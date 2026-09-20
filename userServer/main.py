@@ -5,14 +5,14 @@ from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 
 app = Flask(__name__)
-FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://10.144.11.142:5002")
+FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://10.144.11.132:5002")
 CORS(app, origins=[
     FRONTEND_ORIGIN,
     "http://localhost:5002",
     "http://127.0.0.1:5002",
 ], supports_credentials=True)
 app.secret_key = os.environ.get("SECRET_KEY", "abc123456789my_secret_key_2026")
-DBSERVER_URL = os.environ.get("DBSERVER_URL", "http://10.144.11.142:5000")
+DBSERVER_URL = os.environ.get("DBSERVER_URL", "http://10.144.11.132:5000")
 
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -81,6 +81,37 @@ def login():
         "username": username,
         "level": user_level,
     })
+
+
+@app.route("/api/register", methods=["POST"])
+def register():
+    """公开注册：新用户默认为普通用户(level=1)，不可自选等级。"""
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+
+    if not username or not password:
+        return jsonify({"code": 400, "msg": "用户名和密码不能为空", "success": False}), 400
+    if not (3 <= len(username) <= 20):
+        return jsonify({"code": 400, "msg": "用户名长度需为 3-20 个字符", "success": False}), 400
+    if len(password) < 6:
+        return jsonify({"code": 400, "msg": "密码长度至少 6 位", "success": False}), 400
+
+    try:
+        resp = requests.request(
+            "POST",
+            f"{DBSERVER_URL}/api/insert_user",
+            timeout=10,
+            json={"username": username, "password": password, "level": 1},
+        )
+    except requests.exceptions.RequestException as e:
+        return jsonify({"code": 500, "msg": f"数据库服务连接失败: {e}", "success": False}), 500
+
+    # dbserver：用户名已存在返回 409
+    if resp.status_code == 409:
+        return jsonify({"code": 409, "msg": "用户名已存在", "success": False}), 409
+    resp.raise_for_status()
+    return jsonify({"code": 200, "msg": "注册成功，请登录", "success": True})
 
 
 @app.route("/api/logout", methods=["POST"])
