@@ -1,10 +1,23 @@
-from flask import Flask, send_from_directory
+import os
+
+from flask import Flask, send_from_directory, session
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 
+_secret_key = os.environ.get("SECRET_KEY")
+if not _secret_key:
+    raise RuntimeError("SECRET_KEY environment variable must be set")
+app.secret_key = _secret_key
 
-@app.route("/")
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = False
+
+
+@app.route("/", methods=["GET"])
 def root():
+    if session.get("is_login"):
+        return send_from_directory("static", "index.html")
     return send_from_directory("static", "login.html")
 
 

@@ -45,20 +45,18 @@ function renderUsers() {
         pwdBtn.onclick = () => changePwd(u.username);
         actionCell.appendChild(pwdBtn);
 
-        if (me.level === 3) {
+        if (me.level === 3 && !isSelf) {
             const levelBtn = document.createElement("button");
             levelBtn.className = "btn";
             levelBtn.textContent = "改等级";
             levelBtn.onclick = () => changeLevel(u.username, u.level);
             actionCell.appendChild(levelBtn);
 
-            if (!isSelf) {
-                const delBtn = document.createElement("button");
-                delBtn.className = "btn btn-danger";
-                delBtn.textContent = "删除";
-                delBtn.onclick = () => deleteUser(u.username);
-                actionCell.appendChild(delBtn);
-            }
+            const delBtn = document.createElement("button");
+            delBtn.className = "btn btn-danger";
+            delBtn.textContent = "删除";
+            delBtn.onclick = () => deleteUser(u.username);
+            actionCell.appendChild(delBtn);
         }
         userTbody.appendChild(tr);
     });
