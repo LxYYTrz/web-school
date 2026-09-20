@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理</title>
+    <link rel="stylesheet" href="/css/index.css">
+</head>
+<body>
+    <div class="page">
+        <div class="topbar">
+            <span id="welcome"></span>
+            <button id="logoutBtn" class="btn btn-plain">退出登录</button>
+        </div>
+
+        <!-- 管理员新增用户表单 -->
+        <div id="addUserBox" class="card" style="display:none">
+            <h3>新增用户</h3>
+            <div class="form-row">
+                <input type="text" id="newUsername" placeholder="用户名">
+                <input type="password" id="newPassword" placeholder="密码">
+                <select id="newLevel">
+                    <option value="1">普通用户 (1级)</option>
+                    <option value="2">二级用户 (2级)</option>
+                    <option value="3">管理员 (3级)</option>
+                </select>
+                <button id="addUserBtn" class="btn">创建</button>
+            </div>
+            <div id="addMsg" class="msg"></div>
+        </div>
+
+        <!-- 用户列表 -->
+        <div class="card">
+            <h3>用户列表</h3>
+            <table id="userTable">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>等级</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="userTbody"></tbody>
+            </table>
+        </div>
+
+        <div id="globalMsg" class="msg"></div>
+    </div>
+
+    <script src="/js/config.js"></script>
+    <script src="/js/index.js"></script>
+</body>
+</html>
