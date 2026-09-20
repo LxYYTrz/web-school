@@ -7,18 +7,51 @@
     <link rel="stylesheet" href="/css/login.css">
 </head>
 <body>
-    <div class="login-box">
-        <h2>用户登录</h2>
-        <div class="input-item">
-            <label>用户名</label>
-            <input type="text" id="username" placeholder="请输入用户名">
+    <div class="card" id="card">
+
+        <!-- 紫色表单面板（左右滑动） -->
+        <div class="form-panel">
+            <!-- 登录表单 -->
+            <div class="form-box" id="loginBox">
+                <h1>登录</h1>
+                <input type="text" id="loginUsername" placeholder="用户名" autocomplete="username">
+                <input type="password" id="loginPassword" placeholder="密码" autocomplete="current-password">
+                <button id="loginBtn">登 录</button>
+                <div class="msg" id="loginMsg"></div>
+            </div>
+
+            <!-- 注册表单 -->
+            <div class="form-box hidden" id="registerBox">
+                <h1>注册</h1>
+                <input type="text" id="regUsername" placeholder="用户名" autocomplete="username">
+                <input type="password" id="regPassword" placeholder="密码" autocomplete="new-password">
+                <input type="password" id="regPassword2" placeholder="确认密码" autocomplete="new-password">
+                <button id="registerBtn">注 册</button>
+                <div class="msg" id="regMsg"></div>
+            </div>
         </div>
-        <div class="input-item">
-            <label>密码</label>
-            <input type="password" id="password" placeholder="请输入密码">
+
+        <!-- 白色欢迎面板 -->
+        <div class="welcome">
+            <!-- 登录态：显示在右侧 -->
+            <div class="welcome-content" id="welcomeLogin">
+                <h2>欢迎来到 <span>用户管理系统</span></h2>
+                <p class="sub">登录你的账号，开始使用</p>
+                <div class="illu">🔐</div>
+                <p class="switch-text">还没有账号？</p>
+                <button class="ghost-btn" id="goRegister">去注册</button>
+            </div>
+
+            <!-- 注册态：显示在左侧 -->
+            <div class="welcome-content hidden" id="welcomeRegister">
+                <div class="illu">🐣</div>
+                <h2>创建新账号</h2>
+                <p class="switch-text">已有账号？</p>
+                <button class="ghost-btn" id="goLogin">去登录</button>
+                <p class="tip">注册后默认为普通用户，如需更高权限请联系管理员</p>
+            </div>
         </div>
-        <button id="loginBtn">登录</button>
-        <div id="msg"></div>
+
     </div>
 
     <script src="/js/config.js"></script>
