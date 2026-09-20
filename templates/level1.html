@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>等级1页面</title>
+    <style>
+        body {
+            font-family: "Microsoft Yahei";
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin:0;
+            background-color: #f0f2f5;
+        }
+        .box{
+            background:#fff;
+            padding:40px;
+            border-radius:10px;
+            box-shadow:0 2px 12px rgba(0,0,0,0.1);
+            text-align:center;
+        }
+        h1{
+            color:#333;
+        }
+        p{
+            margin:16px 0;
+            color:#666;
+        }
+        a{
+            display:inline-block;
+            margin:10px 5px;
+            padding:10px 20px;
+            background:#409eff;
+            color:white;
+            text-decoration:none;
+            border-radius:6px;
+        }
+        .logout{
+            background:#f56c6c;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>✅ 欢迎 {{username}}</h1>
+        <p>您当前权限等级：1（普通用户）</p>
+        <a href="/logout" class="logout">退出登录</a>
+    </div>
+</body>
+</html>
