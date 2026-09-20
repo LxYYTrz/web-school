@@ -8,22 +8,38 @@
 </head>
 <body>
     <div class="page">
-        <div class="topbar">
-            <span id="welcome"></span>
-            <button id="logoutBtn" class="btn btn-plain">退出登录</button>
-        </div>
+        <!-- 顶部欢迎横幅 -->
+        <header class="hero">
+            <div class="hero-emoji">🐾</div>
+            <h1>用户管理中心</h1>
+            <div class="topbar">
+                <span id="welcome" class="welcome-chip">欢迎回来</span>
+                <button id="logoutBtn" class="ghost-btn">退出登录</button>
+            </div>
+        </header>
 
         <!-- 管理员新增用户表单 -->
         <div id="addUserBox" class="card" style="display:none">
-            <h3>新增用户</h3>
+            <h3>🐣 新增用户</h3>
             <div class="form-row">
                 <input type="text" id="newUsername" placeholder="用户名">
-                <input type="password" id="newPassword" placeholder="密码">
-                <select id="newLevel">
-                    <option value="1">普通用户 (1级)</option>
-                    <option value="2">二级用户 (2级)</option>
-                    <option value="3">管理员 (3级)</option>
-                </select>
+                <input type="password" id="newPassword" placeholder="初始密码">
+                <div class="select-wrap" id="levelSelect">
+                    <button type="button" class="select-display" id="levelDisplay">
+                        <span id="levelDisplayText">🐣 普通用户 (1级)</span>
+                        <span class="chevron">▾</span>
+                    </button>
+                    <div class="select-options" id="levelOptions">
+                        <div class="select-option selected" data-value="1">🐣 普通用户 (1级)</div>
+                        <div class="select-option" data-value="2">🦊 二级用户 (2级)</div>
+                        <div class="select-option" data-value="3">👑 管理员 (3级)</div>
+                    </div>
+                    <select id="newLevel" style="display:none">
+                        <option value="1" selected>普通用户 (1级)</option>
+                        <option value="2">二级用户 (2级)</option>
+                        <option value="3">管理员 (3级)</option>
+                    </select>
+                </div>
                 <button id="addUserBtn" class="btn">创建</button>
             </div>
             <div id="addMsg" class="msg"></div>
@@ -31,7 +47,7 @@
 
         <!-- 用户列表 -->
         <div class="card">
-            <h3>用户列表</h3>
+            <h3>🐾 用户列表</h3>
             <table id="userTable">
                 <thead>
                     <tr>
@@ -45,6 +61,19 @@
         </div>
 
         <div id="globalMsg" class="msg"></div>
+    </div>
+
+    <!-- 通用弹窗（改密码 / 改等级 / 删除确认） -->
+    <div id="modalOverlay" class="modal-overlay">
+        <div class="modal">
+            <h3 id="modalTitle"></h3>
+            <p id="modalText"></p>
+            <input type="text" id="modalInput">
+            <div class="modal-actions">
+                <button id="modalCancel" class="ghost-btn">取 消</button>
+                <button id="modalConfirm" class="btn">确 定</button>
+            </div>
+        </div>
     </div>
 
     <script src="/js/config.js"></script>
