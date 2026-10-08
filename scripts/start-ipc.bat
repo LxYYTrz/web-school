@@ -6,7 +6,7 @@ rem  会打开 4 个窗口:中间件 / 后端 / 采集器 / SSH 隧道
 rem ============================================================
 
 set CLOUD_USER=linetwin
-set CLOUD_HOST=你的云服务器IP或域名
+set CLOUD_HOST=119.91.145.27
 
 set ROOT=%~dp0
 

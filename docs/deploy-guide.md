@@ -36,10 +36,10 @@ cd line-twin
 docker compose -f deploy/docker-compose.cloud.yml up -d
 ```
 
-✅ 成功标志:`docker ps` 看到 `lt-cloud-nginx`、`lt-cloud-db`;浏览器打开 `http://云服务器IP`
+✅ 成功标志:`docker ps` 看到 `lt-cloud-nginx`、`lt-cloud-db`;浏览器打开 `http://119.91.145.27`
 能看到前端页面(数据为空、机械臂不动,正常——工控机还没接)。
 
-**安全组**:云平台控制台放行 22(SSH)、80(HTTP);5432 不要开。
+**防火墙**:控制台「防火墙」标签页放行 22(SSH)、80(HTTP);5432 不要开。
 
 **创建隧道专用账号**(给工控机用,不要用 root):
 
@@ -113,7 +113,7 @@ ssh-keygen -t ed25519
 
 :: 建隧道(保持窗口开着)
 ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes ^
-    -R 3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 linetwin@云服务器IP
+    -R 3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 linetwin@119.91.145.27
 ```
 
 ✅ 命令不报错、不退出。验证:云服务器上 `ss -tlnp | grep 3300` 有监听。
@@ -131,7 +131,7 @@ ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailur
 | 步骤 | 操作 | 成功标志 |
 |---|---|---|
 | 1 | 云端 `docker ps` | 2 个容器运行 |
-| 2 | 浏览器开 `http://云服务器IP` | 前端页面出来(暂无数据) |
+| 2 | 浏览器开 `http://119.91.145.27` | 前端页面出来(暂无数据) |
 | 3 | 工控机 `curl http://localhost:3000/api/lines/line-01/snapshot` | 返回 JSON,有 status/robots |
 | 4 | 云端 `curl http://localhost:3300/api/lines/line-01/snapshot` | 同上(说明隧道通) |
 | 5 | 浏览器刷新云端页面 | 机械臂在动、计数在涨 |
