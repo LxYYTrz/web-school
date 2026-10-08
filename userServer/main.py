@@ -1,6 +1,7 @@
 import os
 
 import requests
+from openai import OpenAI, APIError, APIConnectionError, AuthenticationError
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 
@@ -18,6 +19,24 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SECURE"] = False
 
+API_KEY = "sk-ws-H.PEDDPIR.HQlI.MEUCIBLrre5PukmNQvsBJL0KhmgMzq_fYRw-reJhdMBNaxDvAiEAgzh2yMLPXrFHYHcSIcB4qZDWY8ZH3pY6E7p2X8Tq924"
+BASE_URL = "https://ws-1vy7j02u7rw0whs9.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+client = OpenAI(api_key=API_KEY, base_url=BASE_URL, timeout=60.0)
+DEFAULT_MODEL = os.getenv("QWEN_MODEL", "qwen3.8-max")
+
+def build_messages(data: dict):
+    """把前端传来的 JSON 统一转成 messages 数组"""
+    messages = data.get("messages")
+    if messages:
+        if not isinstance(messages, list):
+            raise ValueError("messages 必须是数组")
+        return messages
+
+    # 兼容只传一句 prompt 的情况
+    prompt = data.get("prompt") or data.get("content") or data.get("text")
+    if not prompt:
+        raise ValueError("请求体缺少 messages 或 prompt 字段")
+    return [{"role": "user", "content": prompt}]
 
 def db_call(method, path, **kwargs):
     resp = requests.request(method, f"{DBSERVER_URL}{path}", timeout=10, **kwargs)
@@ -231,6 +250,47 @@ def remove_user(username):
     except Exception as e:
         return jsonify({"code": 500, "msg": "调用dbserver删除失败:" + str(e)}), 500
 
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"code": 400, "error": "请求体必须是合法的 JSON"}), 400
+
+    try:
+        messages = build_messages(data)
+    except ValueError as e:
+        return jsonify({"code": 400, "error": str(e)}), 400
+
+    model = data.get("model", DEFAULT_MODEL)
+    temperature = data.get("temperature", 0.7)
+
+    try:
+        completion = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            stream=False,
+        )
+        text = completion.choices[0].message.content
+        return jsonify({
+            "code": 200,
+            "text": text,
+            "model": completion.model,
+            "usage": {
+                "prompt_tokens": completion.usage.prompt_tokens,
+                "completion_tokens": completion.usage.completion_tokens,
+                "total_tokens": completion.usage.total_tokens,
+            },
+        })
+
+    except AuthenticationError:
+        return jsonify({"code": 401, "error": "API Key 无效，或与 base_url 地域不匹配"}), 401
+    except APIConnectionError:
+        return jsonify({"code": 502, "error": "无法连接百炼服务，请检查网络或 base_url"}), 502
+    except APIError as e:
+        return jsonify({"code": 502, "error": f"上游服务错误: {e.message}"}), 502
+    except Exception as e:
+        return jsonify({"code": 500, "error": f"服务内部错误: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=False)
