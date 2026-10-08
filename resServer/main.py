@@ -4,7 +4,7 @@ from flask import Flask, send_from_directory, session
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 
-_secret_key = os.environ.get("SECRET_KEY")
+_secret_key = os.environ.get("SECRET_KEY", "abc123456789my_secret_key_2026")
 if not _secret_key:
     raise RuntimeError("SECRET_KEY environment variable must be set")
 app.secret_key = _secret_key
@@ -20,6 +20,9 @@ def root():
         return send_from_directory("static", "index.html")
     return send_from_directory("static", "login.html")
 
+@app.route("/qw", methods=["GET"])
+def qw():
+    return  send_from_directory("static", "qw.html")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5002, debug=False)
