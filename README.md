@@ -5,14 +5,17 @@
 ## 总体架构
 
 ```
-产线设备 (PLC / 机器人 / 相机)
-   │  Modbus TCP / OPC UA(局域网)
-边缘采集器 edge/(工控机,断网本地缓存)
-   │  MQTT over TLS(只由边缘主动外连,云端从不连入工厂内网)
-云服务器: EMQX → server/ → TimescaleDB · Redis · MinIO
-   │  WebSocket / HTTPS
+产线设备 (机器人 / 视觉 / PLC)
+   │  产线局域网
+工控机(高配 Windows): edge 采集器 + EMQX + NestJS 后端 + Redis + MinIO
+   │  SSH 双隧道(工控机主动外连): Web 流量 -R 3300,数据库 -L 5432
+云服务器(低配 Linux): Nginx 静态前端 + 纯转发 + PostgreSQL/TimescaleDB
+   │  HTTPS
 浏览器: web/(Vue3 + Three.js)
 ```
+
+部署定稿:**云服务器只做"展示 + 数据库 + 纯转发",全部数据处理在工控机**。
+详见 [docs/deployment.md](docs/deployment.md)(拓扑、隧道命令、端口清单、取舍记录)。
 
 核心原则:**契约先行** —— `docs/contract/README.md` 是边缘、后端、前端之间唯一的约定。
 到现场只需用真实采集器替换 `edge/mock_collector.py`、按映射表填点位,其余代码不动。
@@ -21,7 +24,7 @@
 
 | 目录 | 说明 |
 |---|---|
-| deploy/ | 基础设施 docker-compose(EMQX / TimescaleDB / Redis / MinIO) |
+| deploy/ | 部署配置:docker-compose.yml(开发三合一)/ .cloud.yml(云端 nginx+db)/ .ipc.yml(工控机中间件) + nginx 转发配置 |
 | db/init/ | 建库建表 DDL + 种子数据(容器首次启动自动执行) |
 | docs/contract/ | 数据契约 v1 + 寄存器映射表模板 |
 | edge/ | 边缘采集器(当前为 mock 版) |
@@ -59,6 +62,6 @@ python mock_collector.py
        验收:三个角色登录看到不同界面,客户调控制接口被拒
 5. [ ] 图片链路:上传 → MinIO → 元数据入库 → WS 通知 → 前端展示
 6. [ ] 控制链路:指令白名单 + 审计 + MQTT 下行 + ack 回执(mock 已能自动回 ack)
-7. [ ] 上云:同一份 compose 部署到云服务器,Nginx + HTTPS;
-       安全组只开 443/8883,Dashboard/Console 不对公网;改掉全部默认密码
+7. [ ] 上云:云服务器跑 docker-compose.cloud.yml(Nginx + 数据库),工控机跑 docker-compose.ipc.yml + 后端 + 采集器,
+       建 SSH 双隧道(见 docs/deployment.md);改掉全部默认密码,上 HTTPS
 8. [ ] 到现场:实现 plc 采集器 + 填映射表;先只读稳定后,再逐条放开控制指令
