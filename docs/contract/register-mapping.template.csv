@@ -1,0 +1,14 @@
+signal,device_id,protocol,address,data_type,byte_order,scale,offset,unit,poll_group,description
+robot01.j1,robot-01,modbus_tcp,40001,float32,ABCD,1,0,deg,fast,机器人 J1 关节角
+robot01.j2,robot-01,modbus_tcp,40003,float32,ABCD,1,0,deg,fast,机器人 J2 关节角
+robot01.j3,robot-01,modbus_tcp,40005,float32,ABCD,1,0,deg,fast,机器人 J3 关节角
+robot01.j4,robot-01,modbus_tcp,40007,float32,ABCD,1,0,deg,fast,机器人 J4 关节角
+robot01.j5,robot-01,modbus_tcp,40009,float32,ABCD,1,0,deg,fast,机器人 J5 关节角
+robot01.j6,robot-01,modbus_tcp,40011,float32,ABCD,1,0,deg,fast,机器人 J6 关节角
+robot01.speed_pct,robot-01,modbus_tcp,40013,uint16,,1,0,%,slow,速度倍率
+robot01.mode,robot-01,modbus_tcp,40014,uint16,,1,0,,slow,运行模式(0手动/1自动)
+robot01.alarm_code,robot-01,modbus_tcp,40015,uint16,,1,0,,fast,当前报警码(0=无)
+line.state,line-01,modbus_tcp,40020,uint16,,1,0,,fast,产线状态(0停止/1运行/2报警)
+line.good_count,line-01,modbus_tcp,40021,uint32,ABCD,1,0,pcs,slow,良品累计
+line.ng_count,line-01,modbus_tcp,40023,uint32,ABCD,1,0,pcs,slow,不良品累计
+line.beat_ms,line-01,modbus_tcp,40025,uint32,ABCD,1,0,ms,slow,最近一件节拍

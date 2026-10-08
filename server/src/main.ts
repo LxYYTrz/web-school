@@ -1,0 +1,14 @@
+import 'reflect-metadata';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { config } from './config/configuration';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.enableCors({ origin: config.http.corsOrigin });
+  app.enableShutdownHooks();
+  await app.listen(config.http.port);
+  console.log(`[server] HTTP/WebSocket listening on :${config.http.port}`);
+}
+
+void bootstrap();

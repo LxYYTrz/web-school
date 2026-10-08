@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>line-twin WebSocket 联调</title>
+  <style>
+    body { font-family: monospace; margin: 16px; }
+    #log { height: 78vh; overflow: auto; background: #111; color: #0f0; padding: 8px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h3>实时数据测试(line-01)</h3>
+  <p>连接 http://localhost:3000,订阅 robot_state / line_status / event / vision_result</p>
+  <div id="log"></div>
+  <!-- 需联网加载;若离线,把 socket.io.min.js 下载到本地改引用 -->
+  <script src="https://unpkg.com/socket.io-client@4.8.1/dist/socket.io.min.js"></script>
+  <script>
+    const logEl = document.getElementById('log');
+    const log = (m) => { logEl.textContent = m + '\n' + logEl.textContent; };
+
+    const socket = io('http://localhost:3000');
+    socket.on('connect', () => {
+      log('connected: ' + socket.id);
+      socket.emit('subscribe', { lineId: 'line-01' }, (ack) => log('subscribe ack: ' + JSON.stringify(ack)));
+    });
+    let robotCount = 0;
+    socket.on('robot_state', (m) => {
+      if (++robotCount % 10 === 0) log(`robot_state x${robotCount}  joints=${JSON.stringify(m.joints)}`);
+    });
+    socket.on('line_status', (m) => log('line_status: ' + JSON.stringify(m)));
+    socket.on('event', (m) => log('event: ' + JSON.stringify(m)));
+    socket.on('vision_result', (m) => log('vision_result: ' + JSON.stringify(m)));
+    socket.on('connect_error', (e) => log('connect_error: ' + e.message));
+  </script>
+</body>
+</html>

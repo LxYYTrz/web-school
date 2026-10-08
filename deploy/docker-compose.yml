@@ -1,0 +1,72 @@
+# =============================================================
+# 产线数字孪生平台 - 基础设施(本地开发 / 云服务器通用)
+# 组件: EMQX(MQTT) + TimescaleDB(PG16) + Redis + MinIO
+#
+# ★ 生产部署前必须:
+#   1. 修改下列所有默认密码
+#   2. 为 8883 配置 TLS 证书(EMQX 侧)
+#   3. EMQX 关闭匿名登录(EMQX_ALLOW_ANONYMOUS=false)并配置认证
+#   4. 云服务器安全组只对公网开 443 / 8883;
+#      18083(EMQX Dashboard)、9001(MinIO Console)、5432、6379 一律不对公网
+# =============================================================
+services:
+  emqx:
+    image: emqx/emqx:5.8
+    container_name: lt-emqx
+    restart: unless-stopped
+    ports:
+      - "1883:1883"    # MQTT TCP(生产环境建议仅内网,对外只暴露 8883)
+      - "8883:8883"    # MQTT over TLS(边缘采集器走这里)
+      - "18083:18083"  # Dashboard(★不要对公网开放)
+      - "8083:8083"    # MQTT over WebSocket(备用)
+    environment:
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: admin123   # TODO 生产修改
+      EMQX_ALLOW_ANONYMOUS: "true"                  # TODO 生产改 false
+    volumes:
+      - emqx-data:/opt/emqx/data
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: lt-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123               # TODO 生产修改
+      POSTGRES_DB: linetwin
+    ports:
+      - "5432:5432"                                # 生产不要对公网开放
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      # 首次启动自动执行建表 DDL(仅空库初始化时执行一次)
+      - ../db/init:/docker-entrypoint-initdb.d:ro
+
+  redis:
+    image: redis:7-alpine
+    container_name: lt-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"                                # 生产不要对公网开放
+    volumes:
+      - redis-data:/data
+
+  minio:
+    image: minio/minio:latest                      # 建议锁定到具体 RELEASE 版本
+    container_name: lt-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123           # TODO 生产修改
+    ports:
+      - "9000:9000"                                # S3 API
+      - "9001:9001"                                # Console(★不要对公网开放)
+    volumes:
+      - minio-data:/data
+
+volumes:
+  emqx-data:
+  pg-data:
+  redis-data:
+  minio-data:
