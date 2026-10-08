@@ -26,7 +26,7 @@
 | docs/contract/ | 数据契约 v1 + 寄存器映射表模板 |
 | edge/ | 边缘采集器(当前为 mock 版) |
 | server/ | 云端后端(NestJS 骨架:MQTT → TimescaleDB/Redis → WebSocket,见 server/README.md) |
-| web/ | 前端(待建,Vue3 + TS + Three.js) |
+| web/ | 前端(Vue3 + TS + Three.js;孪生/状态/视觉三页,见 web/README.md) |
 
 ## 本地起步(开发机)
 
@@ -53,8 +53,8 @@ python mock_collector.py
 1. [x] 数据契约 v1 + DDL + 基础设施 + mock 采集器(本仓库)
 2. [x] 后端最小链路骨架(server/):订阅 MQTT → 写 TimescaleDB → WebSocket 推送 → Redis 快照
        验收:`curl localhost:3000/api/lines/line-01/snapshot` 有数据;server/tools/ws-test.html 看到实时帧滚动
-3. [ ] 前端孪生:Three.js 加载机器人模型(URDF/glTF),关节随数据动 + 插值
-       验收:浏览器里机器人跟随 mock 数据运动 —— 第一个"看得见"的里程碑
+3. [x] 前端孪生:Three.js 程序化 6 轴机械臂(占位模型,URDF 到手即换),关节随 mock 数据 10Hz 驱动
+       验收:vue-tsc 类型检查 + vite build 通过;浏览器实时画面在本地三件套起齐后目检
 4. [ ] 登录 + RBAC 三角色(菜单 / 接口 / 字段三级控制)
        验收:三个角色登录看到不同界面,客户调控制接口被拒
 5. [ ] 图片链路:上传 → MinIO → 元数据入库 → WS 通知 → 前端展示

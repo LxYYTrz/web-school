@@ -95,6 +95,7 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
         this.gateway.broadcastVision(lineId, msg);
       } else if (kind === 'edge/status') {
         this.state.setEdgeStatus(lineId, msg);
+        this.gateway.broadcastEdge(lineId, msg);
       } else if (kind === 'cmd_ack') {
         this.history.ackCommand(msg);
       }
