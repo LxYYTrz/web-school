@@ -146,6 +146,8 @@ ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailur
 | Docker 拉镜像失败(无外网) | 开发机 `docker pull` 后 `docker save` 成 tar,U盘拷入后 `docker load` |
 | 页面白屏/样式乱 | dist 没放对位置:应在云服务器的 `deploy/dist/` |
 | 推送实时数据不更新 | Nginx 的 /socket.io 段 Upgrade 头缺失——确认用的是仓库里的 cloud.conf |
+| 数据库容器起来了但表是空的 | init SQL 权限问题:`chmod 644 db/init/001_init.sql` 后 `docker exec lt-cloud-db psql -U postgres -d linetwin -f /docker-entrypoint-initdb.d/001_init.sql` 手工执行一次 |
+| 80 端口被占(caddy 等) | compose.cloud.yml 里把 nginx 改为 `"8081:80"` 临时跑,或在控制台停掉占用方后改回 80 |
 
 ## 5. 部署完回传给开发的信息
 

@@ -6,7 +6,7 @@
 #
 # ★ 安全要点:
 #   1. PostgreSQL 只监听 127.0.0.1,工控机经 SSH 隧道访问,不对公网开放
-#   2. 改 POSTGRES_PASSWORD
+#   2. 在 deploy/.env 里设置 POSTGRES_PASSWORD(强随机)
 #   3. 443/80 由 Nginx 暴露;如果上 HTTPS,证书挂到 Nginx(见 nginx/cloud.conf)
 # =============================================================
 services:
@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres123               # ★ 必须修改
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 deploy/.env 里设置 POSTGRES_PASSWORD}
       POSTGRES_DB: linetwin
     ports:
       # 只绑定回环口:只有本机(以及 SSH 隧道进来的工控机)能连
