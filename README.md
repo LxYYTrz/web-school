@@ -26,7 +26,7 @@
 |---|---|
 | deploy/ | 部署配置:docker-compose.yml(开发三合一)/ .cloud.yml(云端 nginx+db)/ .ipc.yml(工控机中间件) + nginx 转发配置 |
 | db/init/ | 建库建表 DDL + 种子数据(容器首次启动自动执行) |
-| docs/contract/ | 数据契约 v1 + 寄存器映射表模板 |
+| docs/ | 数据契约(contract/)、部署方案(deployment.md)、**部署手册(deploy-guide.md,照做即可)** |
 | edge/ | 边缘采集器(当前为 mock 版) |
 | server/ | 云端后端(NestJS 骨架:MQTT → TimescaleDB/Redis → WebSocket,见 server/README.md) |
 | web/ | 前端(Vue3 + TS + Three.js;孪生/状态/视觉三页,见 web/README.md) |
