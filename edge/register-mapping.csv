@@ -1,0 +1,18 @@
+# ============================================================================
+# register-mapping.csv — 已按 DB[0..10] 自动填好
+# ============================================================================
+# PLC:192.168.10.31:503 unit=2  DB 类型=word (INT16/UINT16)
+# 缩放:关节角 ÷10,节拍 ×10;其余 ×1
+# ----------------------------------------------------------------------------
+name,address,type,scale,offset,unit,note
+robot.joints[0],0,INT16,0.1,0,deg,DB[0]  假设 0.1° 缩放
+robot.joints[1],1,INT16,0.1,0,deg,DB[1]
+robot.joints[2],2,INT16,0.1,0,deg,DB[2]
+robot.joints[3],3,INT16,0.1,0,deg,DB[3]
+robot.joints[4],4,INT16,0.1,0,deg,DB[4]
+robot.joints[5],5,INT16,0.1,0,deg,DB[5]
+robot.speedPct,6,UINT16,1.0,0,%,DB[6]
+robot.mode,7,UINT16,1.0,0,,DB[7] 0=manual 1=auto 2=remote 3=error
+robot.alarmCode,8,UINT16,1.0,0,,DB[8] 0=无报警
+line.state,9,UINT16,1.0,0,,DB[9] 0=offline 1=idle 2=running 3=alarm
+line.beatMs,10,UINT16,10.0,0,ms,DB[10] 节拍,DB 存的是 ÷10

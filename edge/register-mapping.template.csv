@@ -1,0 +1,27 @@
+name,address,type,scale,offset,unit,note
+# === 机器人 6 轴关节 (FLOAT32, 占用 2 寄存器/轴) ===
+# 起始地址:0;每轴占 2 个寄存器;按大端字序(MB_SERVER 默认);单位 deg
+robot.joints[0],0,FLOAT32,1.0,0,deg,J1
+robot.joints[1],2,FLOAT32,1.0,0,deg,J2
+robot.joints[2],4,FLOAT32,1.0,0,deg,J3
+robot.joints[3],6,FLOAT32,1.0,0,deg,J4
+robot.joints[4],8,FLOAT32,1.0,0,deg,J5
+robot.joints[5],10,FLOAT32,1.0,0,deg,J6
+# === TCP 位姿 (FLOAT32 x6, 可空;若无此数据,把整段删掉或改成 NULL) ===
+robot.tcp[0],12,FLOAT32,1.0,0,mm,x
+robot.tcp[1],14,FLOAT32,1.0,0,mm,y
+robot.tcp[2],16,FLOAT32,1.0,0,mm,z
+robot.tcp[3],18,FLOAT32,1.0,0,deg,rx
+robot.tcp[4],20,FLOAT32,1.0,0,deg,ry
+robot.tcp[5],22,FLOAT32,1.0,0,deg,rz
+# === 机器人运行状态 ===
+robot.speedPct,24,UINT16,1.0,0,%,
+robot.mode,25,UINT16,1.0,0,,0=manual 1=auto 2=remote 3=error
+robot.program,26,INT16,1.0,0,,PLC 里用 INT 表示程序代号;具体含义看 PLC 程序
+robot.alarmCode,27,UINT16,1.0,0,,0=无报警;非 0=厂商报警码
+# === 产线状态(1Hz retained) ===
+line.state,40,UINT16,1.0,0,,0=offline 1=idle 2=running 3=alarm
+line.productCode,41,INT16,1.0,0,,PLC 里用 INT 表示产品代号
+line.goodCount,42,UINT32,1.0,0,pcs,
+line.ngCount,44,UINT32,1.0,0,pcs,
+line.beatMs,46,UINT16,1.0,0,ms,
