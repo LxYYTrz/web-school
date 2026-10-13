@@ -5,15 +5,17 @@
 plc_collector.py 读这张表 → 周期性地从 PLC 拉 Holding Register → 翻译成数据契约 JSON → 发布到 MQTT。
 **改这张表 = 改采集逻辑,代码不动**。
 
-## 1. PLC 现状(2026-10-09 探测)
+## 1. PLC 现状(2026-10-13 对齐)
 
 | 项 | 值 |
 |---|---|
+| PLC | Siemens S7-1200 CPU 1214C |
 | IP | 192.168.10.31 |
 | 端口 | 503 |
 | Unit ID | 2 |
-| **可读 HOLD_REG 区段** | **仅 [0..10] = 11 个 word** ← 需要扩大 |
-| 当前数据 | 全 0(机器人未接入 / PLC 未运行) |
+| **DB** | **DB3 (plc数据区),优化访问=关闭** |
+| **可读 HOLD_REG 区段** | **word[0..22] = 23 个 word(46 byte,电气工程师已扩好)** |
+| 字节序 | TIA 默认大端;Modbus 协议字序=高字在前;INT 直读;INT32/DINT 现场读出异常时把 PLC_WORD_ORDER 改 LITTLE |
 
 ## 2. TIA Portal 里要做的事(3 步)
 

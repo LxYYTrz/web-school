@@ -33,8 +33,7 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 from pymodbus.client import ModbusTcpClient
-from pymodbus.payload import BinaryPayloadDecoder
-from pymodbus.constants import Endian
+from pymodbus.client.mixin import ModbusClientMixin
 
 LOG = logging.getLogger("plc-collector")
 
@@ -42,6 +41,10 @@ PLC_HOST        = os.getenv("PLC_HOST", "192.168.10.31")
 PLC_PORT        = int(os.getenv("PLC_PORT", "503"))
 PLC_UNIT_ID     = int(os.getenv("PLC_UNIT_ID", "2"))
 PLC_POLL_MS     = int(os.getenv("PLC_POLL_MS", "200"))
+# 32 位类型(INT32/UINT32/DINT/FLOAT32)的字序。
+# 默认 BIG = Modbus 标准(高字在前),TIA 大端与此一致;
+# 西门子 DINT 在内存里是低字在前,跟 Modbus 冲突,读出来值异常时改 LITTLE。
+PLC_WORD_ORDER  = os.getenv("PLC_WORD_ORDER", "BIG").upper()
 MQTT_HOST       = os.getenv("MQTT_HOST", "localhost")
 MQTT_PORT       = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_USERNAME   = os.getenv("MQTT_USERNAME") or None
@@ -93,7 +96,9 @@ def _read_csv(path: Path) -> list[Signal]:
             addr = int(row["address"])
             t = row["type"].upper().strip()
             size_map = {"INT16": 1, "UINT16": 1, "BOOL": 1,
-                        "INT32": 2, "UINT32": 2, "FLOAT32": 2}
+                        "INT32": 2, "UINT32": 2, "FLOAT32": 2,
+                        # 西门子 DBW/DBD 别名(xls 用这种)
+                        "INT": 1, "UINT": 1, "DINT": 2}
             cnt = size_map.get(t)
             if cnt is None:
                 LOG.warning("L%d 未知类型 %s,跳过", line_no, t)
@@ -113,30 +118,41 @@ def _read_csv(path: Path) -> list[Signal]:
     return sigs
 
 
+def _words_to_u32(regs: list[int]) -> int:
+    """按 PLC_WORD_ORDER 把 2 个 word 合并成 32 位整数。
+    BIG   = 高字在前(Modbus 标准,TIA 大端与此一致,默认)
+    LITTLE = 低字在前(西门子 DINT 在内存里就是这个顺序)"""
+    if PLC_WORD_ORDER == "LITTLE":
+        regs = list(reversed(regs))
+    return (regs[0] << 16) | regs[1]
+
+
 def decode_signal(regs: list[int], sig: Signal) -> Any:
     """把 Modbus 寄存器值翻译成物理量。Modbus 协议是大端字序(高字在前);
-    S7 的 MB_SERVER 默认也是大端;若现场 PLC 用了小端,把 Endian.BIG 改 BIG_SWAP/LITTLE 即可。"""
+    S7 的 MB_SERVER 默认也是大端;若现场 PLC 用了小端,把 PLC_WORD_ORDER 改 LITTLE。"""
     if not regs:
         return None
-    if sig.type == "INT16":
+    if sig.type in ("INT16", "INT"):
         raw = regs[0] if regs[0] < 0x8000 else regs[0] - 0x10000
         return (raw + sig.offset) * sig.scale
-    if sig.type == "UINT16":
+    if sig.type in ("UINT16", "UINT"):
         return (regs[0] + sig.offset) * sig.scale
     if sig.type == "BOOL":
         return bool(regs[0])
-    if sig.type == "INT32":
-        raw = (regs[0] << 16) | regs[1]
+    if sig.type in ("INT32", "DINT"):
+        raw = _words_to_u32(regs)
         if raw >= 0x80000000:
             raw -= 0x100000000
         return (raw + sig.offset) * sig.scale
     if sig.type == "UINT32":
-        raw = (regs[0] << 16) | regs[1]
+        raw = _words_to_u32(regs)
         return (raw + sig.offset) * sig.scale
     if sig.type == "FLOAT32":
-        dec = BinaryPayloadDecoder.fromRegisters(
-            regs, byteorder=Endian.BIG, wordorder=Endian.BIG)
-        v = dec.decode_32bit_float()
+        # pymodbus 3.x: 用 ModbusClientMixin.convert_from_registers
+        # word_order 控制 word 间的字节序(BIG=高字在前,默认;LITTLE=低字在前,西门子 REAL 反向)
+        wo = "little" if PLC_WORD_ORDER == "LITTLE" else "big"
+        v = ModbusClientMixin.convert_from_registers(
+            regs, ModbusClientMixin.DATATYPE.FLOAT32, word_order=wo)
         return (v + sig.offset) * sig.scale
     return None
 
@@ -172,7 +188,7 @@ class Plc:
         try:
             for s in sigs_sorted:
                 rr = self.cli.read_holding_registers(
-                    address=s.address, count=s.count, slave=self.unit)
+                    address=s.address, count=s.count, device_id=self.unit)
                 if rr.isError():
                     LOG.warning("读 %s @%d 失败: %s", s.name, s.address, rr)
                     values[s.name] = None

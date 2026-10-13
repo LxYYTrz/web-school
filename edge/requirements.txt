@@ -1,1 +1,2 @@
 paho-mqtt>=2.0,<3.0
+pymodbus>=3.10,<4.0   # 3.10+ 强制 device_id= ;3.8+ 有 convert_from_registers(替代 BinaryPayloadDecoder)
