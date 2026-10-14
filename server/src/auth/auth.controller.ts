@@ -1,6 +1,9 @@
-import { Body, Controller, HttpCode, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
+import { AuthGuard } from './auth.guard';
+import { CurrentUser } from './current-user.decorator';
+import type { SessionUser } from './session-user';
 import { LoginDto } from './dto/login.dto';
 
 @Controller('api/auth')
@@ -26,5 +29,12 @@ export class AuthController {
       delete req.session.loginAt;
     }
     return { success: true };
+  }
+
+  // 当前用户:前端启动时调一次,401 即未登录
+  @Get('me')
+  @UseGuards(AuthGuard)
+  me(@CurrentUser() user: SessionUser) {
+    return { username: user.username, level: user.level };
   }
 }
