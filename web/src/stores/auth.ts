@@ -26,7 +26,13 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       user.value = await apiMe();
     } catch {
-      user.value = null;
+      // dev/demo fallback:无后端时填默认 admin,纯看页面用
+      // import.meta.env.DEV 在生产 build 里是 false,prod 自动失效
+      if (import.meta.env.DEV) {
+        user.value = { username: 'demo', level: 3 };
+      } else {
+        user.value = null;
+      }
     } finally {
       ready.value = true;
     }
@@ -37,10 +43,16 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = u;
   }
 
+  // dev/demo 用:没后端时本地填一个用户(让登录页 submit 也能进首页)
+  async function demoLogin(username: string, level: Level = 3) {
+    if (!import.meta.env.DEV) throw new Error('demoLogin 仅 dev 环境可用');
+    user.value = { username, level };
+  }
+
   async function logout() {
     await apiLogout();
     user.value = null;
   }
 
-  return { user, ready, isLoggedIn, isAdmin, canCommand, canManageUsers, refresh, login, logout };
+  return { user, ready, isLoggedIn, isAdmin, canCommand, canManageUsers, refresh, login, demoLogin, logout };
 });

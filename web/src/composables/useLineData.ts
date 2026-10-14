@@ -11,6 +11,44 @@ import type {
 const MAX_FEED = 60;
 const MAX_VISION = 30;
 
+// ===== dev 演示 mock 数据(仅 import.meta.env.DEV 时使用,prod build 时被消除) =====
+// 没后端时让三个视图(twin/status/vision)有数据可见,纯看页面用。
+// 注意:prod 走真实链路,这些 mock 永远不生效。
+const MOCK_NOW = () => Date.now();
+const MOCK_EARLIER = (secAgo: number) => Date.now() - secAgo * 1000;
+const MOCK_ENABLED = import.meta.env.DEV;
+const MOCK_ROBOT: RobotState = {
+  ts: MOCK_NOW(),
+  deviceId: 'robot-01',
+  joints: [10.2, -35.0, 42.1, 0.5, 88.0, 12.3],
+  tcp: [512.3, -120.5, 388.0, 179.9, 0.2, 45.0],
+  speedPct: 80,
+  mode: 'auto',
+  program: 'PICK_A',
+  alarmCode: 0,
+};
+const MOCK_STATUS: LineStatus = {
+  ts: MOCK_NOW(),
+  lineId: 'line-01',
+  state: 'running',
+  productCode: 'P-1001',
+  goodCount: 1024,
+  ngCount: 3,
+  beatMs: 8500,
+};
+const MOCK_EVENTS: ProductionEvent[] = [
+  { ts: MOCK_EARLIER(2),  lineId: 'line-01', deviceId: 'plc-01', type: 'start',      level: 'info',    message: '产线启动(mock)' },
+  { ts: MOCK_EARLIER(8),  lineId: 'line-01', deviceId: 'robot-01', type: 'piece_done', level: 'info',    message: '工件 SN20261014000001 完成' },
+  { ts: MOCK_EARLIER(15), lineId: 'line-01', deviceId: 'robot-01', type: 'piece_done', level: 'info',    message: '工件 SN20261014000002 完成' },
+  { ts: MOCK_EARLIER(23), lineId: 'line-01', deviceId: 'plc-01',   type: 'alarm',      level: 'warning', code: 'W201', message: '气源压力偏低(mock)' },
+  { ts: MOCK_EARLIER(30), lineId: 'line-01', deviceId: 'robot-01', type: 'piece_done', level: 'info',    message: '工件 SN20261014000003 完成' },
+];
+const MOCK_VISION: VisionResult[] = [
+  { ts: MOCK_EARLIER(8),  lineId: 'line-01', cameraId: 'cam-01', sn: 'SN20261014000001', result: 'ok', defects: [], imageUrl: null, thumbUrl: null },
+  { ts: MOCK_EARLIER(15), lineId: 'line-01', cameraId: 'cam-01', sn: 'SN20261014000002', result: 'ng', defects: [{ type: 'scratch', x: 220, y: 180, w: 60, h: 18 }], imageUrl: null, thumbUrl: null },
+  { ts: MOCK_EARLIER(30), lineId: 'line-01', cameraId: 'cam-01', sn: 'SN20261014000003', result: 'ok', defects: [], imageUrl: null, thumbUrl: null },
+];
+
 // 产线数据(模块级单例):快照预载 + socket.io 实时订阅。
 // 约定:只持有"最新一帧"与"滚动列表",不累积高频数据,避免内存与渲染压力。
 // App 与各页面共享同一实例;SPA 生命周期内常驻,不做组件级注销。
@@ -37,6 +75,16 @@ function createLineData(lineId: string) {
     } catch (e) {
       // 后端没起或网络异常:静默,等待 socket 实时数据
       console.warn('[lineData] snapshot 预载失败', e);
+      // dev 演示 fallback:无后端时填 mock,让三个视图有数据可见
+      if (MOCK_ENABLED) {
+        robot.value = MOCK_ROBOT;
+        status.value = MOCK_STATUS;
+        events.value = MOCK_EVENTS;
+        vision.value = MOCK_VISION;
+        edgeOnline.value = true;
+        lastEventAt.value = MOCK_EVENTS[0].ts;
+        lastVisionAt.value = MOCK_VISION[0].ts;
+      }
     }
   }
 

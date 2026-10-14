@@ -74,14 +74,20 @@ async function onSubmit() {
   loading.value = true;
   try {
     await auth.login(form.username, form.password);
-    // 登录成功后跳转到原本想去的页,或默认 /twin
-    const redirect = (route.query.redirect as string) || '/twin';
-    router.push(redirect);
   } catch (e) {
-    errMsg.value = (e as Error).message || '登录失败';
-  } finally {
-    loading.value = false;
+    // dev/demo fallback:无后端时本地登录,纯看页面用
+    if (import.meta.env.DEV) {
+      await auth.demoLogin(form.username || 'demo');
+    } else {
+      errMsg.value = (e as Error).message || '登录失败';
+      loading.value = false;
+      return;
+    }
   }
+  // 登录成功后跳转到原本想去的页,或默认 /twin
+  const redirect = (route.query.redirect as string) || '/twin';
+  router.push(redirect);
+  loading.value = false;
 }
 </script>
 
