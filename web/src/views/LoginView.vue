@@ -76,7 +76,7 @@ async function onSubmit() {
     await auth.login(form.username, form.password);
   } catch (e) {
     // dev/demo fallback:无后端时本地登录,纯看页面用
-    if (import.meta.env.DEV) {
+    if (import.meta.env.VITE_MOCK_ONLY === 'true') {
       await auth.demoLogin(form.username || 'demo');
     } else {
       errMsg.value = (e as Error).message || '登录失败';

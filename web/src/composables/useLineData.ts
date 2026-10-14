@@ -11,12 +11,13 @@ import type {
 const MAX_FEED = 60;
 const MAX_VISION = 30;
 
-// ===== dev 演示 mock 数据(仅 import.meta.env.DEV 时使用,prod build 时被消除) =====
+// ===== dev 演示 mock 数据(仅 VITE_MOCK_ONLY=true 时使用) =====
 // 没后端时让三个视图(twin/status/vision)有数据可见,纯看页面用。
-// 注意:prod 走真实链路,这些 mock 永远不生效。
+// 开启方式:build 时设 VITE_MOCK_ONLY=true (例:VITE_MOCK_ONLY=true npm run build)。
+// 不设 → prod 走真实链路,mock 不生效。
 const MOCK_NOW = () => Date.now();
 const MOCK_EARLIER = (secAgo: number) => Date.now() - secAgo * 1000;
-const MOCK_ENABLED = import.meta.env.DEV;
+const MOCK_ENABLED = import.meta.env.VITE_MOCK_ONLY === 'true';
 const MOCK_ROBOT: RobotState = {
   ts: MOCK_NOW(),
   deviceId: 'robot-01',

@@ -27,8 +27,8 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = await apiMe();
     } catch {
       // dev/demo fallback:无后端时填默认 admin,纯看页面用
-      // import.meta.env.DEV 在生产 build 里是 false,prod 自动失效
-      if (import.meta.env.DEV) {
+      // VITE_MOCK_ONLY 由 build 时显式注入;默认 false,prod 不走 mock
+      if (import.meta.env.VITE_MOCK_ONLY === 'true') {
         user.value = { username: 'demo', level: 3 };
       } else {
         user.value = null;
@@ -45,7 +45,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // dev/demo 用:没后端时本地填一个用户(让登录页 submit 也能进首页)
   async function demoLogin(username: string, level: Level = 3) {
-    if (!import.meta.env.DEV) throw new Error('demoLogin 仅 dev 环境可用');
+    if (import.meta.env.VITE_MOCK_ONLY !== 'true') throw new Error('demoLogin 仅 mock-only 环境可用');
     user.value = { username, level };
   }
 
