@@ -17,7 +17,14 @@ export const config = {
   },
   http: {
     port: Number(process.env.PORT ?? 3000),
-    corsOrigin: process.env.CORS_ORIGIN ?? '*', // TODO 生产收敛为前端域名
+    // 多个 origin 用逗号分隔(供 cookie 跨域携带);dev 默认 vite dev server
+    corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+    sessionSecret: process.env.SESSION_SECRET ?? 'dev-only-session-secret-change-me',
+  },
+  app: {
+    // 首次启动自动 bootstrap admin 的初始密码;null 表示禁用自动建号
+    adminPassword:
+      process.env.ADMIN_PASSWORD === '' ? null : process.env.ADMIN_PASSWORD ?? 'admin123',
   },
   topicPrefix: process.env.TOPIC_PREFIX ?? 'tl/v1',
 };
