@@ -5,8 +5,19 @@ import { HistoryModule } from './history/history.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { IngestModule } from './ingest/ingest.module';
 import { CommandModule } from './command/command.module';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
-  imports: [InfraModule, StateModule, HistoryModule, RealtimeModule, IngestModule, CommandModule],
+  imports: [
+    InfraModule,
+    StateModule,
+    HistoryModule,
+    RealtimeModule,
+    IngestModule,
+    CommandModule,
+    AuthModule,
+    UsersModule,
+  ],
 })
 export class AppModule {}
