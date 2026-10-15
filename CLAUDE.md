@@ -17,7 +17,7 @@
 - [x] 3 前端孪生(Three.js 程序化 6 轴机械臂)
 - [x] 4 登录 + RBAC 三角色(后端 + 前端完成,路线 5/6 用户先不做)
 - [ ] 5 图片链路
-- [ ] 6 控制链路
+- [x] 6 控制链路(代码就位;**plc_collector 写命令点位地址是 PLACEHOLDER,等电气工程师填真实 DB 字地址**)
 - [x] 7 上云(部署定稿)
 - [x] 8 到现场(PLC 适配器代码完成,**未真实连过 PLC**)
 
@@ -94,11 +94,23 @@ ssh -N -R 3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 root@119.91.145.27
 - **必须用密钥**(免密)+ `-o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes` + NSSM/任务计划做断线自动拉起
 - **隧道断 = 网站不可访问**(架构唯一单点)
 
+### 4.6 控制链路(路线 6,2026-10-15 拍板)
+
+- **范围**:只读 + I/O 展示 + 软控制。孪生页右侧 `IoPanel`(报警灯 + I/O 灯矩阵 + 数值)+ 5 个控制按钮。
+- **数据源**:**复用现有 21 点位**(契约 v1.1 扩 type 白名单)。契约 type 由 `start/stop/reset/changeover` 扩到 6 项(+ `mode_set` / `alarm_clear`),DB CHECK 约束扩在 `db/init/003_control_commands_extension.sql`。
+- **PLC**:S7-1200 + Modbus TCP(MB_SERVER),与 `edge/plc_collector.py` 一致。
+- **位置**:孪生页 `/twin` 右侧(`web/src/components/IoPanel.vue` + `web/src/components/ControlButtons.vue`)。
+- **写权限**:**level >= 2** 才能下发控制指令(`server/src/command/command.guard.ts`)。前端按 `auth.canCommand` 显隐按钮。
+- **契约**:只增字段不动既有;`mode_set.params.mode ∈ {manual,auto,remote}`(电平);`alarm_clear`(脉冲);`operator` 由后端从 session 注入,**前端不得传**。
+- **edge 写命令点位**:`edge/register-mapping.csv` 加 `cmd.start/stop/reset/alarmClear/modeSet` 5 项,**地址是 PLACEHOLDER (100~104)**,等电气工程师填真实 DB 字地址(`docs/contract/README.md` §5 + `edge/plc_collector.py` `CMD_DISPATCH`)。
+- **测试**:`edge/_test_cmd.py` 8 用例覆盖白名单 / pulse+100ms 回 0 / mode 校验 / 调试跳过 / 通信异常;`edge/_test_decode.py` 21 用例未受影响。
+
 ## 5. 已就位 / 待办
 
 ### 5.1 已完成 ✅
 
 - PLC 适配器代码(`edge/plc_collector.py` 升级 + `edge/register-mapping.csv` 21 点位 + 单元测试 42/42 过)
+- **控制链路(路线 6)代码就位**:契约 v1.1 扩 type 白名单 / DB 003 / edge 写命令 + 真写 PLC / 后端 CommandGuard(level>=2)+ audit_logs + 15s 超时 + WS cmd_ack 推送 / 前端 IoPanel + ControlButtons(带确认弹窗 + 状态机 + 15s UI 超时)/ `edge/_test_cmd.py` 8 用例全过
 - RBAC 后端 + 前端 + 路由守卫 + 角色菜单 + 用户管理页
 - 云端部署(`http://119.91.145.27:8081/` 当前 demo build,含 mock fallback)
 - 部署文档更新(`docs/deployment.md` 实战记录)
@@ -110,6 +122,10 @@ ssh -N -R 3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 root@119.91.145.27
   - TIA 强置 DB3.joints[0]=450,IPC 读 Holding Register 0 看是不是 450(确认 MB_SERVER 通 + 字序对)
   - 跑 `edge/plc_collector.py`,订阅 EMQX 主题,看 `tl/v1/line-01/telemetry/robot/robot-01` 有没有 5~10Hz 帧
   - 读 goodCount/ngCount 出乱码 → `PLC_WORD_ORDER=LITTLE` 再试
+- [ ] **plc_collector.py 控制点位真实地址验证(路线 6 §4.6)** —— `register-mapping.csv` 里 `cmd.start/stop/reset/alarmClear/modeSet` 5 项的地址 (100~104) 是 PLACEHOLDER,等电气工程师按"DB3-控制信号映射"给真实 DB 字地址后:
+  - 改 csv,跑 `_test_decode.py` + `_test_cmd.py`,确保全过
+  - TIA 强置 cmd_ack 标志(若 PLC 端做回执),前端按"启动"看按钮变 "已执行 ✓"
+  - 真实按启动/停止/复位/清警,观察 PLC 侧变量是否真变化(PLC 程序边沿检测或电平保持)
 - [ ] **工控机 SSH 隧道建通** —— 上一步完成后,工控机跑:
   ```bash
   ssh -N -R 3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 \
@@ -125,7 +141,6 @@ ssh -N -R 3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 root@119.91.145.27
 ### 5.3 不做(用户决定)
 
 - ❌ 路线 5 图片链路(用户决定先不做)
-- ❌ 路线 6 控制链路(用户决定先不做)
 
 ## 6. 现场操作清单(产线 Windows 第一次开干)
 
@@ -197,13 +212,19 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `edge/_test_decode.py` | 解码单元测试(42 用例) |
 | `db/init/001_init.sql` | 业务表(robot_state/line_status/event/vision_result) |
 | `db/init/002_app_users.sql` | RBAC 表(app_users + level CHECK) |
+| `db/init/003_control_commands_extension.sql` | 路线 6:control_commands.type CHECK 扩到 6 项(mode_set/alarm_clear) |
 | `server/src/auth/` | 登录/会话/三级权限/首启建 admin |
 | `server/src/users/` | 用户管理 CRUD |
+| `server/src/command/` | **路线 6**:指令路由 + CommandGuard(level>=2)+ service(审计 + 15s 超时 + operator 从 session) |
 | `web/src/stores/auth.ts` | RBAC 前端 store(dev fallback) |
 | `web/src/services/auth.ts` | fetch HTTP 客户端(401 跳登录) |
+| `web/src/services/control.ts` | **路线 6**:apiSendCommand + onCommandAck(socket)封装 |
 | `web/src/views/LoginView.vue` | 登录页 |
 | `web/src/views/UsersView.vue` | 用户管理页(admin only) |
+| `web/src/components/IoPanel.vue` | **路线 6**:孪生页右侧 I/O 灯矩阵 + 报警灯(契约 v1.1) |
+| `web/src/components/ControlButtons.vue` | **路线 6**:5 个控制按钮 + 确认弹窗 + ack 状态机 + 15s UI 超时 |
 | `web/src/composables/useLineData.ts` | 产线数据 composable(mock fallback) |
+| `edge/_test_cmd.py` | **路线 6**:控制命令 dispatch 单元测试(8 用例) |
 | `deploy/docker-compose.cloud.yml` | 云服务器 compose(nginx + timescaledb) |
 | `deploy/docker-compose.ipc.yml` | 工控机 compose(EMQX + Redis + MinIO) |
 
