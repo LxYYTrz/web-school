@@ -62,6 +62,10 @@ T_EDGE   = f"tl/v1/{LINE_ID}/edge/status"
 T_CMD    = f"tl/v1/{LINE_ID}/cmd/+"
 T_ACK    = f"tl/v1/{LINE_ID}/cmd_ack"
 
+# 写命令点位(name 以 cmd. 开头),与读取点位分流,只给 _dispatch_cmd 用
+# 用字符串注解延后求值(Signal 在本文件下方定义)
+_cmd_signals: dict = {}
+
 
 # ---------- 点位表加载与解码 ----------
 @dataclass
@@ -76,8 +80,10 @@ class Signal:
 
 
 def _read_csv(path: Path) -> list[Signal]:
-    """读取点位表;支持 # 开头的注释行;缺失/格式错的行打 warning 跳过,不致命。"""
+    """读取点位表;支持 # 开头的注释行;缺失/格式错的行打 warning 跳过,不致命。
+    name 以 "cmd." 开头的为写命令点位,单独存到 _cmd_signals(不进主循环读取)。"""
     sigs: list[Signal] = []
+    _cmd_signals.clear()
     if not path.exists():
         LOG.error("点位表不存在: %s", path)
         return sigs
@@ -103,18 +109,24 @@ def _read_csv(path: Path) -> list[Signal]:
             if cnt is None:
                 LOG.warning("L%d 未知类型 %s,跳过", line_no, t)
                 continue
-            sigs.append(Signal(
-                name=row["name"].strip(),
+            name = row["name"].strip()
+            sig = Signal(
+                name=name,
                 address=addr,
                 type=t,
                 count=cnt,
                 scale=float(row.get("scale") or 1.0),
                 offset=int(row.get("offset") or 0),
                 unit=row.get("unit", ""),
-            ))
+            )
+            # 写命令点位走 _cmd_signals,不进主循环
+            if name.startswith("cmd."):
+                _cmd_signals[name] = sig
+            else:
+                sigs.append(sig)
         except Exception as exc:
             LOG.warning("L%d 解析失败: %s (行=%s)", line_no, exc, row)
-    LOG.info("已加载 %d 个点位: %s", len(sigs), path)
+    LOG.info("已加载 %d 个读点位 + %d 个写点位: %s", len(sigs), len(_cmd_signals), path)
     return sigs
 
 
@@ -276,23 +288,94 @@ def publish(c: mqtt.Client, topic: str, payload: dict, qos=0, retain=False):
     c.publish(topic, json.dumps(payload, ensure_ascii=False), qos=qos, retain=retain)
 
 
+# ---------- 控制命令 ----------
+# 契约 v1.1 type 白名单(对齐 docs/contract/README.md §3.6)
+# sig_name 指向 register-mapping.csv 里的 cmd.* 点位;None 表示契约预留(edge 暂不写)
+# kind: pulse = 写 1 后 sleep 100ms 再写 0;level = 直接写新值(电平)
+CMD_DISPATCH = {
+    'start':       ('cmd.start',      'pulse'),
+    'stop':        ('cmd.stop',       'pulse'),
+    'reset':       ('cmd.reset',      'pulse'),
+    'changeover':  (None,             'noop'),
+    'mode_set':    ('cmd.modeSet',    'level'),
+    'alarm_clear': ('cmd.alarmClear', 'pulse'),
+}
+MODE_VALUE = {'manual': 0, 'auto': 1, 'remote': 2}   # 与 robot_state.mode 契约一致
+CMD_PULSE_MS = 100
+
+
+def _dispatch_cmd(plc: Plc, cmd_type: str, params: dict) -> tuple[bool, str]:
+    """返回 (success, message)。False → cmd_ack.status=rejected,True → acked。"""
+    spec = CMD_DISPATCH.get(cmd_type)
+    if spec is None:
+        return False, f'未知指令类型: {cmd_type}'
+    sig_name, kind = spec
+    if sig_name is None:
+        # 契约预留(changeover 等),edge 暂未对接;告知仍 acked
+        return True, f'{cmd_type} 已接受(edge 暂无对应寄存器,等电气工程师填点位)'
+    sig = _cmd_signals.get(sig_name)
+    if sig is None:
+        return False, f'点位 {sig_name} 未在 register-mapping.csv 配置'
+    # 算写入值
+    if kind == 'pulse':
+        value = 1
+    elif kind == 'level':
+        mode = (params or {}).get('mode')
+        if mode not in MODE_VALUE:
+            return False, f'mode_set.params.mode 必须是 {list(MODE_VALUE.keys())},收到 {mode!r}'
+        value = MODE_VALUE[mode]
+    else:
+        return False, f'未知 kind={kind}'
+    return _write_cmd(plc, sig.address, value, kind)
+
+
+def _write_cmd(plc: Plc, address: int, value: int, kind: str) -> tuple[bool, str]:
+    """写 PLC 寄存器。plc.connected=False → 调试跳过(开发机可验通链路)。"""
+    if not plc.connected:
+        LOG.warning('PLC 未连接,跳过写 addr=%d,value=%d(调试模式,仍回 acked)',
+                    address, value)
+        return True, 'PLC 未连接,调试模式跳过'
+    try:
+        rr = plc.cli.write_register(address=address, value=value, device_id=plc.unit)
+        if rr.isError():
+            return False, f'PLC 写寄存器失败: {rr}'
+        if kind == 'pulse':
+            time.sleep(CMD_PULSE_MS / 1000.0)
+            rr2 = plc.cli.write_register(address=address, value=0, device_id=plc.unit)
+            if rr2.isError():
+                return False, f'脉冲回写 0 失败: {rr2}'
+        return True, ''
+    except Exception as exc:
+        return False, f'PLC 通信异常: {exc}'
+
+
 def on_command(c: mqtt.Client, plc: Plc):
-    """订阅控制指令。真实场景里这里应该按 cmdId 幂等,然后下发给 PLC 寄存器。"""
+    """订阅控制指令。校验白名单 → 真写 PLC(或调试跳过)→ 回 cmd_ack。
+    cmdId 缺失 → 回 rejected;ack 始终回(契约 §3.7)。"""
     def _cb(_client, _userdata, msg):
+        cmd_id, ack_status, ack_msg = '', 'failed', ''
         try:
             cmd = json.loads(msg.payload.decode("utf-8"))
-            LOG.info("收到指令 type=%s topic=%s", cmd.get("type"), msg.topic)
-            # 真实实现:plc.cli.write_register/write_coil,然后等 ack
-            # 这里先按 mock 风格 0.3s 回 ack
-            time.sleep(0.3)
-            publish(c, T_ACK, {
-                "ts": now_ms(),
-                "cmdId": cmd.get("cmdId"),
-                "status": "acked",
-                "message": "plc 已执行",
-            }, qos=1)
+            cmd_id = cmd.get('cmdId') or ''
+            cmd_type = cmd.get('type')
+            params = cmd.get('params') or {}
+            LOG.info('收到指令 type=%s cmdId=%s topic=%s', cmd_type, cmd_id, msg.topic)
+            if not cmd_id:
+                ack_status, ack_msg = 'rejected', 'cmdId 缺失'
+            else:
+                ok, ack_msg = _dispatch_cmd(plc, cmd_type, params)
+                ack_status = 'acked' if ok else 'rejected'
         except Exception as exc:
-            LOG.error("处理指令失败: %s", exc)
+            LOG.error('处理指令异常: %s', exc)
+            ack_status, ack_msg = 'failed', str(exc)
+        finally:
+            if cmd_id:
+                publish(c, T_ACK, {
+                    'cmdId': cmd_id,
+                    'ts': now_ms(),
+                    'status': ack_status,
+                    'message': ack_msg or '',
+                }, qos=1)
     c.message_callback_add(T_CMD, _cb)
     c.subscribe(T_CMD, qos=1)
 

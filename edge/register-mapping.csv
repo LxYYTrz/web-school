@@ -9,6 +9,10 @@
 # 缩放: 关节/TCP/节拍 PLC 端×10 存储(节省 INT16 范围),采集器÷10 还原(scale=0.1)
 # 现场: 改点位/加变量只动这张表,plc_collector.py 不动
 # ----------------------------------------------------------------------------
+# 写命令点位约定:name 以 "cmd." 开头 → 由 plc_collector.py 识别为写命令,
+# 不进主循环读取;handler 通过 pymodbus write_register 下发。
+# 地址是 PLACEHOLDER,等电气工程师给真实 DB 字地址。
+# ----------------------------------------------------------------------------
 name,address,type,scale,offset,unit,note
 
 # === 机器人 6 轴关节 (INT16 ×10, ÷10 后 deg;word 0..5;xls R8-R13) ===
@@ -41,3 +45,16 @@ robot.tcp[5],18,INT,0.1,0,deg,TCP rz (DBW36)
 # === 计数 (DINT=INT32;word 19..22;xls R27-R28) ===
 line.goodCount,19,DINT,1.0,0,pcs,良品累计 (DBD38,word 19-20)
 line.ngCount,21,DINT,1.0,0,pcs,NG 累计 (DBD42,word 21-22)
+
+# ============================================================================
+# 控制点位(写命令,name 以 cmd. 开头;plc_collector.py 自动识别)
+# ============================================================================
+# 地址是 100/101/102/103/104 占位,等电气工程师按"DB3-控制信号映射"填真实地址。
+# 脉冲型(start/stop/reset/alarmClear):edge 写 1 后 100ms 自动写 0;
+# 电平型(modeSet):持续写新值,PLC 端做边沿检测即可。
+# ============================================================================
+cmd.start,100,UINT,1.0,0,,写-启动,脉冲(PLACEHOLDER 地址,等 DB3 真实地址)
+cmd.stop,101,UINT,1.0,0,,写-停止,脉冲(PLACEHOLDER)
+cmd.reset,102,UINT,1.0,0,,写-复位,脉冲(PLACEHOLDER)
+cmd.alarmClear,103,UINT,1.0,0,,写-清警,脉冲(PLACEHOLDER)
+cmd.modeSet,104,UINT,1.0,0,,写-模式(0=manual/1=auto/2=remote),电平(PLACEHOLDER)
