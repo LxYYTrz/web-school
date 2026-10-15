@@ -122,15 +122,28 @@ defects 坐标为像素(原图坐标系)。图片链路未接通时 imageUrl/thu
   "cmdId": "3f6b1c2e-9a4d-4e2f-8b7a-1c0d2e3f4a5b",
   "ts": 1760000000123,
   "lineId": "line-01",
-  "deviceId": "plc-01",
-  "type": "reset",
-  "params": {},
-  "operator": "zhangsan"
+  "deviceId": "robot-01",
+  "type": "mode_set",
+  "params": { "mode": "auto" },
+  "operator": "admin"
 }
 ```
 
-type 为**指令白名单**:start / stop / reset / changeover。不提供任意写寄存器的能力。
-`cmdId` 即数据库 `control_commands.idempotency_key`,全链路幂等与审计都靠它。
+type 为**指令白名单**(契约 §5 第 2 条:扩展项仅追加,不删/不改名):
+- `start` / `stop` / `reset` / `changeover` — 边沿脉冲型动作
+- `mode_set` — 电平型,设机器人运行模式
+- `alarm_clear` — 边沿脉冲,清报警
+
+不提供任意写寄存器的能力。`cmdId` 即数据库 `control_commands.idempotency_key`,
+全链路幂等与审计都靠它。
+
+`params` 按 type 约定(契约扩展点,后续按需追加字段,**只增不删**):
+- start / stop / reset / changeover: `{}`(预留)
+- mode_set: `{"mode": "manual" | "auto" | "remote"}`(enum,与 `robot_state.mode` 一致)
+- alarm_clear: `{}`
+
+`operator` 字段由后端从登录态注入(`req.session.username`),**前端不得传入**。
+契约保留该字段以便边缘端日志记录,但实际值以服务端为准。
 
 ### 3.7 command_ack — 指令回执(边缘→云)
 
