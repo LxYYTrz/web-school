@@ -68,7 +68,29 @@ PLC 寄存器、视觉软件输出等现场细节,由边缘采集适配器负责
 }
 ```
 
-state 枚举:running / idle / alarm / offline。retained 消息,新订阅者立即可读到最新值。
+state 枚举(v1.1 扩展,见 `db/init/004_line_state_stages.sql`):
+
+| 值 | 含义 | 来源 |
+|---|---|---|
+| `running` / `idle` / `alarm` / `offline` | 原 4 态 | mock 采集器 / 旧数据 |
+| `waiting_feed` | 等待入料 | PLC dataDB[6] = 0 |
+| `feeding` | 入料中 | PLC = 1 |
+| `assembling` | 装配中 | PLC = 2 |
+| `unloading` | 下料中 | PLC = 3 |
+| `unload_done` | 下料完成 | PLC = 4 |
+| `waiting_next` | 等待后站入料 | PLC = 5 |
+| `init_error` | 初始化错误状态 | PLC = 100 |
+| `stopped` | 停止状态 | PLC = 101 |
+| `manual_mode` | 手动控制模式 | PLC = 102 |
+
+**PLC 原始整数 → 契约字符串的转换由 edge 完成**(`edge/plc_collector.py` `STATE_MAP`),
+云端与前端只处理已转换的字符串。
+
+retained 消息,新订阅者立即可读到最新值。
+
+> **现场可用性提示**:`productCode` / `goodCount` / `ngCount` / `beatMs` 在现场
+> 11 word 点位表中**未提供**,edge 会输出默认值(`""` / `0` / `0` / `0`)。
+> 字段按"只增不改"原则保留,不代表真实测量值。
 
 ### 3.3 event — 事件/报警
 
@@ -130,20 +152,44 @@ defects 坐标为像素(原图坐标系)。图片链路未接通时 imageUrl/thu
 ```
 
 type 为**指令白名单**(契约 §5 第 2 条:扩展项仅追加,不删/不改名):
-- `start` / `stop` / `reset` / `changeover` — 边沿脉冲型动作
-- `mode_set` — 电平型,设机器人运行模式
-- `alarm_clear` — 边沿脉冲,清报警
+
+| type | 触发语义 | 现场 PLC 寄存器 | 可执行 |
+|---|---|---|---|
+| `start` | 脉冲(写 1 → 100ms → 写 0) | dataDB[9] word 9 | ✅ |
+| `stop` | 脉冲(写 1 → 100ms → 写 0) | dataDB[7] word 7 | ✅ |
+| `mode_set` | 脉冲(写 1/2 → 100ms → 写 0) | dataDB[8] word 8 | ✅ |
+| `conveyor` | **电平**(写 0/1,不回写) | dataDB[10] word 10 | ✅ v1.2 |
+| `reset` | — | 现场无 | ❌ 回 rejected |
+| `changeover` | — | 现场无 | ❌ 回 rejected |
+| `alarm_clear` | — | 现场无 | ❌ 回 rejected |
+
+> **"不可执行"是明确设计**:现场 PLC 的 11 word 表只开放了 4 个写入点。
+> `reset` / `changeover` / `alarm_clear` 保留在白名单里是为了契约完整性
+> (只增不改),但 edge 检测到无对应点位时回 `rejected` + 说明原因,
+> **不假装 acked** —— 避免操作员以为指令生效了。
+> 现场新增寄存器后,只需在 `edge/register-mapping.csv` 加 `cmd.*` 行
+> 并把 `plc_collector.CMD_DISPATCH` 的 `None` 改回点位名,契约无需改动。
 
 不提供任意写寄存器的能力。`cmdId` 即数据库 `control_commands.idempotency_key`,
 全链路幂等与审计都靠它。
 
 `params` 按 type 约定(契约扩展点,后续按需追加字段,**只增不删**):
-- start / stop / reset / changeover: `{}`(预留)
-- mode_set: `{"mode": "manual" | "auto" | "remote"}`(enum,与 `robot_state.mode` 一致)
-- alarm_clear: `{}`
+- `start` / `stop`: `{}`
+- `reset` / `changeover` / `alarm_clear`: `{}`(现场无对应寄存器)
+- `mode_set`: `{"action": "acquire" | "release"}` — PLC word 8,1=获取手动 2=释放手动
+- `conveyor`: `{"action": "forward" | "stop"}` — PLC word 10,1=正转 0=停止
+
+> ⚠️ **v1.1 → v1.2 变更说明**:`mode_set.params` 原为 `{"mode": "manual"|"auto"|"remote"}`
+> (对应机器人运行模式),现场实际只有"获取/释放手动模式"两态,故改为
+> `{"action": "acquire"|"release"}`。这是**语义修正**,旧值不再被接受。
+> 机器人运行模式请读 `robot_state.mode` 只读字段。
 
 `operator` 字段由后端从登录态注入(`req.session.username`),**前端不得传入**。
 契约保留该字段以便边缘端日志记录,但实际值以服务端为准。
+
+**PLC 前置条件**(edge 只提示不拦截,PLC 联锁有最终否决权):
+- `mode_set` 需产线处于 `stopped`(101)
+- `conveyor` 需产线处于 `manual_mode`(102)
 
 ### 3.7 command_ack — 指令回执(边缘→云)
 

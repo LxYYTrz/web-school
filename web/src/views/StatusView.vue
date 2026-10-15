@@ -3,7 +3,7 @@
     <!-- 统计卡片 -->
     <div class="cards">
       <div class="panel card">
-        <div class="card-value" :class="status?.state">{{ statusText }}</div>
+        <div class="card-value" :class="stateClass">{{ statusText }}</div>
         <div class="card-label">产线状态</div>
       </div>
       <div class="panel card">
@@ -61,15 +61,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useLineData } from '../composables/useLineData';
+import { stateText as stateTextOf, stateClass as stateClassOf } from '../services/lineState';
 
 const { status, events, edgeOnline, edgeText } = useLineData();
 
-const statusText = computed(() => {
-  const map: Record<string, string> = {
-    running: '运行中', idle: '待机', alarm: '报警', offline: '离线',
-  };
-  return status.value ? map[status.value.state] ?? status.value.state : '—';
-});
+// 产线状态映射单点定义见 services/lineState.ts(契约 v1.1:原 4 态 + PLC 10 态工序)
+const statusText = computed(() => stateTextOf(status.value?.state));
+const stateClass = computed(() => stateClassOf(status.value?.state));
 
 function fmtTime(ts: number) {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour12: false });

@@ -7,13 +7,13 @@
       </el-tag>
     </div>
 
-    <!-- 报警灯:alarmCode > 0 或 state=alarm 时红色脉冲 -->
+    <!-- 报警灯:alarmCode > 0,或产线处于 alarm / init_error 时红色脉冲 -->
     <div v-if="alarmOn" class="alarm-row">
       <span class="alarm-light" :class="{ pulse: true }" />
-      <span class="alarm-text">{{ alarmText || `机器人报警 #${robot?.alarmCode}` }}</span>
+      <span class="alarm-text">{{ alarmText || `产线异常(${statusText})` }}</span>
     </div>
 
-    <!-- I/O 信号灯矩阵:基于现有 21 点位的状态字段 -->
+    <!-- I/O 信号灯矩阵:现场 11 word 表提供 产线状态 + 6 轴关节 + 边缘在线 -->
     <div v-if="status || robot" class="io-grid">
       <div class="io-cell">
         <span class="io-dot" :class="modeDot" />
@@ -22,7 +22,7 @@
       </div>
       <div class="io-cell">
         <span class="io-dot" :class="runDot" />
-        <span class="io-label">运行</span>
+        <span class="io-label">状态</span>
         <span class="io-val">{{ runText }}</span>
       </div>
       <div class="io-cell">
@@ -37,16 +37,27 @@
       </div>
     </div>
 
-    <!-- 数值字段:从现有契约里抽 (复用 21 点位) -->
-    <div v-if="status" class="stats">
+    <!-- 六轴关节角(现场 PLC 唯一上送的机器人数据) -->
+    <div v-if="joints.length" class="joints">
+      <div class="stat" v-for="(j, i) in joints" :key="i">
+        <div class="val">{{ j === null ? '—' : j.toFixed(1) }}</div>
+        <div class="lbl">J{{ i + 1 }}</div>
+      </div>
+    </div>
+
+    <!--
+      以下字段在契约里保留(只增不改),但现场 11 word 表未提供,
+      edge 输出默认值 0 / 空串,不代表真实测量值。
+    -->
+    <div v-if="status" class="stats is-default">
       <div class="stat"><div class="val ok">{{ status.goodCount }}</div><div class="lbl">良品</div></div>
       <div class="stat"><div class="val ng">{{ status.ngCount }}</div><div class="lbl">不良</div></div>
       <div class="stat"><div class="val">{{ (status.beatMs / 1000).toFixed(1) }}s</div><div class="lbl">节拍</div></div>
       <div class="stat" v-if="robot"><div class="val">{{ robot.speedPct }}%</div><div class="lbl">倍率</div></div>
     </div>
 
-    <div v-if="robot" class="meta">
-      <span>程序 {{ robot.program || '—' }}</span>
+    <div class="meta">
+      <span>程序 {{ robot?.program || '—' }}</span>
       <span>产品 {{ status?.productCode || '—' }}</span>
     </div>
 
@@ -62,34 +73,29 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useLineData } from '../composables/useLineData';
+import { stateText, stateTagType as tagTypeOf, isRunning } from '../services/lineState';
 
 const props = defineProps<{ canCommand: boolean }>();
 const { robot, status, edgeText, alarmText, edgeOnline } = useLineData();
 
-const statusText = computed(() => {
-  const map: Record<string, string> = {
-    running: '运行中', idle: '待机', alarm: '报警', offline: '离线',
-  };
-  return status.value ? (map[status.value.state] ?? status.value.state) : '等待中';
-});
+const statusText = computed(() =>
+  status.value ? stateText(status.value.state) : '等待中');
 
-const stateTagType = computed<'success' | 'info' | 'danger' | 'warning'>(() => {
-  const m: Record<string, 'success' | 'info' | 'danger' | 'warning'> = {
-    running: 'success', idle: 'info', alarm: 'danger', offline: 'warning',
-  };
-  return status.value ? (m[status.value.state] ?? 'info') : 'info';
-});
+const stateTagType = computed(() => tagTypeOf(status.value?.state));
 
+// 现场 PLC 11 word 表只上送 joints[0..5] + 产线状态,没有 alarmCode;
+// 该字段保留在契约里(只增不改),edge 无数据时输出 0。
 const alarmOn = computed(() =>
-  (robot.value?.alarmCode && robot.value.alarmCode !== 0) ||
-  status.value?.state === 'alarm',
+  (robot.value?.alarmCode !== undefined && robot.value.alarmCode !== 0) ||
+  status.value?.state === 'alarm' ||
+  status.value?.state === 'init_error',
 );
 
 const runText = computed(() => status.value ? statusText.value : '—');
 const runDot = computed(() => {
   const s = status.value?.state;
-  if (s === 'running') return 'ok';
-  if (s === 'alarm') return 'ng';
+  if (isRunning(s)) return 'ok';
+  if (s === 'alarm' || s === 'init_error') return 'ng';
   if (s === 'offline') return 'warn';
   return 'idle';
 });
@@ -110,6 +116,12 @@ const alarmCodeText = computed(() =>
 const edgeDot = computed(() => {
   if (edgeOnline.value === null) return 'idle';
   return edgeOnline.value ? 'ok' : 'ng';
+});
+
+// 六轴关节角:现场 PLC 唯一上送的机器人数据(word 0..5,÷10 还原)
+const joints = computed<(number | null)[]>(() => {
+  const j = robot.value?.joints;
+  return Array.isArray(j) ? j.slice(0, 6) : [];
 });
 </script>
 
@@ -167,12 +179,20 @@ const edgeDot = computed(() => {
 .io-label { color: var(--text-dim); width: 28px; }
 .io-val { color: var(--text); font-weight: 500; }
 
+/* 六轴关节角 */
+.joints { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; text-align: center; padding: 6px 0; }
+.joints .val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent); }
+.joints .lbl { font-size: 9px; color: var(--text-dim); margin-top: 1px; }
+
 /* 数值字段 */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; padding: 4px 0; }
 .stats .val { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .stats .val.ok  { color: var(--ok); }
 .stats .val.ng  { color: var(--ng); }
 .stats .lbl { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
+/* 未接现场点位的字段:整块淡化,提示这不是实测值 */
+.stats.is-default { opacity: 0.45; }
 
 .meta {
   margin-top: 8px; padding-top: 6px;

@@ -13,7 +13,14 @@ export interface RobotState {
 export interface LineStatus {
   ts: number;
   lineId: string;
-  state: 'running' | 'idle' | 'alarm' | 'offline';
+  // 契约 v1.1:4 态(兼容 mock/旧数据)+ 10 态(PLC 工序状态)
+  // PLC 整数对照见 edge/plc_collector.py STATE_MAP 与 db/init/004_line_state_stages.sql
+  state:
+    | 'running' | 'idle' | 'alarm' | 'offline'
+    | 'waiting_feed' | 'feeding' | 'assembling' | 'unloading'
+    | 'unload_done' | 'waiting_next'
+    | 'init_error' | 'stopped' | 'manual_mode'
+    | string;
   productCode: string;
   goodCount: number;
   ngCount: number;

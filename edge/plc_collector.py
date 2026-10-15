@@ -245,11 +245,15 @@ def group_signals(signals: list[Signal], values: dict[str, Any]) -> dict:
 
 
 def line_status_payload(values: dict[str, Any]) -> dict:
+    # 注意:state 的 0(等待入料)是合法值,不能用 `or 1` 兜底,否则 0 被吞成 1。
+    # 现场 11 word 表不提供 productCode / goodCount / ngCount / beatMs,
+    # 这些按契约"只增不改"原则保留字段、输出默认值。
+    raw_state = values.get("line.state")
+    state = STATE_MAP.get(int(raw_state), "offline") if isinstance(raw_state, (int, float)) else "offline"
     return {
         "ts": now_ms(),
         "lineId": LINE_ID,
-        "state":  {0: "offline", 1: "idle", 2: "running", 3: "alarm"}.get(
-                    int(values.get("line.state", 1) or 1), "idle"),
+        "state": state,
         "productCode": str(values.get("line.productCode", "") or ""),
         "goodCount":   int(values.get("line.goodCount", 0) or 0),
         "ngCount":     int(values.get("line.ngCount", 0) or 0),
@@ -293,15 +297,36 @@ def publish(c: mqtt.Client, topic: str, payload: dict, qos=0, retain=False):
 # sig_name 指向 register-mapping.csv 里的 cmd.* 点位;None 表示契约预留(edge 暂不写)
 # kind: pulse = 写 1 后 sleep 100ms 再写 0;level = 直接写新值(电平)
 CMD_DISPATCH = {
-    'start':       ('cmd.start',      'pulse'),
-    'stop':        ('cmd.stop',       'pulse'),
-    'reset':       ('cmd.reset',      'pulse'),
-    'changeover':  (None,             'noop'),
-    'mode_set':    ('cmd.modeSet',    'level'),
-    'alarm_clear': ('cmd.alarmClear', 'pulse'),
+    'start':       ('cmd.start',       'pulse'),
+    'stop':        ('cmd.stop',        'pulse'),
+    'reset':       (None,              'noop'),
+    'changeover':  (None,              'noop'),
+    'mode_set':    ('cmd.modeToggle',  'mode_toggle'),
+    'alarm_clear': (None,              'noop'),
+    'conveyor':    ('cmd.conveyor',    'conveyor'),
 }
-MODE_VALUE = {'manual': 0, 'auto': 1, 'remote': 2}   # 与 robot_state.mode 契约一致
+# 现场 11 word 表没有 reset / changeover / alarm_clear 对应寄存器,
+# 这三个指令回 rejected 而不是假装 acked —— 避免操作员以为生效了。
+
+# 手动模式切换:PLC word 8,值域 {1,2},脉冲型(按下触发,松手置0)
+MODE_TOGGLE_VALUE = {'acquire': 1, 'release': 2}
+# 传送带:PLC word 10,值域 {0,1},电平型(持续写值)
+CONVEYOR_VALUE = {'stop': 0, 'forward': 1}
 CMD_PULSE_MS = 100
+
+# 产线状态:PLC dataDB[6](Modbus word 6)整数 → 契约字符串
+# 依据 DB3-Modbus-映射表.xls「产线状态」枚举(契约 v1.1,见 db/init/004_line_state_stages.sql)
+STATE_MAP = {
+    0:   'waiting_feed',   # 等待入料
+    1:   'feeding',        # 入料中
+    2:   'assembling',     # 装配中
+    3:   'unloading',      # 下料中
+    4:   'unload_done',    # 下料完成
+    5:   'waiting_next',   # 等待后站入料
+    100: 'init_error',     # 初始化错误状态
+    101: 'stopped',        # 停止状态
+    102: 'manual_mode',    # 手动控制模式
+}
 
 
 def _dispatch_cmd(plc: Plc, cmd_type: str, params: dict) -> tuple[bool, str]:
@@ -311,35 +336,53 @@ def _dispatch_cmd(plc: Plc, cmd_type: str, params: dict) -> tuple[bool, str]:
         return False, f'未知指令类型: {cmd_type}'
     sig_name, kind = spec
     if sig_name is None:
-        # 契约预留(changeover 等),edge 暂未对接;告知仍 acked
-        return True, f'{cmd_type} 已接受(edge 暂无对应寄存器,等电气工程师填点位)'
+        # 现场 PLC 11 word 表里没有这个点位的寄存器 → 明确拒绝,不能假 ack
+        return False, f'现场 PLC 无 {cmd_type} 对应寄存器(11 word 表未开放),指令未下发'
     sig = _cmd_signals.get(sig_name)
     if sig is None:
         return False, f'点位 {sig_name} 未在 register-mapping.csv 配置'
-    # 算写入值
+    params = params or {}
+
     if kind == 'pulse':
         value = 1
-    elif kind == 'level':
-        mode = (params or {}).get('mode')
-        if mode not in MODE_VALUE:
-            return False, f'mode_set.params.mode 必须是 {list(MODE_VALUE.keys())},收到 {mode!r}'
-        value = MODE_VALUE[mode]
+    elif kind == 'mode_toggle':
+        act = params.get('action')
+        if act not in MODE_TOGGLE_VALUE:
+            return False, (f'mode_set.params.action 必须是 '
+                           f'{list(MODE_TOGGLE_VALUE.keys())},收到 {act!r}')
+        value = MODE_TOGGLE_VALUE[act]
+    elif kind == 'conveyor':
+        act = params.get('action')
+        if act not in CONVEYOR_VALUE:
+            return False, (f'conveyor.params.action 必须是 '
+                           f'{list(CONVEYOR_VALUE.keys())},收到 {act!r}')
+        value = CONVEYOR_VALUE[act]
     else:
         return False, f'未知 kind={kind}'
+
     return _write_cmd(plc, sig.address, value, kind)
 
 
 def _write_cmd(plc: Plc, address: int, value: int, kind: str) -> tuple[bool, str]:
-    """写 PLC 寄存器。plc.connected=False → 调试跳过(开发机可验通链路)。"""
+    """写 PLC 寄存器。
+
+    kind 语义(依据 DB3-Modbus-映射表.xls 说明列):
+      pulse       —— "写入应为按下触发,松手置0" → 写 value,sleep,再写 0
+      mode_toggle —— 同上(手动模式切换 1/2 也是按下触发)
+      conveyor    —— "输入1正转 0停止" → 电平型,只写一次,持续有效
+    plc.connected=False → 调试跳过(开发机可验通链路)。
+    """
     if not plc.connected:
         LOG.warning('PLC 未连接,跳过写 addr=%d,value=%d(调试模式,仍回 acked)',
                     address, value)
         return True, 'PLC 未连接,调试模式跳过'
+    # 脉冲型:凡是要"松手置0"的,写完都要回写 0
+    pulse_like = kind in ('pulse', 'mode_toggle')
     try:
         rr = plc.cli.write_register(address=address, value=value, device_id=plc.unit)
         if rr.isError():
             return False, f'PLC 写寄存器失败: {rr}'
-        if kind == 'pulse':
+        if pulse_like:
             time.sleep(CMD_PULSE_MS / 1000.0)
             rr2 = plc.cli.write_register(address=address, value=0, device_id=plc.unit)
             if rr2.isError():

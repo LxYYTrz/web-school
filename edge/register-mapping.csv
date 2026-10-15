@@ -1,60 +1,65 @@
 # ============================================================================
-# register-mapping.csv — 按电气工程师提供的 DB3-Modbus-映射表.xls 填写
+# register-mapping.csv — 按 DB3-Modbus-映射表.xls(2026-10-15 版)填写
 # ============================================================================
 # PLC: Siemens S7-1200 CPU 1214C
-# IP=192.168.10.31  Port=503  Unit ID=2
-# DB  : DB3 (plc数据区),优化访问=关闭,MB_SERVER HOLD_REG = word[0..22] (23 word,46 byte)
-# 字序: TIA 默认大端(字节);Modbus 协议字序=高字在前
-#       INT16/INT 直读;INT32/DINT 现场若读出数字异常,把 PLC_WORD_ORDER 改为 LITTLE
-# 缩放: 关节/TCP/节拍 PLC 端×10 存储(节省 INT16 范围),采集器÷10 还原(scale=0.1)
-# 现场: 改点位/加变量只动这张表,plc_collector.py 不动
-# ----------------------------------------------------------------------------
-# 写命令点位约定:name 以 "cmd." 开头 → 由 plc_collector.py 识别为写命令,
-# 不进主循环读取;handler 通过 pymodbus write_register 下发。
-# 地址是 PLACEHOLDER,等电气工程师给真实 DB 字地址。
+# 网络: 192.168.10.31:503   Unit ID = 2
+# DB  : DB3「plc服务端」(TIA 侧结构名 dataDB),优化访问 = 关闭
+# HOLD: MB_SERVER HOLD 区长度 = 11 word (22 字节) —— 与本表一致,PLC 无需再改
+# 字序: TIA 默认大端(字节);Modbus 协议字序 = 高字在前 → 无需字节交换
+# 缩放: 关节角 PLC 端 ×10 存储(节省 INT16 范围),采集器 ÷10 还原
+#
+# 【与旧版(2026-10-13)的差异】
+#   旧版按 23 word 假设,现场 PLC 实际只开放 word[0..10],读 11+ 报
+#   Illegal Data Address(exception_code=2)。本表改为现场实际的 11 word。
+#   删除:speedPct / robot.mode / alarmCode / beatMs / program / productCode
+#         tcp[0..5] / goodCount / ngCount(PLC 暂未提供,契约侧输出默认值)
+#   新增:产线状态(word 6,10 值枚举)+ 4 个控制写入点(word 7~10)
+#
+# 【TIA 侧命名提示】
+#   本表 Modbus 字地址(0..10)已在现场实测可读(2026-10-15),为准。
+#   xls 里 TIA 字节偏移列写作 dataDB[0..10];S7-1200 中 dataDB 与
+#   「plc服务端」若为两个块,请确认 MB_SERVER 指向的是哪一个 —— 但只要
+#   Modbus word 0..10 读出来对,就是对的,现场以实测为准。
+#
+# 【控制点位语义】(name 以 "cmd." 开头 → plc_collector.py 识别为写命令,
+#   不进主循环读取;handler 用 pymodbus write_register 下发)
+#   脉冲型:写 1 后 CMD_PULSE_MS(100ms)自动写回 0,模拟"按下触发,松手置0"
+#   电平型:持续写新值,PLC 端做边沿检测即可
 # ----------------------------------------------------------------------------
 name,address,type,scale,offset,unit,note
 
-# === 机器人 6 轴关节 (INT16 ×10, ÷10 后 deg;word 0..5;xls R8-R13) ===
-robot.joints[0],0,INT,0.1,0,deg,J1 关节角 (DBW0)
-robot.joints[1],1,INT,0.1,0,deg,J2 关节角 (DBW2)
-robot.joints[2],2,INT,0.1,0,deg,J3 关节角 (DBW4)
-robot.joints[3],3,INT,0.1,0,deg,J4 关节角 (DBW6)
-robot.joints[4],4,INT,0.1,0,deg,J5 关节角 (DBW8)
-robot.joints[5],5,INT,0.1,0,deg,J6 关节角 (DBW10)
+# === 读取点位 ===
 
-# === 机器人运行状态 (UINT16;word 6..8;xls R14-R16) ===
-robot.speedPct,6,UINT,1.0,0,%,速度百分比 (DBW12)
-robot.mode,7,UINT,1.0,0,,0=manual 1=auto 2=remote 3=error (DBW14)
-robot.alarmCode,8,UINT,1.0,0,,0=无报警;非 0=厂商报警码 (DBW16)
+# --- 机器人 6 轴关节 (INT ×10, ÷10 后 deg;word 0..5) ---
+robot.joints[0],0,INT,0.1,0,deg,J1 关节角 (dataDB[0] 字节0)
+robot.joints[1],1,INT,0.1,0,deg,J2 关节角 (dataDB[1] 字节2)
+robot.joints[2],2,INT,0.1,0,deg,J3 关节角 (dataDB[2] 字节4)
+robot.joints[3],3,INT,0.1,0,deg,J4 关节角 (dataDB[3] 字节6)
+robot.joints[4],4,INT,0.1,0,deg,J5 关节角 (dataDB[4] 字节8)
+robot.joints[5],5,INT,0.1,0,deg,J6 关节角 (dataDB[5] 字节10)
 
-# === 产线状态 (UINT16;word 9..12;xls R17-R20) ===
-line.state,9,UINT,1.0,0,,0=offline 1=idle 2=running 3=alarm (DBW18)
-line.beatMs,10,UINT,0.1,0,ms,节拍(PLC×10,÷10 后 ms) (DBW20)
-robot.program,11,UINT,1.0,0,,程序号 (DBW22)
-line.productCode,12,UINT,1.0,0,,产品编号 (DBW24)
+# --- 产线状态 (UINT;word 6) ---
+# 0=等待入料 1=入料中 2=装配中 3=下料中 4=下料完成 5=等待后站入料
+# 100=初始化错误状态 101=停止状态 102=手动控制模式
+# → plc_collector.py STATE_MAP 负责整数→契约字符串
+line.state,6,UINT,1.0,0,,产线状态 (dataDB[6] 字节12) 10值枚举见 STATE_MAP
 
-# === TCP 位姿 (INT16 ×10;word 13..18;xls R21-R26;若现场无此数据把整段删掉) ===
-robot.tcp[0],13,INT,0.1,0,mm,TCP X (DBW26)
-robot.tcp[1],14,INT,0.1,0,mm,TCP Y (DBW28)
-robot.tcp[2],15,INT,0.1,0,mm,TCP Z (DBW30)
-robot.tcp[3],16,INT,0.1,0,deg,TCP rx (DBW32)
-robot.tcp[4],17,INT,0.1,0,deg,TCP ry (DBW34)
-robot.tcp[5],18,INT,0.1,0,deg,TCP rz (DBW36)
+# === 控制点位(写命令) ===
 
-# === 计数 (DINT=INT32;word 19..22;xls R27-R28) ===
-line.goodCount,19,DINT,1.0,0,pcs,良品累计 (DBD38,word 19-20)
-line.ngCount,21,DINT,1.0,0,pcs,NG 累计 (DBD42,word 21-22)
+# --- 停止信号输入 (word 7) ---
+# 写入 1 = 停止产线,切换到停止状态。写入应为按下触发,松手置0 → 脉冲型
+cmd.stop,7,UINT,1.0,0,,停止信号输入 (dataDB[7] 字节14) 写1停止,脉冲型
 
-# ============================================================================
-# 控制点位(写命令,name 以 cmd. 开头;plc_collector.py 自动识别)
-# ============================================================================
-# 地址是 100/101/102/103/104 占位,等电气工程师按"DB3-控制信号映射"填真实地址。
-# 脉冲型(start/stop/reset/alarmClear):edge 写 1 后 100ms 自动写 0;
-# 电平型(modeSet):持续写新值,PLC 端做边沿检测即可。
-# ============================================================================
-cmd.start,100,UINT,1.0,0,,写-启动,脉冲(PLACEHOLDER 地址,等 DB3 真实地址)
-cmd.stop,101,UINT,1.0,0,,写-停止,脉冲(PLACEHOLDER)
-cmd.reset,102,UINT,1.0,0,,写-复位,脉冲(PLACEHOLDER)
-cmd.alarmClear,103,UINT,1.0,0,,写-清警,脉冲(PLACEHOLDER)
-cmd.modeSet,104,UINT,1.0,0,,写-模式(0=manual/1=auto/2=remote),电平(PLACEHOLDER)
+# --- 手动模式切换输入 (word 8) ---
+# 产线状态为停止状态(101)时可用。1 = 获取手动模式 2 = 释放手动模式
+# 写入为按下触发,松手置0 → 脉冲型,值域 {1,2}
+cmd.modeToggle,8,UINT,1.0,0,,手动模式切换 (dataDB[8] 字节16) 1=获取 2=释放,脉冲型
+
+# --- 启动信号输入 (word 9) ---
+# 切换产线状态为启动模式,产线状态跳转到 0(等待入料)
+# 写入为按下触发,松手置0 → 脉冲型
+cmd.start,9,UINT,1.0,0,,启动信号输入 (dataDB[9] 字节18) 写1启动,状态跳0,脉冲型
+
+# --- 写入传送带控制 (word 10) ---
+# 产线状态必须为手动控制模式(102)才可使用。1 正转 0 停止 → 电平型
+cmd.conveyor,10,UINT,1.0,0,,传送带控制 (dataDB[10] 字节20) 1=正转 0=停止,电平型

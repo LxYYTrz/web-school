@@ -5,10 +5,37 @@ import { CatalogService } from '../infra/catalog.service';
 import { MqttIngestService } from '../ingest/mqtt-ingest.service';
 import type { SessionUser } from '../auth/session-user';
 
-// 契约 v1.1 白名单(对齐 docs/contract/README.md §3.6,扩展项仅追加不删)
+// 契约 v1.2 白名单(对齐 docs/contract/README.md §3.6,扩展项仅追加不删)
+// v1.1: start/stop/reset/changeover/mode_set/alarm_clear
+// v1.2: + conveyor(现场 11 word 表 dataDB[10] 传送带控制)
+// 注:reset / changeover / alarm_clear 在现场 PLC 无对应寄存器,
+//     edge 会回 rejected;保留在白名单是为契约完整性,不等于可执行。
 const ALLOWED_TYPES = new Set([
   'start', 'stop', 'reset', 'changeover', 'mode_set', 'alarm_clear',
+  'conveyor',
 ]);
+
+// 各指令的 params 校验表(值域以现场 DB3-Modbus-映射表.xls 为准)
+//   mode_set.params.action: 'acquire'(1) | 'release'(2)   ← PLC word 8,脉冲
+//   conveyor.params.action: 'forward'(1) | 'stop'(0)       ← PLC word 10,电平
+const PARAM_ENUMS: Record<string, Record<string, number>> = {
+  mode_set: { acquire: 1, release: 2 },
+  conveyor: { forward: 1, stop: 0 },
+};
+
+function validateParams(type: string, params: Record<string, unknown> | undefined):
+  { ok: true } | { ok: false; error: string } {
+  const enumMap = PARAM_ENUMS[type];
+  if (!enumMap) return { ok: true };               // 无参数约束的指令
+  const act = (params ?? {}).action;
+  if (typeof act !== 'string' || !(act in enumMap)) {
+    return {
+      ok: false,
+      error: `${type}.params.action 必须是 ${Object.keys(enumMap).join('|')},收到 ${JSON.stringify(act)}`,
+    };
+  }
+  return { ok: true };
+}
 
 // 契约 §5 第 4 条:15s 无 ack 置 timeout
 const CMD_TIMEOUT_SEC = 15;
@@ -70,6 +97,10 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
     if (lineId === undefined || deviceId === undefined) {
       return { ok: false, error: '未知产线或设备编码' };
     }
+
+    // params 值域校验(契约 §3.6):mode_set/conveyor 的 action 必须是枚举值
+    const pv = validateParams(body.type, body.params);
+    if (!pv.ok) return { ok: false, error: pv.error };
 
     // operator 从 session 取(契约 §5 第 2 条:严禁信客户端)
     const operator = user?.username || 'unknown';

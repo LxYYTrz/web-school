@@ -60,6 +60,24 @@ html, body, #app {
 .alarm-dot { background: var(--ng); box-shadow: 0 0 8px var(--ng); animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: 0.3; } }
 
+/* 产线状态语义色(契约 v1.1 的 10 态工序状态 + 原 4 态)
+   见 edge/plc_collector.py STATE_MAP / db/init/004_line_state_stages.sql */
+.st-running, .st-feeding, .st-assembling, .st-unloading, .st-unload_done {
+  color: var(--ok);           /* 产线在动 */
+}
+.st-waiting_feed, .st-waiting_next, .st-idle {
+  color: var(--accent);       /* 等待下一动作 */
+}
+.st-stopped, .st-manual_mode {
+  color: var(--text-dim);     /* 停止 / 手动接管 */
+}
+.st-init_error, .st-alarm {
+  color: var(--ng);           /* 异常 */
+}
+.st-offline {
+  color: var(--text-dim);
+}
+
 .body { padding: 14px; height: calc(100% - 52px); overflow: auto; }
 
 /* 通用面板 */
