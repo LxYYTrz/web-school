@@ -58,3 +58,11 @@ export interface LineSnapshot {
   edge: { status: 'online' | 'offline' } | null;
   robots: Record<string, RobotState>;
 }
+
+// 控制指令回执(契约 §3.7);前端订阅 socket 'command_ack' 收到
+export interface CommandAck {
+  cmdId: string;
+  ts: number;
+  status: 'acked' | 'rejected' | 'failed' | 'timeout';
+  message?: string | null;
+}

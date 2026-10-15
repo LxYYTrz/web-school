@@ -29,33 +29,12 @@
       </div>
     </div>
 
-    <!-- 右:产线状态摘要 -->
-    <div class="panel overlay right">
-      <div class="panel-title"><span>产线 LINE-01</span></div>
-      <div v-if="status" class="line-stats">
-        <div class="stat">
-          <div class="stat-value" :class="status.state">{{ statusText }}</div>
-          <div class="stat-label">状态</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value ok">{{ status.goodCount }}</div>
-          <div class="stat-label">良品</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value ng">{{ status.ngCount }}</div>
-          <div class="stat-label">不良</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value">{{ (status.beatMs / 1000).toFixed(1) }}s</div>
-          <div class="stat-label">节拍</div>
-        </div>
-      </div>
-      <el-empty v-else description="等待产线状态…" :image-size="60" />
-      <div v-if="status" class="meta">
-        <span>产品 {{ status.productCode }}</span>
-        <span>边缘 {{ edgeText }}</span>
-      </div>
-    </div>
+    <!-- 右:产线状态 + I/O 摘要 + 控制(契约 v1.1 路线 6) -->
+    <IoPanel :can-command="auth.canCommand">
+      <template #controls>
+        <ControlButtons />
+      </template>
+    </IoPanel>
 
     <div class="hint">拖拽旋转 · 滚轮缩放</div>
 
@@ -68,13 +47,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { WarningFilled } from '@element-plus/icons-vue';
 import { useLineData } from '../composables/useLineData';
+import { useAuthStore } from '../stores/auth';
 import { SceneManager } from '../three/SceneManager';
 import { RobotArm } from '../three/RobotArm';
+import IoPanel from '../components/IoPanel.vue';
+import ControlButtons from '../components/ControlButtons.vue';
 
-const { robot, status, edgeText, connected } = useLineData();
+const { robot, connected } = useLineData();
+const auth = useAuthStore();
 
 const host = ref<HTMLElement>();
 let scene: SceneManager | null = null;
@@ -101,13 +84,6 @@ watch(robot, (r) => {
   arm.setAlarm(r.alarmCode !== 0);
 });
 
-const statusText = computed(() => {
-  const map: Record<string, string> = {
-    running: '运行中', idle: '待机', alarm: '报警', offline: '离线',
-  };
-  return status.value ? map[status.value.state] ?? status.value.state : '';
-});
-
 // 角度 → 刻度条上的位置(量程 ±180°)
 function markerPos(deg: number) {
   const pct = ((deg + 180) / 360) * 100;
@@ -121,7 +97,6 @@ function markerPos(deg: number) {
 
 .overlay { position: absolute; top: 14px; width: 240px; z-index: 5; }
 .overlay.left { left: 14px; }
-.overlay.right { right: 14px; width: 260px; }
 
 .joints { display: flex; flex-direction: column; gap: 8px; }
 .joint-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
@@ -145,16 +120,6 @@ function markerPos(deg: number) {
   display: flex; justify-content: space-between;
   font-size: 12px; color: var(--text-dim);
 }
-
-.line-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
-.stat-value { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.stat-value.ok { color: var(--ok); }
-.stat-value.ng { color: var(--ng); }
-.stat-value.running { color: var(--ok); }
-.stat-value.alarm { color: var(--ng); }
-.stat-value.offline { color: var(--warn); }
-.stat-value.idle { color: var(--text-dim); }
-.stat-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
 .hint {
   position: absolute; left: 14px; bottom: 10px;
