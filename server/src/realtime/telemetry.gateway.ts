@@ -42,4 +42,9 @@ export class TelemetryGateway {
   broadcastEdge(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('edge_status', msg);
   }
+
+  // 控制指令回执推前端(cmd_ack → command_ack)
+  broadcastCommandAck(lineId: string, msg: unknown) {
+    this.server?.to(`line:${lineId}`).emit('command_ack', msg);
+  }
 }

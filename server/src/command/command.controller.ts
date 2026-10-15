@@ -1,14 +1,25 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { CommandBody, CommandService } from './command.service';
+import { AuthGuard } from '../auth/auth.guard';
+import { CommandGuard } from './command.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { SessionUser } from '../auth/session-user';
 
 @Controller('api/lines')
 export class CommandController {
   constructor(private readonly commands: CommandService) {}
 
-  // TODO(安全):当前无鉴权,仅供联调!第 4 步必须接入:JWT 登录态 +
-  // 角色权限(api:command:execute)+ user_line_scope 产线数据权限
+  // 鉴权链:
+  //   AuthGuard 先保证 session 有 username + level,
+  //   CommandGuard 再校验 level >= 2。
+  // operator 取自 session(契约 §5 第 2 条),前端不得在 body 传 username。
   @Post(':lineId/commands')
-  send(@Param('lineId') lineId: string, @Body() body: CommandBody) {
-    return this.commands.issue(lineId, body);
+  @UseGuards(AuthGuard, CommandGuard)
+  send(
+    @Param('lineId') lineId: string,
+    @Body() body: CommandBody,
+    @CurrentUser() user: SessionUser,
+  ) {
+    return this.commands.issue(lineId, body, user);
   }
 }

@@ -98,6 +98,7 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
         this.gateway.broadcastEdge(lineId, msg);
       } else if (kind === 'cmd_ack') {
         this.history.ackCommand(msg);
+        this.gateway.broadcastCommandAck(lineId, msg);
       }
     } catch (e) {
       this.logger.error(`报文处理失败 ${topic}: ${(e as Error).message}`);
