@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import re
+import socket
 import sys
 import time
 import urllib.parse
@@ -38,7 +39,25 @@ from pathlib import Path
 
 LOG = logging.getLogger("vision-forwarder")
 
+
+def _force_utf8_stdio():
+    """把 stdout/stderr 固定成 UTF-8。
+
+    现场是中文 Windows,控制台默认 GBK(936)。日志里的中文在 GBK 控制台上
+    可能抛 UnicodeEncodeError 直接把转发器打死 —— 这是个很容易被忽略的
+    "跑一会儿就自己没了"的坑。errors='replace' 保证再奇怪的字符也不崩。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
+_force_utf8_stdio()
+
 STATE_FILE = ".vision_forwarder_state.json"   # 记录已传过的文件,避免重复上传
+CONFIG_FILE = "config.json"                   # UTF-8,配置走它而不是 .cmd(见 load_config)
 DEFAULT_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
 
 
@@ -194,20 +213,114 @@ def upload(path: Path, endpoint: str, token: str, camera: str, sn: str, result: 
         conn.close()
 
 
+def load_config() -> dict:
+    """优先级:命令行 > config.json > 环境变量 > 默认值。
+
+    为什么配置走 config.json 而不是 .cmd 设环境变量:
+    cmd.exe 按系统 OEM 代码页(中文 Windows = GBK)传环境变量,UTF-8 编码的中文路径
+    会在 cmd→Python 之间被按 GBK 解码而变成乱码,目录找不到。
+    Python 直接读 UTF-8 文件就绕开了整个代码页问题 —— 路径可以随便带中文。
+    """
+    cfg = {}
+    cfg_path = Path(__file__).resolve().parent / CONFIG_FILE
+    if cfg_path.exists():
+        try:
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"警告:{CONFIG_FILE} 解析失败,忽略({e})")
+    return cfg
+
+
+def do_check(watch_dir, token, endpoint) -> int:
+    """部署前自检。全部输出走 Python(UTF-8 已处理),不经 cmd 中转,
+    所以中文路径能正常显示。自检结果也会写进日志文件。"""
+    ok_all = True
+    out = []
+
+    def line(flag, text):
+        nonlocal ok_all
+        if flag != "OK":
+            ok_all = False
+        out.append(f"  [{flag}] {text}")
+        LOG.info("[%s] %s", flag, text)
+
+    out.append("=" * 60)
+    out.append("  部署前自检")
+    out.append("=" * 60)
+
+    out.append("")
+    out.append("[1] Python 版本")
+    out.append(f"  {sys.version.split()[0]}  "
+               + ("[OK] 3.9+" if sys.version_info >= (3, 9) else "[NG] 需要 3.9 或更高"))
+    if sys.version_info < (3, 9):
+        ok_all = False
+
+    # 网络 + 端口
+    u = urllib.parse.urlsplit(endpoint)
+    out.append("")
+    out.append(f"[2] 到工控机 {u.hostname}:{u.port or 80}")
+    reachable = False
+    try:
+        with socket.create_connection((u.hostname, u.port or 80), timeout=5):
+            reachable = True
+    except OSError as e:
+        out.append(f"  [NG] 连不上: {e}")
+    if reachable:
+        out.append("  [OK] 端口可连")
+    ok_all = ok_all and reachable
+
+    # 密钥
+    out.append("")
+    out.append("[3] 共享密钥")
+    if not token:
+        out.append(f"  [NG] 没填 —— 在 {CONFIG_FILE} 里填 token")
+    elif token == "PASTE_SECRET_HERE":
+        out.append(f"  [NG] 还是占位符 —— 把工控机 server\\.env 里的 VISION_TOKEN 粘进来")
+    else:
+        out.append(f"  [OK] 已填(长度 {len(token)})")
+    ok_all = ok_all and bool(token) and token != "PASTE_SECRET_HERE"
+
+    # 目录
+    out.append("")
+    out.append("[4] 监视目录")
+    if not watch_dir:
+        out.append(f"  [NG] 没填 —— 在 {CONFIG_FILE} 里填 watch_dir")
+        ok_all = False
+    else:
+        p = Path(watch_dir)
+        if p.is_dir():
+            files = [f.name for f in p.iterdir() if f.is_file()]
+            out.append(f"  [OK] {p}")
+            out.append(f"       现有 {len(files)} 个文件"
+                       + (f",例如 {files[0]}" if files else ""))
+            # 顺带演示解析结果,一眼看出文件名规则对不对
+            for f in files[:3]:
+                if Path(f).suffix.lower() in DEFAULT_EXTENSIONS:
+                    out.append(f"       文件名解析: {f}  ->  {parse_filename(p / f)}")
+        else:
+            out.append(f"  [NG] 不存在: {p}")
+            ok_all = False
+
+    text = "\n".join(out)
+    print(text)
+    print("")
+    print("=" * 60)
+    print("  全部通过,可以运行 start.cmd" if ok_all else "  有 [NG] 项,先按提示处理")
+    print("=" * 60)
+    return 0 if ok_all else 1
+
+
 def main():
     ap = argparse.ArgumentParser(description="视觉机图片转发器")
-    ap.add_argument("--watch-dir", default=os.getenv("VISION_WATCH_DIR"))
-    ap.add_argument("--endpoint", default=os.getenv(
-        "VISION_ENDPOINT", "http://192.168.10.192:3000/api/vision/images"))
-    ap.add_argument("--token", default=os.getenv("VISION_TOKEN", ""))
-    ap.add_argument("--camera", default=os.getenv("VISION_CAMERA", "cam-01"))
-    ap.add_argument("--poll-seconds", type=float,
-                    default=float(os.getenv("VISION_POLL_SECONDS", "2")))
-    ap.add_argument("--move-to", default=os.getenv("VISION_MOVE_TO", ""),
-                    help="上传成功后把原图移到该目录(不填则原地不动)")
-    ap.add_argument("--delete-after", action="store_true",
-                    default=os.getenv("VISION_DELETE_AFTER") == "1",
-                    help="上传成功后删掉原图(慎用:删了就传不回去了)")
+    ap.add_argument("--watch-dir")
+    ap.add_argument("--endpoint")
+    ap.add_argument("--token")
+    ap.add_argument("--camera")
+    ap.add_argument("--poll-seconds", type=float)
+    ap.add_argument("--move-to")
+    ap.add_argument("--delete-after", action="store_true", default=None)
+    ap.add_argument("--check", action="store_true",
+                    help="只做部署前自检,不启动监视")
     args = ap.parse_args()
 
     logging.basicConfig(
@@ -215,25 +328,65 @@ def main():
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+    # 同时写一份 UTF-8 日志文件。现场可能用 pythonw 后台跑(没有控制台),
+    # 出问题时就只能靠这个文件查;控制台是 GBK 也会花屏,文件这边始终是 UTF-8。
+    log_path = Path(__file__).resolve().parent / "vision_forwarder.log"
+    try:
+        fh = logging.FileHandler(log_path, encoding="utf-8")
+        fh.setFormatter(logging.Formatter(
+            "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"))
+        logging.getLogger().addHandler(fh)
+    except Exception as e:      # 只读介质等情况,不该让整个转发器起不来
+        LOG.warning("无法写日志文件(%s),仅输出到控制台", e)
 
-    if not args.watch_dir:
-        ap.error("必须指定 --watch-dir(或设 VISION_WATCH_DIR 环境变量)")
-    if not args.token:
-        ap.error("必须指定 --token(或设 VISION_TOKEN 环境变量)"
-                 "—— 值从工控机 server\\.env 的 VISION_TOKEN 取")
+    cfg = load_config()
+    env = os.environ
 
-    watch = Path(args.watch_dir)
+    def pick(cli, cfg_key, env_key, default=None):
+        if cli not in (None, ""):
+            return cli
+        if cfg.get(cfg_key) not in (None, ""):
+            return cfg[cfg_key]
+        return env.get(env_key, default)
+
+    watch_dir = pick(args.watch_dir, "watch_dir", "VISION_WATCH_DIR")
+    token = pick(args.token, "token", "VISION_TOKEN", "")
+    endpoint = pick(args.endpoint, "endpoint", "VISION_ENDPOINT",
+                    "http://192.168.10.192:3000/api/vision/images")
+    camera = pick(args.camera, "camera", "VISION_CAMERA", "cam-01")
+    poll_s = float(pick(args.poll_seconds, "poll_seconds", "VISION_POLL_SECONDS", 2))
+    move_to = pick(args.move_to, "move_to", "VISION_MOVE_TO", "") or ""
+    del_after = (args.delete_after if args.delete_after is not None
+                 else bool(cfg.get("delete_after")
+                           or env.get("VISION_DELETE_AFTER") == "1"))
+    exts = tuple(e.strip().lower() for e in
+                 (cfg.get("extensions") or env.get("VISION_EXTENSIONS")
+                  or ",".join(DEFAULT_EXTENSIONS)).split(","))
+
+    LOG.info("配置文件: %s", CONFIG_FILE if (Path(__file__).resolve().parent / CONFIG_FILE).exists() else "(无,用默认值)")
+    LOG.info("监视目录: %s", watch_dir or "(未设置)")
+    LOG.info("接口    : %s", endpoint)
+    LOG.info("相机    : %s", camera)
+    LOG.info("日志文件: %s", log_path)
+
+    if args.check:
+        return do_check(watch_dir, token, endpoint)
+
+    if not watch_dir:
+        ap.error(f"没配置监视目录:在 {CONFIG_FILE} 里填 watch_dir")
+    if not token or token == "PASTE_SECRET_HERE":
+        ap.error(f"没配置共享密钥:在 {CONFIG_FILE} 里填 token"
+                 "(工控机 server\\.env 的 VISION_TOKEN)")
+
+    watch = Path(watch_dir)
     if not watch.is_dir():
         ap.error(f"监视目录不存在: {watch}")
     watch.mkdir(parents=True, exist_ok=True)
 
-    exts = tuple(e.strip().lower() for e in
-                 os.getenv("VISION_EXTENSIONS", ",".join(DEFAULT_EXTENSIONS)).split(","))
 
     state_path = watch / STATE_FILE
     state = load_state(state_path)
-    LOG.info("监视目录 %s", watch)
-    LOG.info("接口 %s", args.endpoint)
     LOG.info("已有 %d 条去重记录", len(state))
     LOG.info("就绪。Ctrl+C 停止。")
 
@@ -246,7 +399,7 @@ def main():
                            if p.is_file() and p.suffix.lower() in exts]
             except OSError as e:
                 LOG.error("读目录失败: %s", e)
-                time.sleep(args.poll_seconds)
+                time.sleep(poll_s)
                 continue
 
             for p in entries:
@@ -266,16 +419,16 @@ def main():
                 sn, result, ts = parsed
 
                 try:
-                    info = upload(p, args.endpoint, args.token, args.camera, sn, result, ts)
+                    info = upload(p, endpoint, token, camera, sn, result, ts)
                     LOG.info("已传 sn=%s result=%s id=%s (%s)",
                              sn, result, info.get("id"), p.name)
                     state[key] = "ok"
                     failures.pop(key, None)
 
-                    if args.delete_after:
+                    if del_after:
                         p.unlink(missing_ok=True)
-                    elif args.move_to:
-                        dest = Path(args.move_to)
+                    elif move_to:
+                        dest = Path(move_to)
                         dest.mkdir(parents=True, exist_ok=True)
                         p.replace(dest / p.name)
                 except Exception as exc:
@@ -289,7 +442,7 @@ def main():
             if len(state) > 20000:      # 去重表别无限涨
                 state = dict(list(state.items())[-10000:])
             save_state(state_path, state)
-            time.sleep(args.poll_seconds)
+            time.sleep(poll_s)
 
     except KeyboardInterrupt:
         LOG.info("停止")
