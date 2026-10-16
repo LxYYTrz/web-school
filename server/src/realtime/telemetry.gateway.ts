@@ -31,6 +31,11 @@ export class TelemetryGateway {
     this.server?.to(`line:${lineId}`).emit('line_status', msg);
   }
 
+  // 产线 IO(DB3 word 11~16,契约 §3.8)
+  broadcastIo(lineId: string, msg: unknown) {
+    this.server?.to(`line:${lineId}`).emit('io_state', msg);
+  }
+
   broadcastEvent(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('event', msg);
   }
@@ -46,5 +51,12 @@ export class TelemetryGateway {
   // 控制指令回执推前端(cmd_ack → command_ack)
   broadcastCommandAck(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('command_ack', msg);
+  }
+
+  // AI 建议推前端(propose_action MCP 工具 → 抽屉里的建议卡片)。
+  // 推给整条产线房间而非个人:房间成员都能看到这条建议,
+  // 谁点确认由各自的权限决定 —— 建议本身不构成授权。
+  broadcastAiProposal(lineId: string, msg: unknown) {
+    this.server?.to(`line:${lineId}`).emit('ai_proposal', msg);
   }
 }

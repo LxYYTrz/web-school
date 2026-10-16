@@ -16,6 +16,14 @@ export class LineStateService {
       .catch((e: Error) => this.logger.error(`写机器人快照失败: ${e.message}`));
   }
 
+  // 产线 IO 快照(契约 §3.8)。跟机器人帧一样 EX 60:
+  // 超过 60s 没新帧就过期 → 前端能据此提示"数据停滞"而不是卡在旧值上
+  setIoFrame(lineId: string, frame: unknown) {
+    this.redis
+      .set(`rt:${lineId}:io`, JSON.stringify(frame), 'EX', 60)
+      .catch((e: Error) => this.logger.error(`写 IO 快照失败: ${e.message}`));
+  }
+
   setLineStatus(lineId: string, status: unknown) {
     this.redis
       .set(`rt:${lineId}:status`, JSON.stringify(status), 'EX', 120)
@@ -30,7 +38,11 @@ export class LineStateService {
 
   async getLineSnapshot(lineId: string) {
     try {
-      const [status, edge] = await this.redis.mget(`rt:${lineId}:status`, `rt:${lineId}:edge`);
+      const [status, edge, io] = await this.redis.mget(
+        `rt:${lineId}:status`,
+        `rt:${lineId}:edge`,
+        `rt:${lineId}:io`,
+      );
       const keys = await this.redis.keys(`rt:${lineId}:robot:*`);
       const frames = keys.length ? await this.redis.mget(keys) : [];
       const robots: Record<string, unknown> = {};
@@ -44,6 +56,7 @@ export class LineStateService {
         ts: Date.now(),
         status: status ? JSON.parse(status) : null,
         edge: edge ? JSON.parse(edge) : null,
+        io: io ? JSON.parse(io) : null,
         robots,
       };
     } catch (e) {

@@ -1,30 +1,35 @@
 # ============================================================================
-# register-mapping.csv — 按 DB3-Modbus-映射表.xls(2026-10-15 版)填写
+# register-mapping.csv — 按 DB3-Modbus-映射表.xls(2026-10-16 完整版)填写
 # ============================================================================
 # PLC: Siemens S7-1200 CPU 1214C
 # 网络: 192.168.10.31:503   Unit ID = 2
 # DB  : DB3「plc服务端」(TIA 侧结构名 dataDB),优化访问 = 关闭
-# HOLD: MB_SERVER HOLD 区长度 = 11 word (22 字节) —— 与本表一致,PLC 无需再改
+# HOLD: MB_SERVER HOLD 区长度 = 17 word (34 字节) —— 与本表一致
+#       2026-10-16 TIA 侧已从 11 word 扩到 17 word;已实测 word 0..16 整块连读
+#       成功(17/17 可读,无 Illegal Data Address)。
 # 字序: TIA 默认大端(字节);Modbus 协议字序 = 高字在前 → 无需字节交换
 # 缩放: 关节角 PLC 端 ×10 存储(节省 INT16 范围),采集器 ÷10 还原
 #
-# 【与旧版(2026-10-13)的差异】
-#   旧版按 23 word 假设,现场 PLC 实际只开放 word[0..10],读 11+ 报
-#   Illegal Data Address(exception_code=2)。本表改为现场实际的 11 word。
-#   删除:speedPct / robot.mode / alarmCode / beatMs / program / productCode
-#         tcp[0..5] / goodCount / ngCount(PLC 暂未提供,契约侧输出默认值)
-#   新增:产线状态(word 6,10 值枚举)+ 4 个控制写入点(word 7~10)
+# 【与 2026-10-15 版(11 word)的差异】
+#   TIA 侧 MB_SERVER HOLD 区由 11 word 扩到 17 word,新增 6 个只读点位:
+#     word 11 入料传感器 / 12 到料传感器 / 13 退料传感器
+#     word 14 产线灯光颜色 / 15 托料盘上升 / 16 阻挡干上升
+#   word 0..10 未变(关节 + 产线状态 + 4 个控制写点)。
+#   ⚠️ 若 TIA 侧没改成功而本表先加了新点,读 word 11+ 会报
+#      exception_code=2(Illegal Data Address);采集器逐点读,失败只把该点置
+#      None 并记 warning,不影响 word 0..10,前端该点显示 "—"。
+#
+# 【写点语义变更(2026-10-16 现场确认)】
+#   停止 / 启动 / 手动模式切换:PLC 在完成动作后**自动把寄存器置 0**,
+#   所以采集器只写值、不再 sleep 后回写 0(见 plc_collector._write_cmd)。
+#   传送带保持电平语义,同样只写一次,值由下一次写入覆盖。
 #
 # 【TIA 侧命名提示】
-#   本表 Modbus 字地址(0..10)已在现场实测可读(2026-10-15),为准。
-#   xls 里 TIA 字节偏移列写作 dataDB[0..10];S7-1200 中 dataDB 与
-#   「plc服务端」若为两个块,请确认 MB_SERVER 指向的是哪一个 —— 但只要
-#   Modbus word 0..10 读出来对,就是对的,现场以实测为准。
+#   本表 Modbus 字地址(0..16)已在现场实测可读(2026-10-16),为准。
+#   只要 Modbus word 0..16 读出来对,就是对的,现场以实测为准。
 #
 # 【控制点位语义】(name 以 "cmd." 开头 → plc_collector.py 识别为写命令,
 #   不进主循环读取;handler 用 pymodbus write_register 下发)
-#   脉冲型:写 1 后 CMD_PULSE_MS(100ms)自动写回 0,模拟"按下触发,松手置0"
-#   电平型:持续写新值,PLC 端做边沿检测即可
 # ----------------------------------------------------------------------------
 name,address,type,scale,offset,unit,note
 
@@ -44,21 +49,30 @@ robot.joints[5],5,INT,0.1,0,deg,J6 关节角 (dataDB[5] 字节10)
 # → plc_collector.py STATE_MAP 负责整数→契约字符串
 line.state,6,UINT,1.0,0,,产线状态 (dataDB[6] 字节12) 10值枚举见 STATE_MAP
 
+# --- 产线 IO 只读点位 (UINT;word 11..16,2026-10-16 新增) ---
+# → plc_collector 打 io_state 报文 → 前端「IO 信号」标签页展示
+io.sensorIn,11,UINT,1.0,0,,入料传感器 (dataDB[11] 字节22) 1=有料 0=无料
+io.sensorArrive,12,UINT,1.0,0,,到料传感器 (dataDB[12] 字节24) 1=有料 0=无料
+io.sensorRetreat,13,UINT,1.0,0,,退料传感器 (dataDB[13] 字节26) 1=有料 0=无料
+io.lightColor,14,UINT,1.0,0,,产线灯光颜色 (dataDB[14] 字节28) 0=绿灯 1=黄灯 2=红灯
+io.trayUp,15,UINT,1.0,0,,托料盘上升 (dataDB[15] 字节30) 1=上升 0=下降
+io.blockUp,16,UINT,1.0,0,,阻挡干上升 (dataDB[16] 字节32) 1=上升 0=下降
+
 # === 控制点位(写命令) ===
 
 # --- 停止信号输入 (word 7) ---
-# 写入 1 = 停止产线,切换到停止状态。写入应为按下触发,松手置0 → 脉冲型
-cmd.stop,7,UINT,1.0,0,,停止信号输入 (dataDB[7] 字节14) 写1停止,脉冲型
+# 写入 1 = 停止产线,切换到停止状态。PLC 完成动作后自动置 0
+cmd.stop,7,UINT,1.0,0,,停止信号输入 (dataDB[7] 字节14) 写1停止,PLC 自动置0
 
 # --- 手动模式切换输入 (word 8) ---
 # 产线状态为停止状态(101)时可用。1 = 获取手动模式 2 = 释放手动模式
-# 写入为按下触发,松手置0 → 脉冲型,值域 {1,2}
-cmd.modeToggle,8,UINT,1.0,0,,手动模式切换 (dataDB[8] 字节16) 1=获取 2=释放,脉冲型
+# PLC 完成模式切换后自动置 0
+# 前置:acquire 仅 stopped(101) 可用;release 仅 manual_mode(102) 可用
+cmd.modeToggle,8,UINT,1.0,0,,手动模式切换 (dataDB[8] 字节16) 1=获取 2=释放,PLC 自动置0
 
 # --- 启动信号输入 (word 9) ---
 # 切换产线状态为启动模式,产线状态跳转到 0(等待入料)
-# 写入为按下触发,松手置0 → 脉冲型
-cmd.start,9,UINT,1.0,0,,启动信号输入 (dataDB[9] 字节18) 写1启动,状态跳0,脉冲型
+cmd.start,9,UINT,1.0,0,,启动信号输入 (dataDB[9] 字节18) 写1启动,状态跳0,PLC 自动置0
 
 # --- 写入传送带控制 (word 10) ---
 # 产线状态必须为手动控制模式(102)才可使用。1 正转 0 停止 → 电平型

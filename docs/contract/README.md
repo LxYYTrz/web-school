@@ -19,6 +19,7 @@ PLC 寄存器、视觉软件输出等现场细节,由边缘采集适配器负责
 | 主题 | 方向 | QoS | Retain | 频率 | 说明 |
 |---|---|---|---|---|---|
 | `tl/v1/{lineId}/telemetry/robot/{deviceId}` | 边缘→云 | 0 | 否 | 5~10Hz | 机器人关节与运行状态 |
+| `tl/v1/{lineId}/telemetry/io` | 边缘→云 | 0 | 否 | 5~10Hz | 产线 IO 信号(DB3 word 11~16,只读) |
 | `tl/v1/{lineId}/telemetry/status` | 边缘→云 | 1 | 是 | 1Hz 或变更时 | 产线状态快照 |
 | `tl/v1/{lineId}/event` | 边缘→云 | 1 | 否 | 事件触发 | 启停 / 报警 / 单件完成等 |
 | `tl/v1/{lineId}/vision/result` | 边缘→云 | 1 | 否 | 每件一次 | 视觉检测元数据(**不含图片**) |
@@ -155,15 +156,21 @@ type 为**指令白名单**(契约 §5 第 2 条:扩展项仅追加,不删/不�
 
 | type | 触发语义 | 现场 PLC 寄存器 | 可执行 |
 |---|---|---|---|
-| `start` | 脉冲(写 1 → 100ms → 写 0) | dataDB[9] word 9 | ✅ |
-| `stop` | 脉冲(写 1 → 100ms → 写 0) | dataDB[7] word 7 | ✅ |
-| `mode_set` | 脉冲(写 1/2 → 100ms → 写 0) | dataDB[8] word 8 | ✅ |
+| `start` | 写 1,PLC 完成后自动置 0 | dataDB[9] word 9 | ✅ |
+| `stop` | 写 1,PLC 完成后自动置 0 | dataDB[7] word 7 | ✅ |
+| `mode_set` | 写 1/2,PLC 切换完成后自动置 0 | dataDB[8] word 8 | ✅ |
 | `conveyor` | **电平**(写 0/1,不回写) | dataDB[10] word 10 | ✅ v1.2 |
 | `reset` | — | 现场无 | ❌ 回 rejected |
 | `changeover` | — | 现场无 | ❌ 回 rejected |
 | `alarm_clear` | — | 现场无 | ❌ 回 rejected |
 
-> **"不可执行"是明确设计**:现场 PLC 的 11 word 表只开放了 4 个写入点。
+> ⚠️ **v1.2 → v1.3 变更说明(v1.2 的"100ms 脉冲"写法已废弃)**:
+> 原设计是 edge "写 1 → sleep 100ms → 写 0" 模拟按下触发。现场确认
+> **PLC 在完成动作/模式切换后会把寄存器自己清零**,所以 edge 现在**只写值、
+> 不再回写 0**。两个写者抢同一个寄存器反而可能把 PLC 刚写好的值覆盖掉。
+> 契约字段与 type 白名单未变,只是触发时序收敛。
+
+> **"不可执行"是明确设计**:现场 PLC 点位表只开放了 4 个写入点。
 > `reset` / `changeover` / `alarm_clear` 保留在白名单里是为了契约完整性
 > (只增不改),但 edge 检测到无对应点位时回 `rejected` + 说明原因,
 > **不假装 acked** —— 避免操作员以为指令生效了。
@@ -187,9 +194,13 @@ type 为**指令白名单**(契约 §5 第 2 条:扩展项仅追加,不删/不�
 `operator` 字段由后端从登录态注入(`req.session.username`),**前端不得传入**。
 契约保留该字段以便边缘端日志记录,但实际值以服务端为准。
 
-**PLC 前置条件**(edge 只提示不拦截,PLC 联锁有最终否决权):
-- `mode_set` 需产线处于 `stopped`(101)
+**PLC 前置条件**(前端按此禁用按钮,PLC 联锁有最终否决权):
+- `mode_set` 的 `acquire` 需产线处于 `stopped`(101);`release` 需 `manual_mode`(102)。
+  两个方向都要求"不在运行中":只能 停止 → 手动 → 停止 回路,防止在产线动作中切模式
 - `conveyor` 需产线处于 `manual_mode`(102)
+- `init_error`(100) 状态下**全部指令不可用**,且只能由产线物理按钮解除 ——
+  网页永远不提供解除手段
+- `mode_set` 的 `release` 执行后,PLC 自动把产线切回 `stopped`(101)
 
 ### 3.7 command_ack — 指令回执(边缘→云)
 
@@ -199,6 +210,43 @@ type 为**指令白名单**(契约 §5 第 2 条:扩展项仅追加,不删/不�
 
 status 枚举:acked / rejected / failed。云端侧完整状态机:
 `pending → sent → acked / rejected / failed / timeout`(见 `control_commands` 表,15s 无回执置 timeout)。
+
+### 3.8 io_state — 产线 IO 信号(v1.3 新增,只读)
+
+```json
+{
+  "ts": 1760000000123,
+  "lineId": "line-01",
+  "io": {
+    "sensorIn": 1,
+    "sensorArrive": 0,
+    "sensorRetreat": 1,
+    "lightColor": 0,
+    "trayUp": 1,
+    "blockUp": 0
+  }
+}
+```
+
+对应现场 DB3 MB_SERVER HOLD 区 **word 11~16**(word 0~5 关节走 §3.1,word 6 产线状态走 §3.2,
+word 7~10 是控制写点不走本主题)。全部字段为 `number`,采集器按
+`edge/register-mapping.csv` 的 `io.*` 行解码后原样上送,**不做单位换算**。
+
+| 字段 | word | 类型 | 枚举 / 含义 |
+|---|---|---|---|
+| sensorIn | 11 | bool | 1=有料 0=无料 |
+| sensorArrive | 12 | bool | 1=有料 0=无料 |
+| sensorRetreat | 13 | bool | 1=有料 0=无料 |
+| lightColor | 14 | enum | 0=绿灯 1=黄灯 2=红灯 |
+| trayUp | 15 | bool | 1=上升 0=下降 |
+| blockUp | 16 | bool | 1=上升 0=下降 |
+
+- **某点读失败时该字段为 `null`**(不是 0)。"没读到"和"确实是 0"必须区分开,
+  前端把 `null` 显示成 `—`。
+- **本主题只读**。这 6 个点在 PLC 侧有写(`lightColor` / `trayUp` / `blockUp`),
+  但 v1.3 不提供写它们的能力,只提供 §3.6 的 4 个指令白名单。
+- **不落 TimescaleDB**:高频瞬时量,无回溯价值。只在 Redis 存 60s 快照
+  (`rt:{lineId}:io`,供前端首屏预载),并经 WebSocket `io_state` 事件推送。
 
 ## 4. 图片链路约定
 
@@ -227,6 +275,10 @@ status 枚举:acked / rejected / failed。云端侧完整状态机:
 - 采集器为**配置驱动**:读 `register-mapping.csv`(信号 → 协议地址),轮询 PLC 后组装为本契约报文;
   到现场与电气工程师对点位后填正式映射表,不改代码
 - 模板见同目录 `register-mapping.template.csv`;视觉结果不经 PLC,由视觉工控机直接产生
+- 现场正式点表在 `edge/register-mapping.csv`(不在本目录),HOLD 区 **17 word(34 字节)**:
+  word 0~5 关节 / 6 产线状态 / 7~10 控制写点 / 11~16 产线 IO 只读点。
+  采集器逐点读:某个点读失败(如 TIA 侧没扩 HOLD 区 → `Illegal Data Address`)
+  只把该点置 `None` 并记 warning,不影响其它点位。
 
 ## 7. 版本策略
 

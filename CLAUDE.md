@@ -19,7 +19,8 @@
 - [ ] 5 图片链路(用户决定不做)
 - [x] 6 控制链路 —— 代码 + **现场点位已落地**(契约 v1.2);真实下发待人工验证
 - [x] 7 上云 —— 部署 + SSH 隧道建通,`http://119.91.145.27:8081/` **已见真实 PLC 数据**
-- [x] 8 到现场 —— **PLC 已真实连通**,11 word 点位表落地,10 态 state 流通到公网
+- [x] 8 到现场 —— **PLC 已真实连通**,17 word 点位表落地(11→17 于 2026-10-16),
+      10 态 state + 6 个产线 IO 只读点流通到公网
 
 > **当前唯一未验证项**:控制指令从未真正写过 PLC 寄存器(不可逆动作,须人工在产线旁执行)。
 > 详见 §5.2。
@@ -59,22 +60,32 @@
 
 ### 4.1 PLC 适配器(`edge/`)
 
-**⚠️ 2026-10-15 现场实测后重写:21 点位 → 11 点位。**
+**⚠️ 2026-10-16 现场扩点:11 word → 17 word(34 字节)。**
 
-依据电气工程师 `DB3-Modbus-映射表.xls`(现场实测版本)。旧版按 23 word 假设,
-但 PLC 的 `MB_SERVER` HOLD 区**实际只开放 11 word(22 字节)**,读 word 12+ 会报
-`exception_code=2`(Illegal Data Address)。**PLC 侧不需要改**,是采集端点位表错了。
+电气新增 6 个**只读 IO 点位**,TIA 侧 `MB_SERVER` HOLD 区已从 11 word 扩到 17 word,
+**已实测 word 0..16 整块连读成功、无 Illegal Data Address**。
+旧版本按 23 word 假设导致读越界报 `exception_code=2` 的教训仍然有效 ——
+**点位表不得超过 PLC 实际开放的长度**。
 
-**`edge/register-mapping.csv` — 11 个点位:**
+**`edge/register-mapping.csv` — 17 个点位:**
 
 | word | 契约字段 | 类型 | 缩放 | 说明 |
 |---|---|---|---|---|
 | 0-5 | `robot.joints[0..5]` | INT | ×10 存储 ÷10 | J1~J6 关节角 (deg) |
 | 6 | `line.state` | UINT | ×1 | 产线状态,10 值枚举 |
-| 7 | `cmd.stop` | UINT | — | 停止信号输入,**脉冲**(写1→100ms→0) |
-| 8 | `cmd.modeToggle` | UINT | — | 手动模式切换,**脉冲**,1=获取 2=释放 |
-| 9 | `cmd.start` | UINT | — | 启动信号输入,**脉冲**,产线状态跳转到 0 |
+| 7 | `cmd.stop` | UINT | — | 停止信号输入,写 1,PLC 完成后自动置 0 |
+| 8 | `cmd.modeToggle` | UINT | — | 手动模式切换,1=获取 2=释放,PLC 切换后自动置 0 |
+| 9 | `cmd.start` | UINT | — | 启动信号输入,写 1,PLC 完成后自动置 0 |
 | 10 | `cmd.conveyor` | UINT | — | 传送带控制,**电平**,1=正转 0=停止 |
+| 11 | `io.sensorIn` | UINT | ×1 | 入料传感器,1=有料 |
+| 12 | `io.sensorArrive` | UINT | ×1 | 到料传感器,1=有料 |
+| 13 | `io.sensorRetreat` | UINT | ×1 | 退料传感器,1=有料 |
+| 14 | `io.lightColor` | UINT | ×1 | 产线灯光颜色,0=绿 1=黄 2=红 |
+| 15 | `io.trayUp` | UINT | ×1 | 托料盘上升,1=上升 0=下降 |
+| 16 | `io.blockUp` | UINT | ×1 | 阻挡干上升,1=上升 0=下降 |
+
+`io.*` 走独立主题 `tl/v1/{lineId}/telemetry/io`(契约 §3.8),打到前端「IO 信号」标签页。
+单个点位读失败 → 该字段为 `null`,**不兜底成 0**(0 对传感器/灯色是有意义的真实值)。
 
 **PLC 未提供、edge 输出默认值的契约字段**(按"只增不改"保留):
 `speedPct`(0)/ `robot.mode`('manual')/ `alarmCode`(0)/ `tcp`(null)/
@@ -82,9 +93,13 @@
 
 - **`edge/plc_collector.py`**:pymodbus 3.x(`slave=` → `device_id=`,3.10 强制);
   `PLC_WORD_ORDER` 环境变量(BIG 默认 / LITTLE);
-  `STATE_MAP` 负责 PLC 整数 → 契约字符串;`CMD_DISPATCH` 负责指令 → 寄存器。
-- **`edge/_test_decode.py`**:7 读点 + 10 态枚举 + 4 写点地址,BIG/LITTLE 双字序全过。
-- **`edge/_test_cmd.py`**:7 type 白名单 / 无点位 rejected / 脉冲 vs 电平 / 枚举校验 / 调试跳过 / 通信异常,全过。
+  `STATE_MAP` 负责 PLC 整数 → 契约字符串;`io_payload()` 组 IO 报文;
+  `CMD_DISPATCH` 负责指令 → 寄存器。
+- **⚠️ MB_SERVER 只允许一个客户端** —— 2026-10-16 实测:采集器占着 503 时,
+  任何第二个连接(含临时探测脚本)都被 RST 拒绝。想单独连 PLC 调试
+  **必须先停采集器**,用完记得拉回来。
+- **`edge/_test_decode.py`**:13 读点 + 10 态枚举 + 4 写点地址 + io_payload 组装。
+- **`edge/_test_cmd.py`**:7 type 白名单 / 无点位 rejected / 只写一次 / 枚举校验 / 通信异常,全过。
 
 **现场 10 态 state 枚举**(PLC `dataDB[6]` 原始整数):
 
@@ -166,14 +181,15 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 
 ### 4.6 控制链路(路线 6,2026-10-15 拍板 + 现场点位落地)
 
-- **范围**:只读 + I/O 展示 + 软控制。孪生页右侧 `IoPanel`(六轴关节角 + I/O 灯矩阵 + 数值)+ 控制按钮区。
-- **PLC**:**现场 11 word 表只开放 4 个写入点**,契约 7 个 type 里只有 4 个可执行:
+- **范围**:只读 + I/O 展示 + 软控制。孪生页右侧 `IoPanel`(六轴关节角 + I/O 灯矩阵 + 数值)+ 控制按钮区;
+  独立的「IO 信号」标签页只读展示 word 11~16。
+- **PLC**:**现场点位表只开放 4 个写入点**,契约 7 个 type 里只有 4 个可执行:
 
 | type | 现场寄存器 | 触发语义 | 状态 |
 |---|---|---|---|
-| `start` | word 9 | 脉冲(写1→100ms→0) | ✅ 可执行 |
-| `stop` | word 7 | 脉冲(写1→100ms→0) | ✅ 可执行 |
-| `mode_set` | word 8 | 脉冲,`action: acquire(1) / release(2)` | ✅ 可执行 |
+| `start` | word 9 | 写 1,PLC 完成后自动置 0 | ✅ 可执行 |
+| `stop` | word 7 | 写 1,PLC 完成后自动置 0 | ✅ 可执行 |
+| `mode_set` | word 8 | `action: acquire(1) / release(2)`,PLC 切换后自动置 0 | ✅ 可执行 |
 | `conveyor` | word 10 | **电平**,`action: forward(1) / stop(0)` | ✅ 可执行 |
 | `reset` | — | — | ❌ 现场无寄存器 → edge 回 **rejected** |
 | `changeover` | — | — | ❌ 同上 |
@@ -184,6 +200,9 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
   > —— 否则操作员会以为指令生效了。前端把三个按钮置灰并标注原因。
   > 现场若新增寄存器:CSV 加 `cmd.*` 行 + `CMD_DISPATCH` 的 `None` 改回点名即可,契约不动。
 
+- **⚠️ v1.3 写点时序变更**:原设计是 edge "写 1 → sleep 100ms → 写 0" 模拟按下触发。
+  现场确认 **PLC 在完成动作/模式切换后自己把寄存器清零**,所以 edge 现在**只写值、
+  不再回写 0**。两个写者抢同一个寄存器反而可能把 PLC 刚写好的值覆盖掉。
 - **契约 v1.1 → v1.2**:`mode_set.params` 从 `{mode: manual|auto|remote}`
   **修正**为 `{action: acquire|release}`(现场只有"获取/释放手动"两态,
   原值是对机器人运行模式的误解);**新增** `conveyor` 类型。
@@ -191,9 +210,27 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 - **`line.state` 10 态**:`db/init/004_line_state_stages.sql` 放宽两个表的 CHECK;
   前端 `web/src/services/lineState.ts` **单点定义** 中文 + 语义色,
   `StatusView.vue` / `IoPanel.vue` 共用(避免三处各写一份映射)。
-- **PLC 前置条件**(edge 只提示不拦截,**PLC 联锁有最终否决权**):
-  `mode_set` 需 `stopped(101)`;`conveyor` 需 `manual_mode(102)`。
-  前端在确认弹窗里带出该提示。
+- **PLC 前置条件**(2026-10-16 现场确认;前端 `ControlButtons.vue` 的 `can()` 已按此
+  **真正禁用按钮**并在下方给出原因文案,`confirm()` 里再挡一次防状态竞态;
+  **PLC 联锁仍是最终否决权**,两边都要有):
+
+  ```
+  stopped(101) ──[获取手动]──▶ manual_mode(102)
+       ▲                            │
+       └────[释放手动]─────────────┘   释放后 PLC 自动切回 stopped(101)
+  ```
+
+  | 指令 | 可用条件 |
+  |---|---|
+  | `mode_set` acquire | 仅 `stopped(101)` |
+  | `mode_set` release | 仅 `manual_mode(102)` |
+  | `conveyor` | 仅 `manual_mode(102)` |
+  | `start` | 不可在 `manual_mode(102)` 下(先释放手动);`init_error` 下不可用 |
+  | `stop` | 除 `init_error` 外均可用 |
+  | 全部 | `init_error(100)` 下**全部禁用** |
+
+  > `init_error` **只能由产线物理按钮解除,网页永远不提供解除手段** ——
+  > 按钮区会直接显示"请到产线现场按物理按钮复位"。
 - **写权限**:`level >= 2`(`server/src/command/command.guard.ts`),前端按 `auth.canCommand` 显隐。
 - **params 枚举校验**:后端 `command.service.ts` 的 `PARAM_ENUMS` 拦非法值,
   非法请求根本不会 publish 到 MQTT,PLC 不会被写。
@@ -201,6 +238,15 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 ## 5. 已就位 / 待办
 
 ### 5.1 已完成 ✅
+
+**2026-10-16 本轮(现场扩点 11 → 17 word)**
+
+- ✅ **TIA HOLD 区扩到 17 word 并实测通过** —— word 0..16 整块连读成功,无 Illegal Data Address
+- ✅ **新增 6 个只读 IO 点位**(word 11~16)—— 点位表 + 采集器 `io_payload()`
+  + 契约 §3.8 + 独立主题 `telemetry/io` + Redis 快照 + WS `io_state` + 「IO 信号」标签页
+- ✅ **控制按钮改为真前置条件** —— 按 §4.6 的状态机禁用,`init_error` 全禁并提示物理按钮解除
+- ✅ **写点时序收敛** —— PLC 自行清零,edge 只写一次不回写 0
+- ✅ 端到端已验:snapshot 拿到真实 `io`,`state=unloading` 与 `lightColor=1(黄灯)` 互相印证
 
 **2026-10-15 本轮(现场实测驱动)**
 
@@ -320,9 +366,9 @@ ssh -o ControlMaster=no -o ControlPath=none \
 
 | 路径 | 作用 |
 |---|---|
-| `docs/contract/README.md` | **数据契约 v1.2**(边缘/后端/前端唯一约定) |
+| `docs/contract/README.md` | **数据契约 v1.3**(边缘/后端/前端唯一约定) |
 | `docs/deployment.md` | 架构 + 实战部署记录(踩坑 + 验证清单) |
-| `edge/register-mapping.csv` | **11 点位** Modbus 映射(现场实测;电气工程师 xls 为准) |
+| `edge/register-mapping.csv` | **17 点位** Modbus 映射(现场实测;电气工程师 xls 为准) |
 | `edge/plc_collector.py` | 真实 PLC 采集器(pymodbus 3.x + `STATE_MAP` + `CMD_DISPATCH` + 字序可配) |
 | `edge/_test_decode.py` | 解码测试(7 读点 + 10 态枚举 + 4 写点地址,双字序) |
 | `edge/_test_cmd.py` | 指令派发测试(7 type / 脉冲 vs 电平 / 枚举校验 / 无点位 rejected) |
@@ -335,6 +381,8 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `server/src/users/` | 用户管理 CRUD |
 | `server/src/command/` | 指令路由 + CommandGuard(level>=2)+ service(审计 + 15s 超时 + params 枚举校验 + operator 从 session) |
 | `web/src/services/lineState.ts` | **产线状态单点映射**(中文 + 语义色),StatusView/IoPanel 共用 |
+| `web/src/services/ioPoints.ts` | **IO 点位单点映射**(word/字段/文案/语义色),契约 §3.8 |
+| `web/src/views/IoView.vue` | 「IO 信号」标签页(只读,level 1 可见) |
 | `web/src/stores/auth.ts` | RBAC 前端 store(dev fallback) |
 | `web/src/services/auth.ts` | fetch HTTP 客户端(401 跳登录) |
 | `web/src/services/control.ts` | apiSendCommand + onCommandAck(socket)封装 |

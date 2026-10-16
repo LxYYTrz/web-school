@@ -4,12 +4,15 @@
 ====================================================
 适配 Siemens S7-1200 / S7-1500(以及任何暴露 MB_SERVER / 标准 Modbus Server 的 PLC)
 点位由同目录 register-mapping.csv 配置驱动,改点位不改代码。
+现场 DB3 HOLD 区 17 word(2026-10-16):word 0..5 关节 / 6 产线状态 /
+7..10 控制写点 / 11..16 产线 IO 只读点。
 
 环境变量:
     PLC_HOST            PLC IP (默认 192.168.10.31)
     PLC_PORT            Modbus TCP 端口 (默认 503)
     PLC_UNIT_ID         从站号 (默认 2)
     PLC_POLL_MS         轮询周期毫秒 (默认 200)
+    EDGE_HEARTBEAT_S    edge/status 心跳周期秒 (默认 30,需 < 后端 Redis TTL 300)
     MQTT_HOST           MQTT broker (默认 localhost)
     MQTT_PORT           (默认 1883)
     MQTT_USERNAME/PASSWORD  可选
@@ -56,6 +59,7 @@ MAPPING_FILE    = Path(os.getenv("MAPPING_FILE",
 
 # MQTT 主题(对齐 docs/contract/README.md §2)
 T_ROBOT  = f"tl/v1/{LINE_ID}/telemetry/robot/{ROBOT_ID}"
+T_IO     = f"tl/v1/{LINE_ID}/telemetry/io"
 T_STATUS = f"tl/v1/{LINE_ID}/telemetry/status"
 T_EVENT  = f"tl/v1/{LINE_ID}/event"
 T_EDGE   = f"tl/v1/{LINE_ID}/edge/status"
@@ -244,6 +248,20 @@ def group_signals(signals: list[Signal], values: dict[str, Any]) -> dict:
     return payload
 
 
+def io_payload(signals: list[Signal], values: dict[str, Any]) -> dict | None:
+    """产线 IO 快照(契约 §3.8):io.* 命名空间的点位原样透传。
+
+    只发 io.* 前缀的点位;读失败的点值为 None → 前端显示 "—",
+    不做 0 兜底(0 对传感器/灯光是有意义的真实值,"没读到"和"确实是 0"必须区分开)。
+    一个 io.* 点都没配时返回 None,调用方跳过发布。
+    """
+    io = {s.name.split(".", 1)[1]: values.get(s.name)
+          for s in signals if s.name.startswith("io.")}
+    if not io:
+        return None
+    return {"ts": now_ms(), "lineId": LINE_ID, "io": io}
+
+
 def line_status_payload(values: dict[str, Any]) -> dict:
     # 注意:state 的 0(等待入料)是合法值,不能用 `or 1` 兜底,否则 0 被吞成 1。
     # 现场 11 word 表不提供 productCode / goodCount / ngCount / beatMs,
@@ -295,7 +313,7 @@ def publish(c: mqtt.Client, topic: str, payload: dict, qos=0, retain=False):
 # ---------- 控制命令 ----------
 # 契约 v1.1 type 白名单(对齐 docs/contract/README.md §3.6)
 # sig_name 指向 register-mapping.csv 里的 cmd.* 点位;None 表示契约预留(edge 暂不写)
-# kind: pulse = 写 1 后 sleep 100ms 再写 0;level = 直接写新值(电平)
+# kind 只用于校验 params;真正的写入一律"只写一次",PLC 侧自行清零脉冲点(见 _write_cmd)
 CMD_DISPATCH = {
     'start':       ('cmd.start',       'pulse'),
     'stop':        ('cmd.stop',        'pulse'),
@@ -308,11 +326,10 @@ CMD_DISPATCH = {
 # 现场 11 word 表没有 reset / changeover / alarm_clear 对应寄存器,
 # 这三个指令回 rejected 而不是假装 acked —— 避免操作员以为生效了。
 
-# 手动模式切换:PLC word 8,值域 {1,2},脉冲型(按下触发,松手置0)
+# 手动模式切换:PLC word 8,值域 {1,2};PLC 完成模式切换后自动置 0
 MODE_TOGGLE_VALUE = {'acquire': 1, 'release': 2}
 # 传送带:PLC word 10,值域 {0,1},电平型(持续写值)
 CONVEYOR_VALUE = {'stop': 0, 'forward': 1}
-CMD_PULSE_MS = 100
 
 # 产线状态:PLC dataDB[6](Modbus word 6)整数 → 契约字符串
 # 依据 DB3-Modbus-映射表.xls「产线状态」枚举(契约 v1.1,见 db/init/004_line_state_stages.sql)
@@ -336,8 +353,8 @@ def _dispatch_cmd(plc: Plc, cmd_type: str, params: dict) -> tuple[bool, str]:
         return False, f'未知指令类型: {cmd_type}'
     sig_name, kind = spec
     if sig_name is None:
-        # 现场 PLC 11 word 表里没有这个点位的寄存器 → 明确拒绝,不能假 ack
-        return False, f'现场 PLC 无 {cmd_type} 对应寄存器(11 word 表未开放),指令未下发'
+        # 现场 PLC 点位表里没有这个点位的寄存器 → 明确拒绝,不能假 ack
+        return False, f'现场 PLC 无 {cmd_type} 对应寄存器(register-mapping.csv 未开放该点),指令未下发'
     sig = _cmd_signals.get(sig_name)
     if sig is None:
         return False, f'点位 {sig_name} 未在 register-mapping.csv 配置'
@@ -360,40 +377,35 @@ def _dispatch_cmd(plc: Plc, cmd_type: str, params: dict) -> tuple[bool, str]:
     else:
         return False, f'未知 kind={kind}'
 
-    return _write_cmd(plc, sig.address, value, kind)
+    return _write_cmd(plc, sig.address, value)
 
 
-def _write_cmd(plc: Plc, address: int, value: int, kind: str) -> tuple[bool, str]:
-    """写 PLC 寄存器。
+def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
+    """写 PLC 寄存器(只写一次,不回写 0)。
 
-    kind 语义(依据 DB3-Modbus-映射表.xls 说明列):
-      pulse       —— "写入应为按下触发,松手置0" → 写 value,sleep,再写 0
-      mode_toggle —— 同上(手动模式切换 1/2 也是按下触发)
-      conveyor    —— "输入1正转 0停止" → 电平型,只写一次,持续有效
-    plc.connected=False → 调试跳过(开发机可验通链路)。
+    2026-10-16 现场确认:停止 / 启动 / 手动模式切换这三个点,PLC 在完成动作后
+    会**自己把寄存器置 0**,所以采集器不再做 "写值 → sleep 100ms → 写 0"。
+    传送带本来就是电平语义,同样只写一次,值由下一次写入覆盖。
+    两个写者抢同一个寄存器反而可能把 PLC 刚写好的 1 覆盖掉。
+
+    plc.connected=False → 直接 rejected,不下发(不假 ack)。
     """
     if not plc.connected:
-        LOG.warning('PLC 未连接,跳过写 addr=%d,value=%d(调试模式,仍回 acked)',
-                    address, value)
-        return True, 'PLC 未连接,调试模式跳过'
-    # 脉冲型:凡是要"松手置0"的,写完都要回写 0
-    pulse_like = kind in ('pulse', 'mode_toggle')
+        # 不能假 ack:PLC 都没连上,操作员若看到 acked 会以为指令生效了。
+        # 与 CMD_DISPATCH 里 reset/changeover/alarm_clear 的处理保持同一原则。
+        LOG.error('PLC 未连接,拒绝下发 addr=%d,value=%d(不假 ack)', address, value)
+        return False, 'PLC 未连接,指令未下发'
     try:
         rr = plc.cli.write_register(address=address, value=value, device_id=plc.unit)
         if rr.isError():
             return False, f'PLC 写寄存器失败: {rr}'
-        if pulse_like:
-            time.sleep(CMD_PULSE_MS / 1000.0)
-            rr2 = plc.cli.write_register(address=address, value=0, device_id=plc.unit)
-            if rr2.isError():
-                return False, f'脉冲回写 0 失败: {rr2}'
         return True, ''
     except Exception as exc:
         return False, f'PLC 通信异常: {exc}'
 
 
 def on_command(c: mqtt.Client, plc: Plc):
-    """订阅控制指令。校验白名单 → 真写 PLC(或调试跳过)→ 回 cmd_ack。
+    """订阅控制指令。校验白名单 → 真写 PLC(PLC 未连则 rejected)→ 回 cmd_ack。
     cmdId 缺失 → 回 rejected;ack 始终回(契约 §3.7)。"""
     def _cb(_client, _userdata, msg):
         cmd_id, ack_status, ack_msg = '', 'failed', ''
@@ -444,10 +456,23 @@ def main():
 
     last_status_pub = 0.0
     STATUS_PERIOD = 1.0  # line_status 1Hz retained
+    # edge 心跳:后端把 edge/status 存进 Redis,TTL 只有 300s
+    # (server/src/state/line-state.service.ts setEdgeStatus)。
+    # edge/status 若只在启动/退出时各发一次,运行满 5 分钟后 Redis key 过期,
+    # 前端 snapshot 的 edge 就永久变 null。这里按 EDGE_HEARTBEAT_S 周期重发
+    # 上线声明(retain),保活后端的 Redis key。
+    EDGE_HEARTBEAT_S = float(os.getenv("EDGE_HEARTBEAT_S", "30"))
+    last_edge_pub = time.time()
 
     try:
         while True:
             t_loop = time.time()
+            # 心跳放在 PLC 读取之前 —— PLC 断线时也要发,否则后端会以为 edge 掉线
+            if t_loop - last_edge_pub >= EDGE_HEARTBEAT_S:
+                last_edge_pub = t_loop
+                publish(mq, T_EDGE, {"ts": now_ms(), "lineId": LINE_ID, "status": "online"},
+                        qos=1, retain=True)
+                LOG.debug("edge 心跳已发")
             values = plc.read_all(signals)
             if not values:
                 LOG.warning("PLC 无响应,1s 后重试")
@@ -459,13 +484,18 @@ def main():
             if "deviceId" in tele:
                 publish(mq, T_ROBOT, tele, qos=0)
 
-            # 2) 产线状态 (1Hz, retained)
+            # 2) 产线 IO (跟随 poll;word 11..16,契约 §3.8)
+            io_msg = io_payload(signals, values)
+            if io_msg is not None:
+                publish(mq, T_IO, io_msg, qos=0)
+
+            # 3) 产线状态 (1Hz, retained)
             now = time.time()
             if now - last_status_pub >= STATUS_PERIOD:
                 last_status_pub = now
                 publish(mq, T_STATUS, line_status_payload(values), qos=1, retain=True)
 
-            # 3) 报警:alarmCode 变化时上报一次事件
+            # 4) 报警:alarmCode 变化时上报一次事件
             # (简化:采集者自行维护上一次值;这里留给上层)
 
             dt = time.time() - t_loop

@@ -2,24 +2,37 @@
   <div class="ctrl-btns">
     <div class="ctrl-title">控制</div>
     <div class="ctrl-row">
-      <el-button size="small" type="success" :loading="state === 'sending'" @click="confirm('start')">启动</el-button>
-      <el-button size="small" type="danger"  :loading="state === 'sending'" @click="confirm('stop')">停止</el-button>
+      <el-button size="small" type="success"
+                 :loading="state === 'sending'" :disabled="!can('start')"
+                 @click="confirm('start')">启动</el-button>
+      <el-button size="small" type="danger"
+                 :loading="state === 'sending'" :disabled="!can('stop')"
+                 @click="confirm('stop')">停止</el-button>
     </div>
     <div class="ctrl-row">
-      <!-- PLC word 8:1=获取手动 2=释放手动,脉冲。仅「停止状态」下有效 -->
-      <el-dropdown trigger="click" @command="(a: string) => confirm('mode_set', { action: a })">
-        <el-button size="small" :loading="state === 'sending'">
+      <!-- PLC word 8:1=获取手动 2=释放手动,PLC 切换完成后自动置 0。
+           acquire 仅 stopped(101) 可用;release 仅 manual_mode(102) 可用 -->
+      <el-dropdown trigger="click"
+                   :disabled="!can('mode_set', 'acquire') && !can('mode_set', 'release')"
+                   @command="(a: string) => confirm('mode_set', { action: a })">
+        <el-button size="small" :loading="state === 'sending'"
+                   :disabled="!can('mode_set', 'acquire') && !can('mode_set', 'release')">
           手动模式 ▾<el-icon class="el-icon--right"><ArrowDown /></el-icon>
         </el-button>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="acquire">获取手动模式</el-dropdown-item>
-            <el-dropdown-item command="release">释放手动模式</el-dropdown-item>
+            <el-dropdown-item command="acquire" :disabled="!can('mode_set', 'acquire')">
+              获取手动模式
+            </el-dropdown-item>
+            <el-dropdown-item command="release" :disabled="!can('mode_set', 'release')">
+              释放手动模式
+            </el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
       <!-- PLC word 10:1=正转 0=停止,电平型。仅「手动控制模式」下有效 -->
       <el-button size="small" type="warning" :loading="state === 'sending'"
+                 :disabled="!can('conveyor')"
                  @click="confirm('conveyor', { action: conveyorOn ? 'stop' : 'forward' })">
         {{ conveyorOn ? '传送带停止' : '传送带正转' }}
       </el-button>
@@ -27,12 +40,15 @@
     <!-- @deprecated 2026-10-16 暂停使用(现场无 PLC 寄存器,edge 默认就拒绝) -->
   <!--
     <div class="ctrl-row">
+      <!-- 现场 PLC 未开放这三个寄存器,edge 会回 rejected -->
       <el-button size="small" disabled>复位</el-button>
       <el-button size="small" disabled>清警</el-button>
       <el-button size="small" disabled>换型</el-button>
       <span class="ctrl-note">复位/清警/换型:现场 PLC 未开放对应寄存器</span>
     </div>
   -->
+    <!-- 不可用时说明原因:鼠标悬停即可看到,不靠猜 -->
+    <div class="ctrl-reason">{{ gateHint }}</div>
 
     <!-- 状态行:显示最近一次命令的状态与回执消息 -->
     <div v-if="state !== 'idle'" class="ctrl-state" :class="state">
@@ -68,23 +84,69 @@ const MOCK_ONLY = import.meta.env.VITE_MOCK_ONLY === 'true';
 // 因此取反显示。默认(未开)时显示"正转"。
 const conveyorOn = ref(false);
 
-// 现场 PLC 前置条件(11 word 表的说明列):
-//   手动模式切换仅在「停止状态」(state=101)可用
-//   传送带仅在「手动控制模式」(state=102)可用
-const prereqHint: Record<string, string> = {
-  mode_set: '需产线处于「停止」状态',
-  conveyor: '需产线处于「手动控制模式」',
-};
-function prereqWarn(type: string): string | null {
-  const h = prereqHint[type];
-  return h ? `${h}(当前:${status.value?.state ?? '未知'})。仍要下发?` : null;
+// ---------- 前置条件(现场 PLC 联锁规则的镜像,2026-10-16 确认) ----------
+//
+//   stopped(101) ──[获取手动]──▶ manual_mode(102)
+//        ▲                          │
+//        └────[释放手动]─────────────┘   释放后 PLC 自动切回 stopped(101)
+//
+//   - 获取手动模式 仅 stopped(101) 可用
+//   - 释放手动模式 仅 manual_mode(102) 可用
+//   - 传送带       仅 manual_mode(102) 可用
+//   - 启动         不可在 manual_mode(102) 下用(先释放手动);init_error 下不可用
+//   - 停止         除 init_error 外均可用(任何状态都能停)
+//   - init_error(100) 全部禁用 —— 只能由**产线物理按钮**解除,网页永远不提供
+//
+// 注意:这是 UI 层的拦截,PLC 侧联锁才有最终否决权。两边都要有,不能只靠前端。
+const S_INIT_ERROR = 'init_error';
+const S_STOPPED = 'stopped';
+const S_MANUAL = 'manual_mode';
+
+const lineState = computed(() => status.value?.state);
+const initError = computed(() => lineState.value === S_INIT_ERROR);
+
+/** 某个指令当前是否可点。action 只对 mode_set 有意义 */
+function can(type: CmdType, action?: string): boolean {
+  if (initError.value) return false;
+  switch (type) {
+    case 'stop':
+      return true;
+    case 'start':
+      // 手动模式里不让启动:必须先释放手动回到停止状态
+      return lineState.value !== S_MANUAL;
+    case 'mode_set':
+      return action === 'release' ? lineState.value === S_MANUAL
+                                  : lineState.value === S_STOPPED;
+    case 'conveyor':
+      return lineState.value === S_MANUAL;
+    default:
+      return false;
+  }
 }
 
-// 二次确认文案(type → 提示)
+/** 不满足前置条件时的一句话原因,给操作员看;都可用时返回空串 */
+const gateHint = computed(() => {
+  const s = lineState.value ?? '未知';
+  if (initError.value) {
+    return '产线处于「初始化错误」:网页无法解除,请到产线现场按物理按钮复位。';
+  }
+  if (lineState.value === S_MANUAL) {
+    return '手动控制模式:可用「传送带」与「释放手动模式」;释放后自动回到停止状态。';
+  }
+  if (lineState.value === S_STOPPED) {
+    return '停止状态:可「获取手动模式」或「启动」。';
+  }
+  if (lineState.value === undefined) {
+    return '尚未收到产线状态,指令暂不可用。';
+  }
+  return '';
+});
+
+/** 二次确认文案(type → 提示) */
 const CONFIRM_PROMPT: Record<CmdType, string> = {
   start:    '确认向产线发送「启动」指令?\n这会让 PLC 真正动作,产线状态跳转到「等待入料」。',
   stop:     '确认向产线发送「停止」指令?\n这会中断当前作业并切换到停止状态。',
-  mode_set: '确认切换手动模式?\nPLC 侧:写 1 = 获取手动,写 2 = 释放手动。',
+  mode_set: '确认切换手动模式?\nPLC 侧:写 1 = 获取手动,写 2 = 释放手动;PLC 切换完成后自行清零该位。',
   conveyor: '确认操作传送带?\nPLC 侧:写 1 = 正转,写 0 = 停止(电平型,持续有效)。',
 };
 
@@ -126,11 +188,15 @@ function scheduleReset() {
 
 async function confirm(type: CmdType, params?: Record<string, unknown>) {
   if (state.value !== 'idle') return;
-  // 前置条件不满足时把 PLC 的联锁说明带进确认框(PLC 仍有最终否决权)
-  const warn = prereqWarn(type);
-  const prompt = warn ? `${warn}\n\n${CONFIRM_PROMPT[type]}` : CONFIRM_PROMPT[type];
+  // 双保险:按钮已按 can() 禁用,但点击瞬间产线状态可能刚变(比如别处刚发了指令),
+  // 这里再挡一次,避免把明显违反联锁的指令发到 PLC。
+  const action = (params ?? {}).action as string | undefined;
+  if (!can(type, action)) {
+    ElMessage.warning(`当前产线状态不允许该指令。${gateHint.value}`);
+    return;
+  }
   try {
-    await ElMessageBox.confirm(prompt, '下发控制指令', {
+    await ElMessageBox.confirm(CONFIRM_PROMPT[type], '下发控制指令', {
       confirmButtonText: '确认下发', cancelButtonText: '取消', type: 'warning',
     });
   } catch { return; /* 用户取消 */ }
@@ -186,6 +252,13 @@ async function confirm(type: CmdType, params?: Record<string, unknown>) {
 }
 .ctrl-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .ctrl-note { font-size: 10px; color: var(--text-dim); opacity: 0.75; }
+
+.ctrl-reason {
+  font-size: 11px; color: var(--text-dim); line-height: 1.5;
+  padding: 4px 6px; border-radius: 4px;
+  background: rgba(255,255,255,0.02);
+}
+.ctrl-reason:empty { display: none; }
 
 .ctrl-state {
   margin-top: 6px; padding: 4px 6px;

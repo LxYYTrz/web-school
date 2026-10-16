@@ -32,6 +32,7 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
       this.client.subscribe(
         [
           `${p}/+/telemetry/robot/+`,
+          `${p}/+/telemetry/io`,
           `${p}/+/telemetry/status`,
           `${p}/+/event`,
           `${p}/+/vision/result`,
@@ -83,6 +84,15 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
         this.state.setRobotFrame(lineId, deviceId, msg);
         this.history.bufferRobotFrame(lineId, deviceId, msg);
         this.gateway.broadcastRobot(lineId, msg);
+      } else if (kind === 'telemetry/io') {
+        // 产线 IO(契约 §3.8):高频瞬时量,只走 Redis 快照 + WebSocket,不落 TimescaleDB。
+        // 单个点位读失败时值为 null(edge 保证"没读到"不冒充 0),这里整包照收。
+        if (!msg.io || typeof msg.io !== 'object' || Array.isArray(msg.io)) {
+          this.logger.warn(`io_state 缺少合法 io 对象,已忽略: ${topic}`);
+          return;
+        }
+        this.state.setIoFrame(lineId, msg);
+        this.gateway.broadcastIo(lineId, msg);
       } else if (kind === 'telemetry/status') {
         this.state.setLineStatus(lineId, msg);
         this.history.insertLineStatus(lineId, msg);

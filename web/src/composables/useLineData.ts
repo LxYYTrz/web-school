@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue';
 import { getSocket, fetchSnapshot } from '../services/socket';
 import type {
+  IoState,
   LineSnapshot,
   LineStatus,
   ProductionEvent,
@@ -49,6 +50,14 @@ const MOCK_VISION: VisionResult[] = [
   { ts: MOCK_EARLIER(15), lineId: 'line-01', cameraId: 'cam-01', sn: 'SN20261014000002', result: 'ng', defects: [{ type: 'scratch', x: 220, y: 180, w: 60, h: 18 }], imageUrl: null, thumbUrl: null },
   { ts: MOCK_EARLIER(30), lineId: 'line-01', cameraId: 'cam-01', sn: 'SN20261014000003', result: 'ok', defects: [], imageUrl: null, thumbUrl: null },
 ];
+// demo 模式下 6 个 IO 点各给一个不同的值,便于在页面上区分每个点位
+const MOCK_IO: IoState = {
+  ts: MOCK_NOW(), lineId: 'line-01',
+  io: {
+    sensorIn: 1, sensorArrive: 0, sensorRetreat: null,
+    lightColor: 1, trayUp: 1, blockUp: 0,
+  },
+};
 
 // 产线数据(模块级单例):快照预载 + socket.io 实时订阅。
 // 约定:只持有"最新一帧"与"滚动列表",不累积高频数据,避免内存与渲染压力。
@@ -60,6 +69,7 @@ function createLineData(lineId: string) {
   const edgeOnline = ref<boolean | null>(null);
   const robot = ref<RobotState | null>(null);
   const status = ref<LineStatus | null>(null);
+  const io = ref<IoState | null>(null);
   const events = ref<ProductionEvent[]>([]);
   const vision = ref<VisionResult[]>([]);
   const lastEventAt = ref(0);
@@ -71,6 +81,7 @@ function createLineData(lineId: string) {
       const snap = (await fetchSnapshot(lineId)) as LineSnapshot;
       if (snap.status) status.value = snap.status;
       if (snap.edge) edgeOnline.value = snap.edge.status === 'online';
+      if (snap.io) io.value = snap.io;
       const first = Object.values(snap.robots ?? {})[0];
       if (first) robot.value = first;
     } catch (e) {
@@ -83,6 +94,7 @@ function createLineData(lineId: string) {
         events.value = MOCK_EVENTS;
         vision.value = MOCK_VISION;
         edgeOnline.value = true;
+        io.value = MOCK_IO;
         lastEventAt.value = MOCK_EVENTS[0].ts;
         lastVisionAt.value = MOCK_VISION[0].ts;
       }
@@ -105,6 +117,9 @@ function createLineData(lineId: string) {
   });
   socket.on('line_status', (msg: LineStatus) => {
     status.value = msg;
+  });
+  socket.on('io_state', (msg: IoState) => {
+    io.value = msg;
   });
   socket.on('event', (msg: ProductionEvent) => {
     events.value.unshift(msg);
@@ -141,6 +156,7 @@ function createLineData(lineId: string) {
     edgeText,
     robot,
     status,
+    io,
     events,
     vision,
     alarmText,
