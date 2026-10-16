@@ -24,13 +24,15 @@
         {{ conveyorOn ? '传送带停止' : '传送带正转' }}
       </el-button>
     </div>
+    <!-- @deprecated 2026-10-16 暂停使用(现场无 PLC 寄存器,edge 默认就拒绝) -->
+  <!--
     <div class="ctrl-row">
-      <!-- 现场 PLC 11 word 表未开放这三个寄存器,edge 会回 rejected -->
       <el-button size="small" disabled>复位</el-button>
       <el-button size="small" disabled>清警</el-button>
       <el-button size="small" disabled>换型</el-button>
       <span class="ctrl-note">复位/清警/换型:现场 PLC 未开放对应寄存器</span>
     </div>
+  -->
 
     <!-- 状态行:显示最近一次命令的状态与回执消息 -->
     <div v-if="state !== 'idle'" class="ctrl-state" :class="state">

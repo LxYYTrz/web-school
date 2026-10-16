@@ -1,3 +1,11 @@
+<!--
+  @deprecated 2026-10-16 暂停使用
+  暂停原因:当前阶段不展示。文件保留不删,后续如需恢复:
+    1. web/src/router/index.ts 取消 /status 路由注释
+    2. web/src/App.vue 取消 <el-menu-item>"产线状态" 注释
+    3. router 重新 import StatusView
+  代码内容保持原样,未做改动。
+-->
 <template>
   <div class="status-page">
     <!-- 统计卡片 -->

@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import TwinView from '../views/TwinView.vue';
-import StatusView from '../views/StatusView.vue';
+// import StatusView from '../views/StatusView.vue';   // @deprecated 2026-10-16 暂停使用,文件保留不删,见 App.vue 同等注释
 import VisionView from '../views/VisionView.vue';
 import LoginView from '../views/LoginView.vue';
 import UsersView from '../views/UsersView.vue';
@@ -13,7 +13,8 @@ export const router = createRouter({
     { path: '/', redirect: '/twin' },
     { path: '/login', name: 'login', component: LoginView, meta: { title: '登录', public: true } },
     { path: '/twin', name: 'twin', component: TwinView, meta: { title: '实时孪生' } },
-    { path: '/status', name: 'status', component: StatusView, meta: { title: '产线状态' } },
+    // @deprecated 2026-10-16 暂停使用(/status 路由暂停,文件保留不删)
+    // { path: '/status', name: 'status', component: StatusView, meta: { title: '产线状态' } },
     { path: '/vision', name: 'vision', component: VisionView, meta: { title: '视觉检测' } },
     { path: '/users', name: 'users', component: UsersView, meta: { title: '用户管理', requiredLevel: 3 } },
   ],

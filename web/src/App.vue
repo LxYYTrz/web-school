@@ -16,9 +16,12 @@
         <el-menu-item v-if="canSee('twin')" index="/twin">
           <el-icon><Monitor /></el-icon>实时孪生
         </el-menu-item>
+        <!-- @deprecated 2026-10-16 暂停使用(产线状态页暂停,文件保留不删) -->
+        <!--
         <el-menu-item v-if="canSee('status')" index="/status">
           <el-icon><Odometer /></el-icon>产线状态
         </el-menu-item>
+        -->
         <el-menu-item v-if="canSee('vision')" index="/vision">
           <el-icon><CameraFilled /></el-icon>视觉检测
         </el-menu-item>
@@ -67,7 +70,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { Monitor, Odometer, CameraFilled, User } from '@element-plus/icons-vue';
+import { Monitor, CameraFilled, User } from '@element-plus/icons-vue';
 import { useLineData } from './composables/useLineData';
 import { useAuthStore } from './stores/auth';
 
@@ -77,8 +80,8 @@ const auth = useAuthStore();
 const router = useRouter();
 
 // 菜单显隐:对照 router meta.requiredLevel
-// level=1 普通 → twin + status
-// level=2 二级 → twin + status + vision
+// level=1 普通 → twin
+// level=2 二级 → twin + vision
 // level=3 admin → 全部 + 用户管理
 function canSee(routeName: string): boolean {
   if (!auth.user) return false;
