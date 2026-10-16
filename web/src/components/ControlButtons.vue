@@ -40,7 +40,6 @@
     <!-- @deprecated 2026-10-16 暂停使用(现场无 PLC 寄存器,edge 默认就拒绝) -->
   <!--
     <div class="ctrl-row">
-      <!-- 现场 PLC 未开放这三个寄存器,edge 会回 rejected -->
       <el-button size="small" disabled>复位</el-button>
       <el-button size="small" disabled>清警</el-button>
       <el-button size="small" disabled>换型</el-button>
