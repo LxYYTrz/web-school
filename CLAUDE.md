@@ -125,7 +125,10 @@
   - `level=2` 二级: 看 level=1+自己 + 改 level=1 密码
   - `level=1` 普通: 只看自己 + 改自己密码
 - **前端**:`web/src/stores/auth.ts`(pinia store) + `web/src/services/auth.ts`(fetch 封装 HTTP,401 跳登录) + `web/src/views/LoginView.vue` + `web/src/views/UsersView.vue`。
-- **菜单按 level 显隐**:`/users` 路由 meta.requiredLevel=3,`/vision` 待 5 做完后置 2;`/twin` `/status` 全部可见。
+- **菜单按 level 显隐**:`/users` 路由 meta.requiredLevel=3,`/vision` 待 5 做完后置 2;
+  `/twin` `/io` 全部可见。**`/status`(产线状态页)已于 2026-10-16 停用** ——
+  路由与菜单项都被注释(`@deprecated` 标记,文件保留不删),恢复步骤写在
+  `web/src/views/StatusView.vue` 顶部;信号观测改由 `/io` 页承担。
 - **首启建 admin**:`server/src/auth/users-bootstrap.service.ts` 在 `app.app_users` 空时自动建 `admin` 用户,初始密码取自 `ADMIN_PASSWORD` 环境变量(`.env.example` 里默认 `admin123`,生产必须改)。
 - **后端 `/api/auth/me`**:`GET /api/auth/me`(AuthGuard 保护),返回当前 session 用户;401 = 未登录。
 
@@ -133,10 +136,14 @@
 
 - **生产 build**(`npm run build`):**走真实链路**,mock 不生效。
 - **Demo build**(`VITE_MOCK_ONLY=true npm run build`):mock fallback 生效,无后端也能进所有页面看 UI。`web/src/stores/auth.ts` `web/src/views/LoginView.vue` `web/src/composables/useLineData.ts` 三处都改用 `import.meta.env.VITE_MOCK_ONLY === 'true'` 而不是 `import.meta.env.DEV`(因为生产 build 的 `DEV` 是 false,会让 mock 失效)。
-- **云服务器**当前跑的是 **demo build**,但 `/api/` 与 `/socket.io/` 已通过 SSH 隧道
-  转发到工控机后端 —— 所以 `http://119.91.145.27:8081/` 上 **状态/孪生页拿到的是真实
-  PLC 数据**(2026-10-15 验证:`state=manual_mode`,来自 PLC word 6 = 102)。
-  仅"无后端时的 demo fallback"分支还用得到 mock。
+- **云服务器当前跑的是生产 build**(2026-10-16 实测更正,原文写的"demo build"是错的)。
+  判据:线上 `dist/assets/index-*.js` 里 **grep 不到 `MOCK_CYCLE`** —— 未设
+  `VITE_MOCK_ONLY` 时 mock 代码块会被 tree-shake 掉,所以生产包里不含 mock 字符串。
+  **以后打包云端一律用 `npm run build`,不要加 `VITE_MOCK_ONLY=true`**。
+  `/api/` 与 `/socket.io/` 通过 SSH 隧道转发到工控机后端,所以
+  `http://119.91.145.27:8081/` 拿到的是**真实 PLC 数据**(2026-10-16 验证:
+  `state=unloading` + `io.sensorArrive=1`,来自 word 6 与 word 11~16)。
+  代价:后端/隧道断时**没有 mock 兜底**,页面只会空着,不会显示假数据。
 - 本机开发时前端 dev server 绑 IPv6 回环,用 `http://localhost:5173`(不是 `127.0.0.1`)。
 
 ### 4.4 云端部署
