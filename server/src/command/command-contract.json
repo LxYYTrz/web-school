@@ -1,0 +1,31 @@
+{
+  "_comment": "控制指令契约的单一数据源。后端 CommandService 以 TS import 读取,AI 的只读 MCP server(mcp/line-twin-mcp.js,独立进程)以 require 直接读取本文件 —— 两边共用一份定义,避免 AI 建议白名单与真实下发白名单漂移。改这里等于改两处。",
+  "_source": "契约 v1.2,docs/contract/README.md §3.6",
+  "allowedTypes": [
+    "start",
+    "stop",
+    "reset",
+    "changeover",
+    "mode_set",
+    "alarm_clear",
+    "conveyor"
+  ],
+  "executableTypes": ["start", "stop", "mode_set", "conveyor"],
+  "paramEnums": {
+    "mode_set": {
+      "acquire": 1,
+      "release": 2
+    },
+    "conveyor": {
+      "forward": 1,
+      "stop": 0
+    }
+  },
+  "notes": {
+    "mode_set": "PLC word 8,脉冲型(写完自动回 0)",
+    "conveyor": "PLC word 10,电平型(1=正转 0=停止,需显式回 0)",
+    "reset": "现场 PLC 无对应寄存器,edge 会回 rejected",
+    "changeover": "现场 PLC 无对应寄存器,edge 会回 rejected",
+    "alarm_clear": "现场 PLC 无对应寄存器,edge 会回 rejected"
+  }
+}

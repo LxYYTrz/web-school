@@ -8,6 +8,7 @@ dist/
 
 # 日志与系统文件
 *.log
+*.log.err
 .DS_Store
 Thumbs.db
 
