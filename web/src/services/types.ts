@@ -1,4 +1,5 @@
 // 与数据契约 docs/contract/README.md 对齐的前端类型(字段一致,只增不改)
+// 机器人六轴遥测（契约 3.1）
 export interface RobotState {
   ts: number;
   deviceId: string;
@@ -10,6 +11,7 @@ export interface RobotState {
   alarmCode: number;
 }
 
+// 产线状态快照（契约 3.2）
 export interface LineStatus {
   ts: number;
   lineId: string;
@@ -27,6 +29,7 @@ export interface LineStatus {
   beatMs: number;
 }
 
+// 生产事件 / 报警（契约 3.3）
 export interface ProductionEvent {
   ts: number;
   lineId: string;

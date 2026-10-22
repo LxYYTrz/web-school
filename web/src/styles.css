@@ -1,18 +1,26 @@
 /* 全局样式:深色工业风 */
 :root {
+  /* 页面背景色 */
   --bg: #0b0f14;
+  /* 面板背景（半透明，叠加在 3D 画布上时能看见后面的画面） */
   --panel: rgba(18, 24, 32, 0.82);
+  /* 面板边框（很淡的蓝白描边） */
   --panel-border: rgba(120, 160, 200, 0.18);
+  /* 主文字 / 次要文字 */
   --text: #d7e1ea;
   --text-dim: #7f8c99;
+  /* 强调色（橙） */
   --accent: #ff8c42;
+  /* 正常 / 异常 / 警告 */
   --ok: #2ecc71;
   --ng: #ff5c5c;
   --warn: #f5b041;
 }
 
+/* 所有元素盒模型统一为 border-box：padding/border 不会撑大元素 */
 * { box-sizing: border-box; }
 
+/* html/body/#app 撑满视口高度 —— 3D 画布需要确定的高度才能计算尺寸 */
 html, body, #app {
   height: 100%;
   margin: 0;
@@ -21,8 +29,10 @@ html, body, #app {
   font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
 }
 
+/* 根布局容器：撑满高度 */
 .layout { height: 100%; }
 
+/* ---------------- 顶栏 ---------------- */
 .topbar {
   display: flex;
   align-items: center;
@@ -33,7 +43,9 @@ html, body, #app {
   height: 52px;
 }
 
+/* 品牌区 */
 .brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+/* 品牌小圆点（发光） */
 .brand-dot {
   width: 10px; height: 10px; border-radius: 50%;
   background: var(--accent);
@@ -41,15 +53,18 @@ html, body, #app {
 }
 .brand-name { font-weight: 600; letter-spacing: 1px; }
 
+/* 菜单：占据中间剩余空间 */
 .nav { flex: 1; background: transparent; border-bottom: none; }
 .nav .el-menu-item { color: var(--text-dim); }
 .nav .el-menu-item.is-active { color: var(--accent); }
 
+/* ---------------- 右上角状态徽标 ---------------- */
 .badges { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
 .badge {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; color: var(--text-dim);
 }
+/* 状态小圆点 */
 .dot {
   width: 8px; height: 8px; border-radius: 50%; display: inline-block;
   background: #555;
@@ -57,6 +72,7 @@ html, body, #app {
 .dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .dot.off { background: var(--ng); box-shadow: 0 0 8px var(--ng); }
 .alarm { color: var(--ng); }
+/* 报警圆点闪烁 */
 .alarm-dot { background: var(--ng); box-shadow: 0 0 8px var(--ng); animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: 0.3; } }
 
@@ -78,6 +94,8 @@ html, body, #app {
   color: var(--text-dim);
 }
 
+/* ---------------- 内容区 ---------------- */
+/* 高度 = 视口高度 - 顶栏高度（52px），超出可滚动 */
 .body { padding: 14px; height: calc(100% - 52px); overflow: auto; }
 
 /* 通用面板 */
@@ -88,6 +106,7 @@ html, body, #app {
   padding: 12px 14px;
   backdrop-filter: blur(6px);
 }
+/* 面板标题栏 */
 .panel-title {
   font-size: 12px; color: var(--text-dim);
   letter-spacing: 2px; margin-bottom: 10px;

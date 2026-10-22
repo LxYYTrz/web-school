@@ -1,19 +1,41 @@
 {
+  // ============================================================================
+  // 文件作用：后端 TypeScript 编译配置
+  // 所属模块：server/
+  // ============================================================================
+  // 说明：tsconfig.json 支持注释（TypeScript 用 JSONC 解析）。
+  // ============================================================================
   "compilerOptions": {
+    // 模块格式：CommonJS —— Node.js 原生最稳的格式（NestJS 默认）
     "module": "commonjs",
+    // 编译目标：ES2021
     "target": "ES2021",
+    // 可用的标准库
     "lib": ["ES2021"],
+    // 模块解析方式：Node 的传统解析（node_modules 逐级向上找）
     "moduleResolution": "node",
+    // ★ 开启装饰器元数据 —— NestJS 的依赖注入靠它识别构造函数参数类型。
+    //   关闭它，@Injectable() 类的依赖就注入不进来
     "emitDecoratorMetadata": true,
+    // ★ 开启装饰器语法（实验性，但 NestJS 生态的事实标准）
     "experimentalDecorators": true,
+    // 允许 default import CJS 模块（express、pg 等）
     "esModuleInterop": true,
+    // 跳过第三方类型声明检查（省时间）
     "skipLibCheck": true,
+    // ★ 严格模式：所有严格检查都开
     "strict": true,
+    // 允许类属性未初始化（NestJS 的依赖注入属性是运行时赋值的，编译期无法确定）
     "strictPropertyInitialization": false,
+    // 编译产物输出目录（npm run build 后生成 dist/）
     "outDir": "dist",
+    // 源码根目录（编译后 dist/main.js 的位置对应 src/main.ts）
     "rootDir": "src",
+    // 允许 import JSON 文件
     "resolveJsonModule": true,
+    // 文件名大小写必须一致（跨平台兼容：Windows 不区分大小写，Linux 区分）
     "forceConsistentCasingInFileNames": true
   },
+  // 只编译 src/ 目录下的所有 .ts 文件
   "include": ["src/**/*"]
 }

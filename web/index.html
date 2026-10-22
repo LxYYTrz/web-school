@@ -1,12 +1,39 @@
 <!doctype html>
+<!--
+  ============================================================================
+  文件作用：前端 HTML 入口模板（Vite 的起点）
+  所属模块：web/
+  ============================================================================
+
+  【宏观定位】整个前端唯一的 HTML 文件。
+    开发期：Vite 开发服务器直接返回它，脚本是 ES Module，按需编译。
+    生产期：npm run build 后，Vite 把它作为模板生成 dist/index.html，
+            并把打包后的 JS/CSS 以 <script>/<link> 注入，
+            最终由云端 Nginx 托管（deploy/nginx/cloud.conf 的 root 指向它）。
+
+  【为什么是单页应用（SPA）】
+    只有这一个 HTML，所有页面切换靠前端路由（vue-router），
+    不重新加载整个文档 —— 所以切换页面时 WebSocket 连接不会断。
+
+  【<html class="dark"> 的作用】
+    Element Plus 的暗色主题是靠 html 元素上的 .dark 类激活的
+    （配合 element-plus/theme-chalk/dark/css-vars.css）。
+    在 HTML 上直接写死，省得 JS 里再切一次，避免首屏闪白。
+  ============================================================================
+-->
 <html lang="zh-CN" class="dark">
   <head>
+    <!-- 字符编码：中文页面必须声明，否则可能乱码 -->
     <meta charset="UTF-8" />
+    <!-- 移动端适配：禁止缩放，保证在工控机触摸屏上正常显示 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 浏览器标签页标题 -->
     <title>产线数字孪生监控平台</title>
   </head>
   <body>
+    <!-- Vue 应用的挂载点：createApp(App).mount('#app') 会接管这个 div -->
     <div id="app"></div>
+    <!-- 入口脚本：type="module" 表示 ES Module（Vite 会接管并转换） -->
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

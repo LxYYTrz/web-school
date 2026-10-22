@@ -1,5 +1,35 @@
 # register-mapping.csv 填写指南(给电气工程师)
 
+<!--
+  ============================================================================
+  文件作用：现场点位表(edge/register-mapping.csv)的填写指南
+  所属模块：edge/
+  ============================================================================
+
+  【给谁看】现场电气工程师 / PLC 程序工程师。
+  【什么时候看】拿到 PLC 地址、准备填点位表时。
+
+  【★ 与 docs/contract/register-mapping.template.csv 的区别（别搞混）】
+    docs/contract/…template.csv  → 契约层的**通用**点位模板
+                                    （含 protocol/byte_order/poll_group 等，
+                                      为将来接 OPC UA / S7 等多协议预留，
+                                      当前 plc_collector.py 并不读它）
+    edge/register-mapping.csv    → ★ **采集器实际解析的** Modbus 点位表
+                                    （列：name,address,type,scale,offset,unit，
+                                      由 plc_collector.py 的 _read_csv() 解析）
+    → 现场填的是 **edge/register-mapping.csv**。
+
+  【本文件的章节】
+    §1 PLC 现状（2026-10-09 探测结果）
+    §2 TIA Portal 里要做的 3 步（扩 DB3 / 变量映射 / 扩 MB_SERVER 长度）
+    §3 怎么算 Modbus address（字节偏移 ÷ 2）
+    §4 缩放系数 scale 怎么定
+    §5 验证步骤
+    §6 验证 PLC 实时刷新的最简单办法（Force Table）
+    §7 三个文件的备份与版本分工
+  ============================================================================
+-->
+
 ## 0. 这张表干什么
 
 plc_collector.py 读这张表 → 周期性地从 PLC 拉 Holding Register → 翻译成数据契约 JSON → 发布到 MQTT。

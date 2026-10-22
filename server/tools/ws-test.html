@@ -1,35 +1,76 @@
 <!doctype html>
+<!--
+  ============================================================================
+  文件作用：WebSocket 联调测试页（独立于前端项目的最小测试工具）
+  所属模块：server/tools/
+  ============================================================================
+
+  【用途】
+    不启动前端，也能独立验证「MQTT → 后端 → WebSocket」这条链路是否通。
+    联调后端时特别有用：不用开浏览器就能看到数据在滚动。
+
+  【怎么用】
+    1. 启动基础设施（deploy/docker-compose.yml）
+    2. 启动后端（server/ → npm run start:dev）
+    3. 启动 mock 采集器（edge/ → python mock_collector.py）
+    4. 浏览器直接打开这个文件（file:// 协议也行）
+       → 页面里应看到 robot_state / line_status / event 持续滚动
+
+  【注意】
+    · 脚本从 CDN 加载 socket.io-client，需要联网。
+      离线环境请把 socket.io.min.js 下载到本地再改引用。
+    · 这是**开发工具**，不要部署到生产服务器。
+  ============================================================================
+-->
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <title>line-twin WebSocket 联调</title>
   <style>
+    /* 整体排版：等宽字体，像终端 */
     body { font-family: monospace; margin: 16px; }
+    /* 日志区：占 78% 屏幕高度，超出可滚动；黑底绿字 */
     #log { height: 78vh; overflow: auto; background: #111; color: #0f0; padding: 8px; white-space: pre-wrap; }
   </style>
 </head>
 <body>
   <h3>实时数据测试(line-01)</h3>
-  <p>连接 http://localhost:3000,订阅 robot_state / line_status / event / vision_result</p>
+  <p>连接 http://localhost:3000,订阅 robot_state / line_status / event</p>
+  <!-- 日志输出区 -->
   <div id="log"></div>
+
   <!-- 需联网加载;若离线,把 socket.io.min.js 下载到本地改引用 -->
   <script src="https://unpkg.com/socket.io-client@4.8.1/dist/socket.io.min.js"></script>
   <script>
+    // 日志容器元素
     const logEl = document.getElementById('log');
+    // 往日志区顶部插入一行（新的在上，和终端习惯一致）
     const log = (m) => { logEl.textContent = m + '\n' + logEl.textContent; };
 
+    // 建立 socket.io 连接（开发期直连后端 3000）
     const socket = io('http://localhost:3000');
+
+    // 连接成功
     socket.on('connect', () => {
       log('connected: ' + socket.id);
+      // 订阅产线：第三个参数是 ack 回调，后端会返回 { ok:true, lineId }
       socket.emit('subscribe', { lineId: 'line-01' }, (ack) => log('subscribe ack: ' + JSON.stringify(ack)));
     });
+
+    // 机器人帧计数（用于观察 10Hz 的到达频率）
     let robotCount = 0;
     socket.on('robot_state', (m) => {
+      // 每 10 帧打一次，避免刷屏（10Hz 全打会闪瞎眼）
       if (++robotCount % 10 === 0) log(`robot_state x${robotCount}  joints=${JSON.stringify(m.joints)}`);
     });
+
+    // 产线状态（1Hz，每条都打）
     socket.on('line_status', (m) => log('line_status: ' + JSON.stringify(m)));
+
+    // 生产事件
     socket.on('event', (m) => log('event: ' + JSON.stringify(m)));
-    socket.on('vision_result', (m) => log('vision_result: ' + JSON.stringify(m)));
+
+    // 连接错误（后端没起、端口不对、代理问题都会走到这里）
     socket.on('connect_error', (e) => log('connect_error: ' + e.message));
   </script>
 </body>

@@ -10,7 +10,19 @@
 #
 # 端口全部只绑回环口:本机后端使用,不对局域网/公网开放。
 # =============================================================
+# 工控机(Windows,高配)侧基础设施
+# 角色:全部数据处理 —— EMQX + Redis
+# 后端 NestJS(server/)与采集器(edge/)在 Windows 上原生运行,不进容器
+# 用法(工控机上装了 Docker Desktop 时):
+#   docker compose -f deploy/docker-compose.ipc.yml up -d
+# 没装 Docker 就装原生版本:EMQX Windows 版 / Redis(可用 Memurai),
+# 端口保持一致即可,后端代码无感知。
+# 端口全部只绑回环口:本机后端使用,不对局域网/公网开放。
 services:
+  # --------------------------------------------------------------------------
+  # EMQX：工控机本机的 MQTT Broker
+  #   采集器 publish → 本机 EMQX → 后端 subscribe，全在本机完成（不依赖外网）
+  #   这就是"断网时产线照常运行"的实现：上行链路完全本地闭环。
   emqx:
     image: emqx/emqx:5.8
     container_name: lt-ipc-emqx
@@ -22,9 +34,14 @@ services:
       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
       EMQX_DASHBOARD__DEFAULT_PASSWORD: admin123   # TODO 修改
       EMQX_ALLOW_ANONYMOUS: "true"                  # TODO 产线稳定后改 false
+    # 具名卷声明
     volumes:
       - emqx-data:/opt/emqx/data
 
+  # --------------------------------------------------------------------------
+  # Redis：工控机本机的实时快照缓存
+  #   ★ 放在本机是有意为之：断外网时快照依然可用，
+  #     网站恢复后前端重连即可立刻看到当前状态（不用等新数据）。
   redis:
     image: redis:7-alpine
     container_name: lt-ipc-redis
@@ -36,5 +53,7 @@ services:
       - redis-data:/data
 
 volumes:
+  # EMQX 数据
   emqx-data:
+  # Redis AOF 文件
   redis-data:
