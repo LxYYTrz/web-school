@@ -27,7 +27,6 @@ ROBOT_ID = os.getenv("ROBOT_ID", "robot-01")
 T_ROBOT  = f"tl/v1/{LINE_ID}/telemetry/robot/{ROBOT_ID}"
 T_STATUS = f"tl/v1/{LINE_ID}/telemetry/status"
 T_EVENT  = f"tl/v1/{LINE_ID}/event"
-T_VISION = f"tl/v1/{LINE_ID}/vision/result"
 T_EDGE   = f"tl/v1/{LINE_ID}/edge/status"
 T_CMD    = f"tl/v1/{LINE_ID}/cmd/+"
 T_ACK    = f"tl/v1/{LINE_ID}/cmd_ack"
@@ -123,23 +122,11 @@ def main():
                     "beatMs": int(BEAT_SECONDS * 1000),
                 }, qos=1, retain=True)
 
-            # 3) 每件一次:视觉结果 + piece_done 事件
+            # 3) 每件一次:piece_done 事件
             if beat_index != last_beat and t >= 1:
                 last_beat = beat_index
                 seq += 1
                 sn = f"SN{time.strftime('%Y%m%d')}{seq:05d}"
-                is_ng = (seq % 50 == 0)
-                defects = ([{
-                    "type": "scratch",
-                    "x": random.randint(0, 600), "y": random.randint(0, 400),
-                    "w": random.randint(10, 60), "h": random.randint(5, 30),
-                }] if is_ng else [])
-                pub(client, T_VISION, {
-                    "ts": now_ms(), "lineId": LINE_ID, "cameraId": "cam-01",
-                    "sn": sn, "result": "ng" if is_ng else "ok",
-                    "defects": defects,
-                    "imageUrl": None, "thumbUrl": None,  # 图片链路接通后由后端补全
-                }, qos=1)
                 pub(client, T_EVENT, {
                     "ts": now_ms(), "lineId": LINE_ID, "deviceId": ROBOT_ID,
                     "type": "piece_done", "level": "info",

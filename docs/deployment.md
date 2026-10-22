@@ -25,13 +25,12 @@
                 │  NestJS 后端:3000    │  ← 所有数据处理/转发/审计
                 │  EMQX(本机 MQTT)    │
                 │  Redis(快照缓存)    │
-                │  MinIO(视觉图片)    │
                 │  edge 采集器         │
                 └─────────┬──────────┘
                           │  产线局域网
               ┌───────────┼───────────┐
-           机器人        视觉         PLC
-         (六轴数据)   (拍照/结果)  (传送带/状态)
+           机器人             PLC
+         (六轴数据)          (传送带/状态)
 ```
 
 ## 2. 各机器部署清单
@@ -39,7 +38,7 @@
 | 机器 | 跑什么 | 怎么跑 |
 |---|---|---|
 | 云服务器 | Nginx + TimescaleDB | `docker compose -f deploy/docker-compose.cloud.yml up -d`,前端 `web/` 构建后把 `dist/` 放到 `deploy/dist/` |
-| 工控机 | EMQX + Redis + MinIO | 有 Docker:`docker compose -f deploy/docker-compose.ipc.yml up -d`;无 Docker:装原生 EMQX/Redis(Memurai)/MinIO,端口一致即可 |
+| 工控机 | EMQX + Redis | 有 Docker:`docker compose -f deploy/docker-compose.ipc.yml up -d`;无 Docker:装原生 EMQX/Redis(Memurai),端口一致即可 |
 | 工控机 | NestJS 后端 | 原生运行:`cd server && npm install && npm run build && node dist/main.js`(用 NSSM 或任务计划注册成开机自启服务) |
 | 工控机 | 采集器 | `python edge/mock_collector.py`(现场换成 plc_collector.py) |
 | 开发机 | 完整一套(开发用) | `deploy/docker-compose.yml`(三合一开发版)+ server + web dev |
@@ -66,17 +65,14 @@ ssh -N -R 3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 linetwin@云服务器IP
 ## 4. 数据流(对应新拓扑)
 
 - **上行**:设备 → 采集器 → 工控机 EMQX → 工控机后端 →(历史数据经隧道写入云数据库 / Redis 快照在工控机本地 / WebSocket 经隧道推给浏览器)
-- **图片**:相机 → 视觉程序 → 采集器上传 → 工控机 MinIO;浏览器里的 `<img>` URL 指向 `/api/vision/images/...`,经隧道由工控机后端从 MinIO 读流返回(所以 nginx 不需要单独代理 MinIO)
 - **下行控制**:浏览器 → 云 Nginx → 隧道 → 工控机后端(鉴权+审计)→ 工控机 EMQX → 采集器 → PLC(联锁否决权在 PLC)
-
-注意:后端生成图片 URL 时用**相对路径**(`/api/vision/images/xx`),不要写死工控机 IP,否则外部浏览器打不开。
 
 ## 5. 端口与防火墙
 
 | 机器 | 对外 | 仅本机 |
 |---|---|---|
 | 云服务器 | 80/443(Nginx)、22(SSH) | 5432(PG)、3300(隧道入口) |
-| 工控机 | 无(全部回环) | 1883/18083(EMQX)、6379(Redis)、9000/9001(MinIO)、3000(后端) |
+| 工控机 | 无(全部回环) | 1883/18083(EMQX)、6379(Redis)、3000(后端) |
 
 工控机不需要任何入站开放;云服务器安全组只开 22/80/443。
 

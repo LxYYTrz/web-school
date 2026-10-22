@@ -15,7 +15,7 @@ interface RobotRow {
 }
 
 // 历史数据落库(TimescaleDB)。机器人帧频率高,先缓冲再每秒批量 INSERT;
-// 状态/事件/视觉频率低,即时写入。
+// 状态/事件频率低,即时写入。
 @Injectable()
 export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(HistoryWriterService.name);
@@ -36,7 +36,7 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
 
-  bufferRobotFrame(lineCode: string, deviceCode: string, msg: any) {
+  bufferRobotFrame(deviceCode: string, msg: any) {
     const deviceId = this.catalog.deviceId(deviceCode);
     if (deviceId === undefined) return;
     if (this.robotBuffer.length >= 10000) {
@@ -119,23 +119,6 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
         ],
       )
       .catch((e: Error) => this.logger.error(`写事件失败: ${e.message}`));
-  }
-
-  insertVision(lineCode: string, msg: any) {
-    const lineId = this.catalog.lineId(lineCode);
-    if (lineId === undefined) return;
-    // camera_id 解析不到时写 NULL(相机可能未登记),其余字段照存
-    const cameraId = msg.cameraId ? this.catalog.deviceId(msg.cameraId) ?? null : null;
-    this.pool
-      .query(
-        `INSERT INTO vision_images (line_id, camera_id, sn, result, defects, captured_at)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [
-          lineId, cameraId, msg.sn ?? null, msg.result === 'ng' ? 'ng' : 'ok',
-          JSON.stringify(msg.defects ?? []), toTime(msg),
-        ],
-      )
-      .catch((e: Error) => this.logger.error(`写视觉结果失败: ${e.message}`));
   }
 
   ackCommand(msg: any) {

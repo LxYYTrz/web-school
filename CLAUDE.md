@@ -8,7 +8,7 @@
 
 ## 1. 这是什么项目
 
-**产线数字孪生监控平台**:机器人六轴实时孪生 + 机器视觉图片展示 + 多角色 RBAC(操作员 / 客户 / 数据分析员)。
+**产线数字孪生监控平台**:机器人六轴实时孪生 + 多角色 RBAC(操作员 / 客户 / 数据分析员)。
 
 8 步路线当前进度:
 
@@ -16,7 +16,7 @@
 - [x] 2 后端最小链路(`MQTT → TimescaleDB / Redis / WebSocket`)
 - [x] 3 前端孪生(Three.js 程序化 6 轴机械臂)
 - [x] 4 登录 + RBAC 三角色
-- [ ] 5 图片链路(用户决定不做)
+- [ ] 5 图片链路(用户决定不做,2026-10-22 已彻底移除)
 - [x] 6 控制链路 —— 代码 + **现场点位已落地**(契约 v1.2);真实下发待人工验证
 - [x] 7 上云 —— 部署 + SSH 隧道建通,`http://119.91.145.27:8081/` **已见真实 PLC 数据**
 - [x] 8 到现场 —— **PLC 已真实连通**,17 word 点位表落地(11→17 于 2026-10-16),
@@ -28,9 +28,9 @@
 ## 2. 架构(铁律)
 
 ```
-产线设备(机器人 / 视觉 / PLC)
+产线设备(机器人 / PLC)
     │ 产线局域网
-工控机(高配 Windows): EMQX + Redis + MinIO + NestJS 后端 + edge 采集器
+工控机(高配 Windows): EMQX + Redis + NestJS 后端 + edge 采集器
     │ SSH 双隧道(工控机主动外连;工厂防火墙零配置)
 云服务器(低配 Linux): Nginx 静态前端 + PostgreSQL/TimescaleDB + 纯转发
     │ HTTPS
@@ -125,7 +125,7 @@
   - `level=2` 二级: 看 level=1+自己 + 改 level=1 密码
   - `level=1` 普通: 只看自己 + 改自己密码
 - **前端**:`web/src/stores/auth.ts`(pinia store) + `web/src/services/auth.ts`(fetch 封装 HTTP,401 跳登录) + `web/src/views/LoginView.vue` + `web/src/views/UsersView.vue`。
-- **菜单按 level 显隐**:`/users` 路由 meta.requiredLevel=3,`/vision` 待 5 做完后置 2;
+- **菜单按 level 显隐**:`/users` 路由 meta.requiredLevel=3;
   `/twin` `/io` 全部可见。**`/status`(产线状态页)已于 2026-10-16 停用** ——
   路由与菜单项都被注释(`@deprecated` 标记,文件保留不删),恢复步骤写在
   `web/src/views/StatusView.vue` 顶部;信号观测改由 `/io` 页承担。
@@ -302,7 +302,7 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 
 ### 5.3 不做(用户决定)
 
-- ❌ 路线 5 图片链路(用户决定先不做)
+- ❌ 路线 5 图片链路(2026-10-22 已整体移除:后端 vision 模块 + 前端视觉页 + edge 转发器 + DB 表 + 权限)
 
 ## 6. 现场操作清单(产线 Windows 第一次开干)
 
@@ -379,7 +379,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `edge/plc_collector.py` | 真实 PLC 采集器(pymodbus 3.x + `STATE_MAP` + `CMD_DISPATCH` + 字序可配) |
 | `edge/_test_decode.py` | 解码测试(7 读点 + 10 态枚举 + 4 写点地址,双字序) |
 | `edge/_test_cmd.py` | 指令派发测试(7 type / 脉冲 vs 电平 / 枚举校验 / 无点位 rejected) |
-| `db/init/001_init.sql` | 业务表(robot_state/line_status/event/vision_result) |
+| `db/init/001_init.sql` | 业务表(robot_state/line_status/event) |
 | `db/init/002_app_users.sql` | RBAC 表(app_users + level CHECK) |
 | `db/init/003_control_commands_extension.sql` | 契约 v1.1:type CHECK 扩到 6 项 |
 | `db/init/004_line_state_stages.sql` | **契约 v1.1**:state CHECK 放宽到 10 态工序 + 原 4 态 |
@@ -400,7 +400,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `web/src/composables/useLineData.ts` | 产线数据 composable(mock fallback) |
 | `edge/_test_cmd.py` | **路线 6**:控制命令 dispatch 单元测试(8 用例) |
 | `deploy/docker-compose.cloud.yml` | 云服务器 compose(nginx + timescaledb) |
-| `deploy/docker-compose.ipc.yml` | 工控机 compose(EMQX + Redis + MinIO) |
+| `deploy/docker-compose.ipc.yml` | 工控机 compose(EMQX + Redis) |
 
 ## 8. 重要环境信息(**敏感**,不进仓库**)
 

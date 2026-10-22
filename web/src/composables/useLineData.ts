@@ -6,14 +6,12 @@ import type {
   LineStatus,
   ProductionEvent,
   RobotState,
-  VisionResult,
 } from '../services/types';
 
 const MAX_FEED = 60;
-const MAX_VISION = 30;
 
 // ===== dev 演示 mock 数据(仅 VITE_MOCK_ONLY=true 时使用) =====
-// 没后端时让三个视图(twin/status/vision)有数据可见,纯看页面用。
+// 没后端时让视图(twin/io)有数据可见,纯看页面用。
 // 开启方式:build 时设 VITE_MOCK_ONLY=true (例:VITE_MOCK_ONLY=true npm run build)。
 // 不设 → prod 走真实链路,mock 不生效。
 const MOCK_NOW = () => Date.now();
@@ -45,11 +43,6 @@ const MOCK_EVENTS: ProductionEvent[] = [
   { ts: MOCK_EARLIER(23), lineId: 'line-01', deviceId: 'plc-01',   type: 'alarm',      level: 'warning', code: 'W201', message: '气源压力偏低(mock)' },
   { ts: MOCK_EARLIER(30), lineId: 'line-01', deviceId: 'robot-01', type: 'piece_done', level: 'info',    message: '工件 SN20261014000003 完成' },
 ];
-const MOCK_VISION: VisionResult[] = [
-  { ts: MOCK_EARLIER(8),  lineId: 'line-01', cameraId: 'cam-01', sn: 'SN20261014000001', result: 'ok', defects: [], imageUrl: null, thumbUrl: null },
-  { ts: MOCK_EARLIER(15), lineId: 'line-01', cameraId: 'cam-01', sn: 'SN20261014000002', result: 'ng', defects: [{ type: 'scratch', x: 220, y: 180, w: 60, h: 18 }], imageUrl: null, thumbUrl: null },
-  { ts: MOCK_EARLIER(30), lineId: 'line-01', cameraId: 'cam-01', sn: 'SN20261014000003', result: 'ok', defects: [], imageUrl: null, thumbUrl: null },
-];
 // demo 模式下 6 个 IO 点各给一个不同的值,便于在页面上区分每个点位
 const MOCK_IO: IoState = {
   ts: MOCK_NOW(), lineId: 'line-01',
@@ -71,9 +64,7 @@ function createLineData(lineId: string) {
   const status = ref<LineStatus | null>(null);
   const io = ref<IoState | null>(null);
   const events = ref<ProductionEvent[]>([]);
-  const vision = ref<VisionResult[]>([]);
   const lastEventAt = ref(0);
-  const lastVisionAt = ref(0);
 
   // ---------- 快照预载(首屏立即有数据,不等下一帧) ----------
   async function preload() {
@@ -87,16 +78,14 @@ function createLineData(lineId: string) {
     } catch (e) {
       // 后端没起或网络异常:静默,等待 socket 实时数据
       console.warn('[lineData] snapshot 预载失败', e);
-      // dev 演示 fallback:无后端时填 mock,让三个视图有数据可见
+      // dev 演示 fallback:无后端时填 mock,让视图有数据可见
       if (MOCK_ENABLED) {
         robot.value = MOCK_ROBOT;
         status.value = MOCK_STATUS;
         events.value = MOCK_EVENTS;
-        vision.value = MOCK_VISION;
         edgeOnline.value = true;
         io.value = MOCK_IO;
         lastEventAt.value = MOCK_EVENTS[0].ts;
-        lastVisionAt.value = MOCK_VISION[0].ts;
       }
     }
   }
@@ -126,11 +115,6 @@ function createLineData(lineId: string) {
     if (events.value.length > MAX_FEED) events.value.length = MAX_FEED;
     lastEventAt.value = msg.ts;
   });
-  socket.on('vision_result', (msg: VisionResult) => {
-    vision.value.unshift(msg);
-    if (vision.value.length > MAX_VISION) vision.value.length = MAX_VISION;
-    lastVisionAt.value = msg.ts;
-  });
   socket.on('edge_status', (msg: { status: 'online' | 'offline' }) => {
     edgeOnline.value = msg.status === 'online';
   });
@@ -158,10 +142,8 @@ function createLineData(lineId: string) {
     status,
     io,
     events,
-    vision,
     alarmText,
     lastEventAt,
-    lastVisionAt,
   };
 }
 

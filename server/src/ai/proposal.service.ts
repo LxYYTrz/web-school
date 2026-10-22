@@ -1,7 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import Redis from 'ioredis';
 import { REDIS } from '../infra/tokens';
-import { config } from '../config/configuration';
 import { TelemetryGateway } from '../realtime/telemetry.gateway';
 import { ALLOWED_TYPES, EXECUTABLE_TYPES, validateParams } from '../command/command-contract';
 

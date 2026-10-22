@@ -125,7 +125,6 @@ function can(type: CmdType, action?: string): boolean {
 
 /** 不满足前置条件时的一句话原因,给操作员看;都可用时返回空串 */
 const gateHint = computed(() => {
-  const s = lineState.value ?? '未知';
   if (initError.value) {
     return '产线处于「初始化错误」:网页无法解除,请到产线现场按物理按钮复位。';
   }

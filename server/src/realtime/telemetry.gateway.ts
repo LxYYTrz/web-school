@@ -40,10 +40,6 @@ export class TelemetryGateway {
     this.server?.to(`line:${lineId}`).emit('event', msg);
   }
 
-  broadcastVision(lineId: string, msg: unknown) {
-    this.server?.to(`line:${lineId}`).emit('vision_result', msg);
-  }
-
   broadcastEdge(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('edge_status', msg);
   }

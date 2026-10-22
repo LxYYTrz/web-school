@@ -62,7 +62,7 @@ CREATE TABLE user_line_scope (
 CREATE TABLE devices (
   id       BIGSERIAL PRIMARY KEY,
   line_id  BIGINT NOT NULL REFERENCES production_lines(id),
-  type     TEXT NOT NULL CHECK (type IN ('plc','robot','camera','ipc')),
+  type     TEXT NOT NULL CHECK (type IN ('plc','robot')),
   code     TEXT NOT NULL UNIQUE,   -- 与 MQTT 主题中的 {deviceId} 一致
   name     TEXT NOT NULL,
   protocol TEXT,                   -- modbus_tcp / opc_ua / s7 / mc / http ...
@@ -126,22 +126,6 @@ CREATE TABLE line_current_status (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 视觉图片元数据(图片二进制在对象存储 MinIO/OSS)
-CREATE TABLE vision_images (
-  id          BIGSERIAL PRIMARY KEY,
-  line_id     BIGINT NOT NULL REFERENCES production_lines(id),
-  camera_id   BIGINT REFERENCES devices(id),
-  sn          TEXT,                       -- 工件序列号/条码,追溯键
-  result      TEXT NOT NULL CHECK (result IN ('ok','ng')),
-  defects     JSONB NOT NULL DEFAULT '[]',
-  object_key  TEXT,                       -- 原图在对象存储中的 key
-  thumb_key   TEXT,                       -- 缩略图 key
-  captured_at TIMESTAMPTZ NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX idx_vi_line_time ON vision_images (line_id, captured_at DESC);
-CREATE INDEX idx_vi_sn ON vision_images (sn);
-
 -- 控制指令(全生命周期审计;type 为白名单,不开放任意写寄存器)
 CREATE TABLE control_commands (
   id              BIGSERIAL PRIMARY KEY,
@@ -178,26 +162,24 @@ INSERT INTO roles (code, name) VALUES
 INSERT INTO permissions (code, type, name) VALUES
   ('menu:dashboard','menu','产线总览'),
   ('menu:twin','menu','数字孪生'),
-  ('menu:vision','menu','视觉检测'),
   ('menu:analysis','menu','数据分析'),
   ('menu:admin','menu','系统管理'),
   ('api:command:execute','api','下发控制指令'),
-  ('data:telemetry:detail','data','查看详细遥测数据'),
-  ('data:vision:all','data','查看全部视觉结果(含 NG 明细)');
+  ('data:telemetry:detail','data','查看详细遥测数据');
 
 INSERT INTO role_permissions (role_id, permission_id)
   SELECT r.id, p.id FROM roles r JOIN permissions p ON TRUE WHERE r.code = 'admin';
 INSERT INTO role_permissions (role_id, permission_id)
   SELECT r.id, p.id FROM roles r, permissions p
   WHERE r.code = 'operator' AND p.code IN
-    ('menu:dashboard','menu:twin','menu:vision','api:command:execute');
+    ('menu:dashboard','menu:twin','api:command:execute');
 INSERT INTO role_permissions (role_id, permission_id)
   SELECT r.id, p.id FROM roles r, permissions p
   WHERE r.code = 'customer' AND p.code IN ('menu:dashboard','menu:twin');
 INSERT INTO role_permissions (role_id, permission_id)
   SELECT r.id, p.id FROM roles r, permissions p
   WHERE r.code = 'analyst' AND p.code IN
-    ('menu:dashboard','menu:vision','menu:analysis','data:telemetry:detail','data:vision:all');
+    ('menu:dashboard','menu:analysis','data:telemetry:detail');
 
 -- 初始管理员:admin / Admin@123  ★首次登录后必须修改
 INSERT INTO users (username, password_hash, display_name)
@@ -211,9 +193,7 @@ INSERT INTO devices (line_id, type, code, name, protocol)
   SELECT l.id, d.type, d.code, d.name, d.protocol
   FROM production_lines l,
        (VALUES ('plc',   'plc-01',    '主控 PLC',   'modbus_tcp'),
-               ('robot', 'robot-01',  '六轴机器人', 'via_plc'),
-               ('camera','cam-01',    '视觉相机',   'gige'),
-               ('ipc',   'ipc-vision','视觉工控机', 'http')
+               ('robot', 'robot-01',  '六轴机器人', 'via_plc')
        ) AS d(type, code, name, protocol)
   WHERE l.code = 'line-01';
 INSERT INTO line_current_status (line_id)

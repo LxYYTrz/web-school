@@ -26,9 +26,6 @@
         <el-menu-item v-if="canSee('io')" index="/io">
           <el-icon><Switch /></el-icon>IO 信号
         </el-menu-item>
-        <el-menu-item v-if="canSee('vision')" index="/vision">
-          <el-icon><CameraFilled /></el-icon>视觉检测
-        </el-menu-item>
         <el-menu-item v-if="canSee('users')" index="/users">
           <el-icon><User /></el-icon>用户管理
         </el-menu-item>
@@ -82,7 +79,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Monitor, CameraFilled, User, ChatDotRound, Switch } from '@element-plus/icons-vue';
+import { Monitor, User, ChatDotRound, Switch } from '@element-plus/icons-vue';
 import { useLineData } from './composables/useLineData';
 import { useAuthStore } from './stores/auth';
 import AiDrawer from './components/AiDrawer.vue';
@@ -103,7 +100,7 @@ const aiOpen = ref(false);
 
 // 菜单显隐:对照 router meta.requiredLevel
 // level=1 普通 → twin + io(只读观测,无写操作)
-// level=2 二级 → twin + io + vision
+// level=2 二级 → twin + io
 // level=3 admin → 全部 + 用户管理
 function canSee(routeName: string): boolean {
   if (!auth.user) return false;

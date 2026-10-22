@@ -1,7 +1,7 @@
 # 数据契约 v1
 
 本文件是**边缘采集层、云端后端、前端**三方之间唯一的数据约定。所有代码只依赖本契约;
-PLC 寄存器、视觉软件输出等现场细节,由边缘采集适配器负责翻译成本契约格式。
+PLC 寄存器等现场细节,由边缘采集适配器负责翻译成本契约格式。
 
 **修改规则:只增字段,不改名、不删字段。** 破坏性变更必须升级主题版本号(见文末)。
 
@@ -22,7 +22,6 @@ PLC 寄存器、视觉软件输出等现场细节,由边缘采集适配器负责
 | `tl/v1/{lineId}/telemetry/io` | 边缘→云 | 0 | 否 | 5~10Hz | 产线 IO 信号(DB3 word 11~16,只读) |
 | `tl/v1/{lineId}/telemetry/status` | 边缘→云 | 1 | 是 | 1Hz 或变更时 | 产线状态快照 |
 | `tl/v1/{lineId}/event` | 边缘→云 | 1 | 否 | 事件触发 | 启停 / 报警 / 单件完成等 |
-| `tl/v1/{lineId}/vision/result` | 边缘→云 | 1 | 否 | 每件一次 | 视觉检测元数据(**不含图片**) |
 | `tl/v1/{lineId}/edge/status` | 边缘→云 | 1 | 是 | 连接/断开时 | 边缘在线状态(LWT) |
 | `tl/v1/{lineId}/cmd/{deviceId}` | 云→边缘 | 1 | 否 | 人工触发 | 控制指令(白名单) |
 | `tl/v1/{lineId}/cmd_ack` | 边缘→云 | 1 | 否 | 每指令一次 | 指令回执 |
@@ -111,25 +110,7 @@ retained 消息,新订阅者立即可读到最新值。
 type 枚举:start / stop / alarm / piece_done / changeover / custom。
 level 枚举:info / warning / critical。`code` 为厂商报警码,可空。
 
-### 3.4 vision_result — 视觉检测元数据
-
-```json
-{
-  "ts": 1760000000123,
-  "lineId": "line-01",
-  "cameraId": "cam-01",
-  "sn": "SN20261008000123",
-  "result": "ng",
-  "defects": [{ "type": "scratch", "x": 120, "y": 88, "w": 34, "h": 12 }],
-  "imageUrl": "https://oss.example.com/vision/2026/10/08/xxx.jpg",
-  "thumbUrl": "https://oss.example.com/vision/2026/10/08/xxx_thumb.jpg"
-}
-```
-
-defects 坐标为像素(原图坐标系)。图片链路未接通时 imageUrl/thumbUrl 为 null,
-由后端在图片上传后补全(见第 4 节)。
-
-### 3.5 edge/status — 边缘在线状态(retained + LWT)
+### 3.4 edge/status — 边缘在线状态(retained + LWT)
 
 ```json
 { "ts": 1760000000123, "lineId": "line-01", "status": "online" }
@@ -138,7 +119,7 @@ defects 坐标为像素(原图坐标系)。图片链路未接通时 imageUrl/thu
 边缘连接成功后 retained 发布 `online`;同时向 Broker 注册遗嘱消息(LWT),
 异常掉线时 Broker 自动发布 `offline` —— **产线离线状态由此自动产生,无需心跳轮询**。
 
-### 3.6 command — 控制指令(云→边缘)
+### 3.5 command — 控制指令(云→边缘)
 
 ```json
 {
@@ -202,7 +183,7 @@ type 为**指令白名单**(契约 §5 第 2 条:扩展项仅追加,不删/不�
   网页永远不提供解除手段
 - `mode_set` 的 `release` 执行后,PLC 自动把产线切回 `stopped`(101)
 
-### 3.7 command_ack — 指令回执(边缘→云)
+### 3.6 command_ack — 指令回执(边缘→云)
 
 ```json
 { "cmdId": "3f6b1c2e-9a4d-4e2f-8b7a-1c0d2e3f4a5b", "ts": 1760000000456, "status": "acked", "message": "" }
@@ -248,18 +229,7 @@ word 7~10 是控制写点不走本主题)。全部字段为 `number`,采集器�
 - **不落 TimescaleDB**:高频瞬时量,无回溯价值。只在 Redis 存 60s 快照
   (`rt:{lineId}:io`,供前端首屏预载),并经 WebSocket `io_state` 事件推送。
 
-## 4. 图片链路约定
-
-图片二进制**不走 MQTT**。流程:
-
-1. 视觉侧 `HTTP POST /api/vision/images`(multipart:图片文件 + sn + cameraId + result + ts)
-2. 后端存对象存储(MinIO/OSS),写 `vision_images` 表,补全 imageUrl / thumbUrl
-3. 后端经 WebSocket 向前端推送"新图通知"(含 URL),前端按需拉取
-4. MQTT 的 `vision/result` 用于实时事件流与时间对齐;两边以 **sn + ts** 关联
-
-建议同时存原图与 web 尺寸图,并配置保留策略(如原图保留 30 天)。
-
-## 5. 控制链路约定
+## 4. 控制链路约定
 
 1. 前端 → 后端 REST(带 JWT)
 2. 后端:校验角色(`api:command:execute`)+ 产线数据权限(`user_line_scope`)
@@ -268,19 +238,19 @@ word 7~10 是控制写点不走本主题)。全部字段为 `number`,采集器�
 4. 后端:收到 ack 更新状态;15s 无 ack 置 timeout
 5. 全流程落 `audit_logs`。**急停为硬件回路,不在本系统范围内,网页永远不做急停。**
 
-## 6. 现场切换(mock → 真实)
+## 5. 现场切换(mock → 真实)
 
 - 现场只需实现真实采集器(如 `edge/plc_collector.py`)替换 `mock_collector.py`,**本契约不变**,
   云端、前端、数据库零改动
 - 采集器为**配置驱动**:读 `register-mapping.csv`(信号 → 协议地址),轮询 PLC 后组装为本契约报文;
   到现场与电气工程师对点位后填正式映射表,不改代码
-- 模板见同目录 `register-mapping.template.csv`;视觉结果不经 PLC,由视觉工控机直接产生
+- 模板见同目录 `register-mapping.template.csv`
 - 现场正式点表在 `edge/register-mapping.csv`(不在本目录),HOLD 区 **17 word(34 字节)**:
   word 0~5 关节 / 6 产线状态 / 7~10 控制写点 / 11~16 产线 IO 只读点。
   采集器逐点读:某个点读失败(如 TIA 侧没扩 HOLD 区 → `Illegal Data Address`)
   只把该点置 `None` 并记 warning,不影响其它点位。
 
-## 7. 版本策略
+## 6. 版本策略
 
 主题统一前缀 `tl/v1/`。破坏性变更(删字段 / 改语义)时升级 `v2` 并行运行,灰度切换。
 新增可选字段不算破坏性变更,直接在本文档追加。

@@ -75,7 +75,7 @@ import { computed } from 'vue';
 import { useLineData } from '../composables/useLineData';
 import { stateText, stateTagType as tagTypeOf, isRunning } from '../services/lineState';
 
-const props = defineProps<{ canCommand: boolean }>();
+defineProps<{ canCommand: boolean }>();
 const { robot, status, edgeText, alarmText, edgeOnline } = useLineData();
 
 const statusText = computed(() =>

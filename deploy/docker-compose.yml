@@ -1,13 +1,13 @@
 # =============================================================
 # 产线数字孪生平台 - 基础设施(本地开发 / 云服务器通用)
-# 组件: EMQX(MQTT) + TimescaleDB(PG16) + Redis + MinIO
+# 组件: EMQX(MQTT) + TimescaleDB(PG16) + Redis
 #
 # ★ 生产部署前必须:
 #   1. 修改下列所有默认密码
 #   2. 为 8883 配置 TLS 证书(EMQX 侧)
 #   3. EMQX 关闭匿名登录(EMQX_ALLOW_ANONYMOUS=false)并配置认证
 #   4. 云服务器安全组只对公网开 443 / 8883;
-#      18083(EMQX Dashboard)、9001(MinIO Console)、5432、6379 一律不对公网
+#      18083(EMQX Dashboard)、5432、6379 一律不对公网
 # =============================================================
 services:
   emqx:
@@ -51,22 +51,7 @@ services:
     volumes:
       - redis-data:/data
 
-  minio:
-    image: minio/minio:latest                      # 建议锁定到具体 RELEASE 版本
-    container_name: lt-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123           # TODO 生产修改
-    ports:
-      - "9000:9000"                                # S3 API
-      - "9001:9001"                                # Console(★不要对公网开放)
-    volumes:
-      - minio-data:/data
-
 volumes:
   emqx-data:
   pg-data:
   redis-data:
-  minio-data:

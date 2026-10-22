@@ -8,7 +8,6 @@ import { CommandModule } from './command/command.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { AiModule } from './ai/ai.module';
-import { VisionModule } from './vision/vision.module';
 
 @Module({
   imports: [
@@ -21,7 +20,6 @@ import { VisionModule } from './vision/vision.module';
     AuthModule,
     UsersModule,
     AiModule,
-    VisionModule,
   ],
 })
 export class AppModule {}

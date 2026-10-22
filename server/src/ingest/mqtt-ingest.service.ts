@@ -35,7 +35,6 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
           `${p}/+/telemetry/io`,
           `${p}/+/telemetry/status`,
           `${p}/+/event`,
-          `${p}/+/vision/result`,
           `${p}/+/edge/status`,
           `${p}/+/cmd_ack`,
         ],
@@ -82,7 +81,7 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
           return;
         }
         this.state.setRobotFrame(lineId, deviceId, msg);
-        this.history.bufferRobotFrame(lineId, deviceId, msg);
+        this.history.bufferRobotFrame(deviceId, msg);
         this.gateway.broadcastRobot(lineId, msg);
       } else if (kind === 'telemetry/io') {
         // 产线 IO(契约 §3.8):高频瞬时量,只走 Redis 快照 + WebSocket,不落 TimescaleDB。
@@ -100,9 +99,6 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
       } else if (kind === 'event') {
         this.history.insertEvent(lineId, msg);
         this.gateway.broadcastEvent(lineId, msg);
-      } else if (kind === 'vision/result') {
-        this.history.insertVision(lineId, msg);
-        this.gateway.broadcastVision(lineId, msg);
       } else if (kind === 'edge/status') {
         this.state.setEdgeStatus(lineId, msg);
         this.gateway.broadcastEdge(lineId, msg);

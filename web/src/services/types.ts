@@ -38,25 +38,6 @@ export interface ProductionEvent {
   payload?: Record<string, unknown>;
 }
 
-export interface VisionDefect {
-  type: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-export interface VisionResult {
-  ts: number;
-  lineId: string;
-  cameraId: string;
-  sn: string;
-  result: 'ok' | 'ng';
-  defects: VisionDefect[];
-  imageUrl: string | null;
-  thumbUrl: string | null;
-}
-
 // 产线 IO 信号(契约 v1.3 §3.8,对应 DB3 MB_SERVER HOLD 区 word 11~16)
 // 只读。单个点位读失败时为 null —— "没读到"和"确实是 0"必须区分开,
 // 前端把 null 显示成 "—" 而不是 0。

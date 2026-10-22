@@ -59,8 +59,8 @@ chown -R linetwin:linetwin /home/linetwin/.ssh
 |---|---|---|
 | Node.js 20 LTS | 必需 | 跑后端 |
 | Python 3.11+ | 必需 | 跑采集器 |
-| Docker Desktop | 二选一 | 用它跑 EMQX/Redis/MinIO |
-| 原生 EMQX + Memurai + MinIO | 二选一 | 没 Docker 时装这三个原生 Windows 程序 |
+| Docker Desktop | 二选一 | 用它跑 EMQX/Redis |
+| 原生 EMQX + Memurai | 二选一 | 没 Docker 时装这两个原生 Windows 程序 |
 
 ### 2.2 拿代码
 
@@ -72,8 +72,8 @@ chown -R linetwin:linetwin /home/linetwin/.ssh
 ```bat
 docker compose -f deploy\docker-compose.ipc.yml up -d
 ```
-✅ `docker ps` 看到 lt-ipc-emqx / lt-ipc-redis / lt-ipc-minio。
-(无 Docker:启动原生 EMQX、Memurai、MinIO,端口保持 1883/6379/9000。)
+✅ `docker ps` 看到 lt-ipc-emqx / lt-ipc-redis。
+(无 Docker:启动原生 EMQX、Memurai,端口保持 1883/6379。)
 
 ### 2.4 配置并启动后端
 

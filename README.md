@@ -1,13 +1,13 @@
 # 产线数字孪生监控平台(line-twin)
 
-外部网站:机器人六轴实时孪生 · 机器视觉图片展示 · 多角色 RBAC(操作员 / 客户 / 数据分析员)。
+外部网站:机器人六轴实时孪生 · 多角色 RBAC(操作员 / 客户 / 数据分析员)。
 
 ## 总体架构
 
 ```
-产线设备 (机器人 / 视觉 / PLC)
+产线设备 (机器人 / PLC)
    │  产线局域网
-工控机(高配 Windows): edge 采集器 + EMQX + NestJS 后端 + Redis + MinIO
+工控机(高配 Windows): edge 采集器 + EMQX + NestJS 后端 + Redis
    │  SSH 双隧道(工控机主动外连): Web 流量 -R 3300,数据库 -L 5432
 云服务器(低配 Linux): Nginx 静态前端 + 纯转发 + PostgreSQL/TimescaleDB
    │  HTTPS
@@ -29,7 +29,7 @@
 | docs/ | 数据契约(contract/)、部署方案(deployment.md)、**部署手册(deploy-guide.md,照做即可)** |
 | edge/ | 边缘采集器(当前为 mock 版) |
 | server/ | 云端后端(NestJS 骨架:MQTT → TimescaleDB/Redis → WebSocket,见 server/README.md) |
-| web/ | 前端(Vue3 + TS + Three.js;孪生/状态/视觉三页,见 web/README.md) |
+| web/ | 前端(Vue3 + TS + Three.js;孪生/IO 等页,见 web/README.md) |
 
 ## 本地起步(开发机)
 
@@ -41,7 +41,6 @@ docker compose -f deploy/docker-compose.yml up -d
 
 # 2. 验证
 #    EMQX Dashboard  http://localhost:18083  (admin / admin123,仅开发默认值)
-#    MinIO Console   http://localhost:9001   (minioadmin / minioadmin123)
 
 # 3. 跑 mock 采集器
 cd edge
@@ -60,8 +59,7 @@ python mock_collector.py
        验收:vue-tsc 类型检查 + vite build 通过;浏览器实时画面在本地三件套起齐后目检
 4. [ ] 登录 + RBAC 三角色(菜单 / 接口 / 字段三级控制)
        验收:三个角色登录看到不同界面,客户调控制接口被拒
-5. [ ] 图片链路:上传 → MinIO → 元数据入库 → WS 通知 → 前端展示
-6. [ ] 控制链路:指令白名单 + 审计 + MQTT 下行 + ack 回执(mock 已能自动回 ack)
-7. [ ] 上云:云服务器跑 docker-compose.cloud.yml(Nginx + 数据库),工控机跑 docker-compose.ipc.yml + 后端 + 采集器,
+5. [ ] 控制链路:指令白名单 + 审计 + MQTT 下行 + ack 回执(mock 已能自动回 ack)
+6. [ ] 上云:云服务器跑 docker-compose.cloud.yml(Nginx + 数据库),工控机跑 docker-compose.ipc.yml + 后端 + 采集器,
        建 SSH 双隧道(见 docs/deployment.md);改掉全部默认密码,上 HTTPS
-8. [ ] 到现场:实现 plc 采集器 + 填映射表;先只读稳定后,再逐条放开控制指令
+7. [ ] 到现场:实现 plc 采集器 + 填映射表;先只读稳定后,再逐条放开控制指令

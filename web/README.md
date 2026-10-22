@@ -1,7 +1,7 @@
 # web/ — 前端(Vue3 + TS + Three.js)
 
 三个页面:**实时孪生**(6 轴机器人随数据运动)、**产线状态**(统计卡 + 事件流 + 报警声音)、
-**视觉检测**(实时检测流,网格/单件两种模式,NG 缺陷框叠加)。
+
 
 ## 启动
 
@@ -25,7 +25,6 @@ npm run dev                 # http://localhost:5173
 | `src/three/SceneManager.ts` | 渲染器/相机/灯光/网格/主循环封装 |
 | `src/views/TwinView.vue` | 孪生页:10Hz 关节驱动 + 角度刻度条 + 产线摘要 |
 | `src/views/StatusView.vue` | 状态页:统计卡片 + 事件流(报警高亮 + WebAudio 蜂鸣) |
-| `src/views/VisionView.vue` | 视觉页:检测流网格 / 单件详情,缺陷框按 640×480 归一化叠加 |
 
 ## 换成真实机器人模型
 
@@ -43,5 +42,4 @@ const robot = URDFLoader.load('/models/robot.urdf');   // 网格文件放 public
 
 - 第 4 步:登录页 + JWT;菜单/按钮按角色权限渲染
 - 第 4 步:数据分析页(ECharts,读 TimescaleDB 历史)
-- 第 5 步:vision 页接通 MinIO 图片(imageUrl/thumbUrl 目前是 null → 显示占位图)
 - 打磨:机器人角度插值补帧(当前 10Hz 直驱已平滑);TCP 轨迹线;多产线切换

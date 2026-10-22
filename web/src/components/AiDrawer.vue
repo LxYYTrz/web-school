@@ -81,7 +81,7 @@
           type="textarea"
           :rows="3"
           resize="none"
-          placeholder="例如:现在产线什么状态?视觉不良率多少? / 诊断后需要停机就给建议"
+          placeholder="例如:现在产线什么状态?不良率多少? / 诊断后需要停机就给建议"
           @keydown.enter.exact.prevent="send"
         />
         <el-button

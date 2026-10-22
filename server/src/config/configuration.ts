@@ -27,23 +27,6 @@ export const config = {
       process.env.ADMIN_PASSWORD === '' ? null : process.env.ADMIN_PASSWORD ?? 'admin123',
   },
   topicPrefix: process.env.TOPIC_PREFIX ?? 'tl/v1',
-  vision: {
-    // 视觉机上传图片的共享密钥(Header: X-Vision-Token)。
-    // 空字符串 = 禁用上传接口(见 VisionTokenGuard:fail closed,绝不"没配就放开")。
-    token: process.env.VISION_TOKEN ?? '',
-    storageDir: process.env.VISION_STORAGE_DIR ?? 'D:/line-twin/data/vision',
-    // 原图保留小时数;到期由 CleanupService 删文件 + 删表行
-    retentionHours: Number(process.env.VISION_RETENTION_HOURS ?? 24),
-    thumbMaxEdge: Number(process.env.VISION_THUMB_MAX_EDGE ?? 640),
-    thumbQuality: Number(process.env.VISION_THUMB_QUALITY ?? 80),
-    // 视觉机不上报 lineId/cameraId 时的兜底值
-    defaultLineId: process.env.VISION_DEFAULT_LINE_ID ?? 'line-01',
-    defaultCameraId: process.env.VISION_DEFAULT_CAMERA_ID ?? 'cam-01',
-    // 纯内存保护上限,不是"业务限制"。这台机同时跑 PLC 轮询,
-    // 一次 OOM 会连带采集器一起死,所以留了个远高于实际(5MB)的硬顶。
-    maxUploadBytes: Number(process.env.VISION_MAX_UPLOAD_BYTES ?? 100 * 1024 * 1024),
-    cleanupIntervalMs: Number(process.env.VISION_CLEANUP_INTERVAL_MS ?? 6 * 3600_000),
-  },
   ai: {
     // Hermes 自带的 OpenAI 兼容 API Server。只绑 loopback,外部够不着;
     // 浏览器也永远拿不到 apiKey —— 所有调用都从这里出。
