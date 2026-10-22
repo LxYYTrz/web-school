@@ -1,18 +1,38 @@
 {
+  // ============================================================================
+  // 文件作用：前端 TypeScript 编译配置
+  // 所属模块：web/
+  // ============================================================================
+  // 说明：tsconfig.json 支持注释（TypeScript 用 JSONC 解析），但 package.json 不支持。
+  // ============================================================================
   "compilerOptions": {
+    // 编译目标：ES2020（现代浏览器都支持）
     "target": "ES2020",
+    // 模块格式：ESNext（交给 Vite 打包时再转译）
     "module": "ESNext",
+    // 模块解析方式：bundler —— 按打包器（如 Vite）的规则解析模块
     "moduleResolution": "bundler",
+    // 可用的标准库：ES2020 + DOM + DOM.Iterable
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // 严格模式：开启全部严格检查（代码质量的关键）
     "strict": true,
+    // 跳过第三方类型声明的检查（省时间，第三方库类型偶尔有问题）
     "skipLibCheck": true,
+    // 允许 default import 从 CommonJS 模块导入（Vite 生态里很常见）
     "esModuleInterop": true,
+    // 允许使用 default import（与 esModuleInterop 配套）
     "allowSyntheticDefaultImports": true,
+    // 允许 import JSON 文件
     "resolveJsonModule": true,
+    // 强制每个文件是独立模块（Vite 依赖这个约束）
     "isolatedModules": true,
+    // 使用标准的 class 字段语义（与 ES2022 一致）
     "useDefineForClassFields": true,
+    // 不产出 JS 文件（类型检查用；真正的打包由 Vite 做）
     "noEmit": true,
+    // 全局类型包：vite/client 提供 import.meta.env 的类型
     "types": ["vite/client"]
   },
+  // 需要类型检查的文件范围：所有 .ts 和 .vue
   "include": ["src/**/*.ts", "src/**/*.vue"]
 }

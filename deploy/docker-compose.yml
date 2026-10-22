@@ -1,19 +1,51 @@
+# ============================================================================
+# 文件作用：开发环境三合一基础设施编排（EMQX + TimescaleDB + Redis）
+# 所属模块：deploy/
+# ============================================================================
+#
+# 【用途】
+#   开发机用的一套：一条命令拉起全部中间件，让后端和前端能立刻联调。
+#     docker compose -f deploy/docker-compose.yml up -d
+#
+# 【与另外两个 compose 的区别（★ 部署时千万别搞混）】
+#   docker-compose.yml       ← 本文件：开发机三合一（EMQX + DB + Redis）
+#   docker-compose.ipc.yml   ← 工控机：只有 EMQX + Redis（DB 在云端）
+#   docker-compose.cloud.yml ← 云服务器：只有 Nginx + DB（业务在工控机）
+#
+# 【端口总览】
+#   1883  MQTT 明文      （开发用；生产走 8883 TLS）
+#   8883  MQTT over TLS （生产用）
+#   18083 EMQX Dashboard （管理界面，★ 生产绝对不要对公网开放）
+#   8083  MQTT over WebSocket（备用）
+#   5432  PostgreSQL     （★ 生产不要对公网开放）
+#   6379  Redis          （★ 生产不要对公网开放）
+#
+# 【数据卷】
+#   Docker 的具名卷：容器删除后数据仍在，容器重建数据不丢。
+#   emqx-data / pg-data / redis-data 三个卷分别对应三个服务的数据目录。
+# ============================================================================
+
 # =============================================================
 # 产线数字孪生平台 - 基础设施(本地开发 / 云服务器通用)
-# 组件: EMQX(MQTT) + TimescaleDB(PG16) + Redis + MinIO
+# 组件: EMQX(MQTT) + TimescaleDB(PG16) + Redis
 #
 # ★ 生产部署前必须:
 #   1. 修改下列所有默认密码
 #   2. 为 8883 配置 TLS 证书(EMQX 侧)
 #   3. EMQX 关闭匿名登录(EMQX_ALLOW_ANONYMOUS=false)并配置认证
 #   4. 云服务器安全组只对公网开 443 / 8883;
-#      18083(EMQX Dashboard)、9001(MinIO Console)、5432、6379 一律不对公网
+#      18083(EMQX Dashboard)、5432、6379 一律不对公网
 # =============================================================
 services:
+  # --------------------------------------------------------------------------
+  # EMQX：MQTT Broker（消息代理）
+  # 角色：产线数据的所有 MQTT 报文在这里汇聚和分发。
+  #       采集器 publish → Broker → 后端 subscribe，同一份数据也可能被多个订阅者收到。
+  # --------------------------------------------------------------------------
   emqx:
-    image: emqx/emqx:5.8
-    container_name: lt-emqx
-    restart: unless-stopped
+    image: emqx/emqx:5.8              # EMQX 5.8 版本
+    container_name: lt-emqx           # 固定容器名，方便 docker ps / docker exec
+    restart: unless-stopped           # 开机自启；手动停止后不再自动拉起
     ports:
       - "1883:1883"    # MQTT TCP(生产环境建议仅内网,对外只暴露 8883)
       - "8883:8883"    # MQTT over TLS(边缘采集器走这里)
@@ -24,49 +56,53 @@ services:
       EMQX_DASHBOARD__DEFAULT_PASSWORD: admin123   # TODO 生产修改
       EMQX_ALLOW_ANONYMOUS: "true"                  # TODO 生产改 false
     volumes:
+      # 数据持久化（会话、规则、配置）
       - emqx-data:/opt/emqx/data
 
+  # --------------------------------------------------------------------------
+  # TimescaleDB：PostgreSQL 16 + 时序扩展
+  # 角色：存放历史时序数据（机器人帧/状态/事件）+ 业务表（产线/设备/用户/审计）。
+  #       TimescaleDB 把大表按时间自动分区，10Hz 写入也能扛住。
+  # --------------------------------------------------------------------------
   timescaledb:
-    image: timescale/timescaledb:latest-pg16
+    image: timescale/timescaledb:latest-pg16  # PostgreSQL 16 + TimescaleDB
     container_name: lt-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres123               # TODO 生产修改
-      POSTGRES_DB: linetwin
+      POSTGRES_USER: postgres                # 超级用户名
+      POSTGRES_PASSWORD: postgres123         # TODO 生产修改
+      POSTGRES_DB: linetwin                  # 默认数据库名（后端 DATABASE_URL 里对应）
     ports:
-      - "5432:5432"                                # 生产不要对公网开放
+      - "5432:5432"                          # 生产不要对公网开放
     volumes:
+      # 数据库数据目录（最重要，删了这个卷数据就没了）
       - pg-data:/var/lib/postgresql/data
       # 首次启动自动执行建表 DDL(仅空库初始化时执行一次)
       - ../db/init:/docker-entrypoint-initdb.d:ro
 
+  # --------------------------------------------------------------------------
+  # Redis：实时快照缓存
+  # 角色：存"每台设备的最新一帧"，供前端首屏和断线重连时读取。
+  #       写 Redis 是"覆盖写 + TTL"，不存历史。
+  # --------------------------------------------------------------------------
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine                   # Redis 7 精简版
     container_name: lt-redis
     restart: unless-stopped
+    # 开启 AOF 持久化（appendonly yes）：每次写入都追加到文件，重启不丢数据
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"                                # 生产不要对公网开放
+      - "6379:6379"                          # 生产不要对公网开放
     volumes:
       - redis-data:/data
 
-  minio:
-    image: minio/minio:latest                      # 建议锁定到具体 RELEASE 版本
-    container_name: lt-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123           # TODO 生产修改
-    ports:
-      - "9000:9000"                                # S3 API
-      - "9001:9001"                                # Console(★不要对公网开放)
-    volumes:
-      - minio-data:/data
-
+# ============================================================================
+# 具名卷声明（必须在顶层 volumes 里声明，才能被上面的 services 引用）
+# ============================================================================
 volumes:
+  # EMQX 数据（配置、规则、会话）
   emqx-data:
+  # PostgreSQL 数据目录
   pg-data:
+  # Redis AOF 文件
   redis-data:
-  minio-data:

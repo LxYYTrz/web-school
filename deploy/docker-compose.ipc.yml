@@ -1,16 +1,60 @@
+# ============================================================================
+# 文件作用：工控机侧中间件编排（EMQX + Redis）
+# 所属模块：deploy/
+# ============================================================================
+#
+# 【用途】
+#   工控机（Windows，高配）上跑的这一套：
+#     docker compose -f deploy/docker-compose.ipc.yml up -d
+#
+# 【★ 最终架构的分工（部署定稿，见 docs/deployment.md）】
+#
+#   ┌──────────────────────────┐         ┌────────────────────────────┐
+#   │ 工控机（Windows, 高配）  │  SSH    │ 云服务器（Linux, 低配）    │
+#   │                          │ 双隧道  │                            │
+#   │  ★ EMQX (本文件)         │ ──────▶ │  ★ Nginx（静态前端+转发）  │
+#   │  ★ Redis (本文件)        │ ──────▶ │  ★ PostgreSQL/TimescaleDB │
+#   │  ★ NestJS 后端（原生）   │         │                            │
+#   │  ★ edge 采集器（原生）   │         │  只做"展示+数据库+纯转发"  │
+#   │  ★ PLC / 机器人          │         │  零业务逻辑                │
+#   └──────────────────────────┘         └────────────────────────────┘
+#
+#   注意：工控机**不需要** PostgreSQL —— 数据库在云端，
+#         工控机通过 SSH 正向隧道(-L 5432)访问它。
+#
+# 【为什么后端和采集器不进容器】
+#   Windows 上 Docker 性能损耗大、文件挂载麻烦；后端用原生 Node 跑，
+#   注册成 Windows 服务（NSSM）更稳，也方便现场排障（直接看控制台日志）。
+#
+# 【★ 端口绑定 127.0.0.1 的含义（安全要点）】
+#   "127.0.0.1:1883:1883" 表示容器端口只绑定到**本机回环口**，
+#   局域网里其他机器连不上，云端更是连不上。
+#   本机后端和采集器用 localhost 访问，完全够用。
+#   ★ 这样工控机**不需要开放任何入站防火墙端口** —— 与"单向出站"的设计一致。
+#
+# 【没装 Docker 的替代方案】
+#   原生 Windows 版：EMQX Windows 版 / Memurai（Redis 兼容版）。
+#   端口保持一致即可，**后端代码完全无感知**（只认 .env 里的地址）。
+# ============================================================================
+
 # =============================================================
 # 工控机(Windows,高配)侧基础设施
-# 角色:全部数据处理 —— EMQX + Redis + MinIO
+# 角色:全部数据处理 —— EMQX + Redis
 # 后端 NestJS(server/)与采集器(edge/)在 Windows 上原生运行,不进容器
 #
 # 用法(工控机上装了 Docker Desktop 时):
 #   docker compose -f deploy/docker-compose.ipc.yml up -d
-# 没装 Docker 就装原生版本:EMQX Windows 版 / Redis(可用 Memurai)/ MinIO 单文件,
+# 没装 Docker 就装原生版本:EMQX Windows 版 / Redis(可用 Memurai),
 # 端口保持一致即可,后端代码无感知。
 #
 # 端口全部只绑回环口:本机后端使用,不对局域网/公网开放。
 # =============================================================
 services:
+  # --------------------------------------------------------------------------
+  # EMQX：工控机本机的 MQTT Broker
+  #   采集器 publish → 本机 EMQX → 后端 subscribe，全在本机完成（不依赖外网）
+  #   这就是"断网时产线照常运行"的实现：上行链路完全本地闭环。
+  # --------------------------------------------------------------------------
   emqx:
     image: emqx/emqx:5.8
     container_name: lt-ipc-emqx
@@ -25,6 +69,11 @@ services:
     volumes:
       - emqx-data:/opt/emqx/data
 
+  # --------------------------------------------------------------------------
+  # Redis：工控机本机的实时快照缓存
+  #   ★ 放在本机是有意为之：断外网时快照依然可用，
+  #     网站恢复后前端重连即可立刻看到当前状态（不用等新数据）。
+  # --------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: lt-ipc-redis
@@ -35,21 +84,9 @@ services:
     volumes:
       - redis-data:/data
 
-  minio:
-    image: minio/minio:latest
-    container_name: lt-ipc-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123           # TODO 修改
-    ports:
-      - "127.0.0.1:9000:9000"   # S3 API(仅本机后端访问)
-      - "127.0.0.1:9001:9001"   # Console(仅本机调试)
-    volumes:
-      - minio-data:/data
-
+# 具名卷声明
 volumes:
+  # EMQX 数据
   emqx-data:
+  # Redis AOF 文件
   redis-data:
-  minio-data:

@@ -1,5 +1,28 @@
 # 部署手册(无需 AI 协助,照做即可)
 
+<!--
+  ============================================================================
+  文件作用：【面向部署人员的逐步操作手册】（云端 + 工控机正式形态）
+  所属模块：docs/
+  ============================================================================
+
+  【与其它文档的区别】
+    docs/deployment.md            → 架构定稿与取舍（讲"为什么"）
+    docs/工控机部署手册-U盘版.md   → 只在工控机本地跑的 U 盘人工版
+    本文档                        → ★ 完整上线的操作手册（讲"怎么做"）
+
+  【读法】
+    §0 先看"一分钟认知"：三台机器各是什么角色
+    §1 云服务器（Linux）：装 Docker → 放前端 dist → 改密码 → 起 compose
+    §2 工控机（Windows）：装软件 → 起中间件 → 配 .env → 起后端 → 起采集器 → ★ 建 SSH 隧道
+    §3 整体验收顺序（5 步，逐步验证）
+    §4 常见问题（先查这里）
+    §5 部署完回传给开发的信息
+
+  【每一节都有"看到什么算成功"】——照着做，不用理解原理也能装完。
+  ============================================================================
+-->
+
 > 面向部署人员。每一步都有"看到什么算成功"。遇到问题先看文末「常见问题」。
 
 ## 0. 一分钟认知
@@ -59,8 +82,8 @@ chown -R linetwin:linetwin /home/linetwin/.ssh
 |---|---|---|
 | Node.js 20 LTS | 必需 | 跑后端 |
 | Python 3.11+ | 必需 | 跑采集器 |
-| Docker Desktop | 二选一 | 用它跑 EMQX/Redis/MinIO |
-| 原生 EMQX + Memurai + MinIO | 二选一 | 没 Docker 时装这三个原生 Windows 程序 |
+| Docker Desktop | 二选一 | 用它跑 EMQX/Redis |
+| 原生 EMQX + Memurai | 二选一 | 没 Docker 时装这两个原生 Windows 程序 |
 
 ### 2.2 拿代码
 
@@ -72,8 +95,8 @@ chown -R linetwin:linetwin /home/linetwin/.ssh
 ```bat
 docker compose -f deploy\docker-compose.ipc.yml up -d
 ```
-✅ `docker ps` 看到 lt-ipc-emqx / lt-ipc-redis / lt-ipc-minio。
-(无 Docker:启动原生 EMQX、Memurai、MinIO,端口保持 1883/6379/9000。)
+✅ `docker ps` 看到 lt-ipc-emqx / lt-ipc-redis。
+(无 Docker:启动原生 EMQX、Memurai,端口保持 1883/6379。)
 
 ### 2.4 配置并启动后端
 
