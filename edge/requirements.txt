@@ -3,20 +3,28 @@
 # 所属模块：edge/
 # ============================================================================
 #
-# 【为什么只有一个依赖】
-#   采集器只做一件事：把数据组装成 JSON 发到 MQTT Broker。
-#   MQTT 客户端用 Eclipse Paho（Python 社区事实标准）。
-#   现场真实采集器会再加 OPC UA(asyncua) / Modbus(pymodbus) / S7(python-snap7)。
+# 【为什么有两个依赖】
+#   ① paho-mqtt   —— MQTT 客户端。mock_collector.py 与 plc_collector.py 都要用，
+#                    负责把契约报文发到 Broker、订阅下行指令。
+#   ② pymodbus    —— Modbus TCP 客户端。只有 plc_collector.py（真实 PLC 采集器）
+#                    需要，用来读保持寄存器（功能码 0x03）。
+#                    mock_collector.py 不需要它 —— 但为现场离线安装方便，
+#                    这里统一列出，免得现场切换采集器时还要再装一次。
 #
 # 【版本约束的写法】
 #   >=2.0,<3.0 —— "至少 2.0 且不到 3.0"。
 #   上界很重要：Paho 3.x 可能有不兼容改动，锁住大版本避免现场踩坑。
 #
 # 【离线安装（工控机无外网时）】
-#   仓库里带了预下载的 wheel 包：edge/wheels/paho_mqtt-2.1.0-py3-none-any.whl
+#   仓库里带了预下载的 wheel 包：edge/wheels/
+#     paho_mqtt-2.1.0-py3-none-any.whl
+#     pymodbus-*.whl
 #   离线安装命令（见 docs/工控机部署手册-U盘版.md 第 4 节）：
-#     python -m pip install --no-index --find-links=edge\wheels paho-mqtt
+#     python -m pip install --no-index --find-links=edge\wheels paho-mqtt pymodbus
 #   --no-index 表示不联网，直接从本地目录找包。
 # ============================================================================
 
+# MQTT 客户端（mock_collector.py / plc_collector.py 共用）
 paho-mqtt>=2.0,<3.0
+# Modbus TCP 客户端（plc_collector.py 读 PLC 用；mock 不需要但现场切换时免装）
+pymodbus>=3.6,<4.0

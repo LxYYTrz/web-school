@@ -174,8 +174,10 @@
 
 | 顺序 | 文件 | 看什么 |
 |---|---|---|
-| 2.1 | `edge/mock_collector.py` | 主题常量、报文结构、LWT/retain 的用法、下行回执 |
-| 2.2 | `edge/README.md` | 现场怎么换成真实采集器 |
+| 2.1 | `edge/mock_collector.py` | 主题常量、报文结构、LWT/retain 的用法、下行回执（**开发版，看逻辑最清楚**） |
+| 2.2 | `edge/plc_collector.py` | ★★ **现场版**：点位表驱动、Modbus TCP 读寄存器、字节序、工程量换算 |
+| 2.3 | `edge/register-mapping.README.md` | 现场怎么把点位表填对（给电气工程师看的） |
+| 2.4 | `edge/README.md` | 两个采集器怎么切换、现场注意事项 |
 
 ### 第 3 步：看数据终点（后端主干）
 
@@ -228,7 +230,7 @@
 
 | 目录 | 说明 | 主要文件 |
 |---|---|---|
-| `edge/` | **边缘采集层**：数据起点。把现场协议翻译成契约 JSON | `mock_collector.py`（现场换 `plc_collector.py`）、`requirements.txt`、`wheels/`（离线安装包） |
+| `edge/` | **边缘采集层**：数据起点。把现场协议翻译成契约 JSON | `plc_collector.py`（★现场版，读 Modbus）、`mock_collector.py`（开发版）、`register-mapping.csv`（点位表）、`requirements.txt`、`wheels/`（离线安装包） |
 | `server/` | **后端**：数据处理中枢。MQTT ↔ Redis/PG/WebSocket | `src/ingest/`（入口）、`src/state/`（快照）、`src/history/`（落库）、`src/realtime/`（推送）、`src/command/`（控制）、`src/infra/`（连接池/映射）、`src/config/`（配置） |
 | `web/` | **前端**：Vue3 + TS + Three.js | `src/composables/`（数据层）、`src/services/`（通信）、`src/three/`（3D）、`src/views/`（页面） |
 | `db/` | **数据库结构** | `init/001_init.sql`（DDL+种子）、`init/002_drop_vision.sql`（迁移） |

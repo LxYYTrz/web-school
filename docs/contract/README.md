@@ -166,6 +166,14 @@ status 枚举:acked / rejected / failed。云端侧完整状态机:
 
 ### 5.1 映射表列含义(`register-mapping.template.csv`)
 
+> ⚠ **注意区分两份模板**（列结构不同，别填错文件）：
+> | 文件 | 谁在读 | 列结构 |
+> |---|---|---|
+> | `docs/contract/register-mapping.template.csv`（本表） | 暂无程序直接读，是**契约层的通用模板** | `signal,device_id,protocol,address,data_type,byte_order,scale,offset,unit,poll_group,description` |
+> | `edge/register-mapping.csv`（**现场真正填的那张**） | ★ `edge/plc_collector.py` 的 `_read_csv()` | `name,address,type,scale,offset,unit` |
+>
+> 现场请以 `edge/register-mapping.README.md` 为准。
+
 | 列 | 含义 | 举例 |
 |---|---|---|
 | `signal` | 信号名(采集器内部引用) | `robot01.j1` |
@@ -182,6 +190,8 @@ status 枚举:acked / rejected / failed。云端侧完整状态机:
 
 > ★ `poll_group` 决定采集器的轮询节奏:`fast` 组按 10Hz 轮询(关节角、报警码),
 > `slow` 组按 1Hz 或更低频轮询(累计数、节拍),避免占满总线影响 PLC 其它任务。
+>
+> ★ 已落地的 Modbus 版本见 `edge/register-mapping.README.md`。
 
 
 ## 6. 版本策略
