@@ -105,6 +105,22 @@ $scp = 'C:\Windows\System32\OpenSSH\scp.exe'
 
 4. **token 用完必须删** —— 云服务器上落地过的 token / `.lt_cred` 凭据文件 / bundle /
    临时克隆,推完立刻删干净(脚本第 4 步做的就是这件事,别跳过)。
+   ⚠ **失败路径不会执行第 4 步**(`set -e` 中途 abort)→ 脚本报错后要手动补删:
+   `rm -rf /root/lt-push.bundle /root/.lt_push_token /root/push_via_cloud.sh /root/.lt_cred /tmp/lt-push`
+
+4.5 **云端 → github.com 会瞬时断,重跑即可** —— 2026-10-23 撞过两次:
+   - `Failed to connect to github.com port 443 after 133598 ms`(fetch 阶段)
+   - `GnuTLS recv error (-110): The TLS connection was non-properly terminated`(push 阶段)
+   `curl https://github.com/` 通常是通的,所以**是瞬时抖动,直接重跑脚本**。
+
+   ⚠ **脚本报错 ≠ 没推上去** —— 有一次"核对远端"报连接超时,但实际上远端已经是本地 HEAD 了。
+   **判断成功与否只认 `api.github.com`**:
+   ```powershell
+   $r = Invoke-RestMethod "https://api.github.com/repos/LxYYTrz/web-school/branches/line-twin" `
+        -Headers @{ Authorization="Bearer $((Get-Content ~\.github_token -Raw).Trim())"; "User-Agent"="lt" }
+   $r.commit.sha   # 和本地 git rev-parse HEAD 比对
+   ```
+   别看到红字就重推(重推会把已经推上去的提交当成新的)。
 
 5. **别用仓库文件覆盖服务器上"打过补丁"的文件** —— 2026-10-23 踩过:
    仓库里的 `docker-compose.cloud.yml` 写的是 `80:80`,而线上那台机器的 80 被 DSH caddy 占着,
