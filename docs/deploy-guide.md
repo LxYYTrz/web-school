@@ -31,8 +31,8 @@
 
 | 机器 | 角色 | 要部署的东西 |
 |---|---|---|
-| 云服务器(Linux) | 橱窗 + 数据库 | Nginx + PostgreSQL(一个 compose) |
-| 工控机(Windows) | 全部数据处理 | 中间件三件套 + 后端 + 采集器 + SSH 隧道 |
+| 云服务器(Linux) | 橱窗 | Nginx(一个 compose,只一个容器) |
+| 工控机(Windows) | 全部数据处理 + 数据库 | PostgreSQL/TimescaleDB + 中间件 + 后端 + 采集器 + SSH 隧道 |
 | 开发机(现在的电脑) | 开发 + 构建前端 | 只负责把 `web/` 构建出 `dist/` |
 
 **最省事的离线方案:开发机和工控机都是 Windows,把整个 line-twin 文件夹(含 node_modules)
@@ -52,17 +52,15 @@ git clone https://github.com/LxYYTrz/web-school.git && cd web-school && git chec
 #    在【开发机】上:cd web && npm install && npm run build
 #    把生成的 web/dist/ 拷到云服务器的 line-twin/deploy/dist/
 
-# 4) 改密码:编辑 deploy/docker-compose.cloud.yml 里的 POSTGRES_PASSWORD
-
-# 5) 启动
+# 4) 启动(云端只有 Nginx,没有数据库)
 cd line-twin
 docker compose -f deploy/docker-compose.cloud.yml up -d
 ```
 
-✅ 成功标志:`docker ps` 看到 `lt-cloud-nginx`、`lt-cloud-db`;浏览器打开 `http://119.91.145.27`
+✅ 成功标志:`docker ps` 看到 `lt-cloud-nginx` 一个容器;浏览器打开 `http://119.91.145.27`
 能看到前端页面(数据为空、机械臂不动,正常——工控机还没接)。
 
-**防火墙**:控制台「防火墙」标签页放行 22(SSH)、80(HTTP);5432 不要开。
+**防火墙**:控制台「防火墙」标签页放行 22(SSH)、80(HTTP)。**不用开数据库端口**。
 
 **创建隧道专用账号**(给工控机用,不要用 root):
 
@@ -98,18 +96,21 @@ docker compose -f deploy\docker-compose.ipc.yml up -d
 ✅ `docker ps` 看到 lt-ipc-emqx / lt-ipc-redis。
 (无 Docker:启动原生 EMQX、Memurai,端口保持 1883/6379。)
 
+**数据库**(PostgreSQL 16 + TimescaleDB,Windows 原生装):端口 5432,
+建表执行 `db\init\001_init.sql`(详见 `docs/工控机部署手册-U盘版.md` §2.6 / §3.2)。
+
 ### 2.4 配置并启动后端
 
 `server/.env`(从 .env.example 复制)内容:
 
 ```
 MQTT_URL=mqtt://localhost:1883
-DATABASE_URL=postgres://postgres:云端数据库密码@localhost:5432/linetwin
+DATABASE_URL=postgres://postgres:本地库密码@localhost:5432/linetwin
 REDIS_URL=redis://localhost:6379
 PORT=3000
 ```
 
-注意 `DATABASE_URL` 写的是 **localhost**——经 SSH 隧道连到云端数据库(见 2.6)。
+注意 `DATABASE_URL` 指的是**工控机本机**的 PostgreSQL —— 数据库只走本地,不经隧道。
 
 ```bat
 cd server
@@ -136,7 +137,7 @@ ssh-keygen -t ed25519
 
 :: 建隧道(保持窗口开着)
 ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes ^
-    -R 3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 linetwin@119.91.145.27
+    -R 3300:127.0.0.1:3000 linetwin@119.91.145.27
 ```
 
 ✅ 命令不报错、不退出。验证:云服务器上 `ss -tlnp | grep 3300` 有监听。
@@ -153,7 +154,7 @@ ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailur
 
 | 步骤 | 操作 | 成功标志 |
 |---|---|---|
-| 1 | 云端 `docker ps` | 2 个容器运行 |
+| 1 | 云端 `docker ps` | 1 个容器运行(lt-cloud-nginx) |
 | 2 | 浏览器开 `http://119.91.145.27` | 前端页面出来(暂无数据) |
 | 3 | 工控机 `curl http://localhost:3000/api/lines/line-01/snapshot` | 返回 JSON,有 status/robots |
 | 4 | 云端 `curl http://localhost:3300/api/lines/line-01/snapshot` | 同上(说明隧道通) |
@@ -164,13 +165,13 @@ ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailur
 | 现象 | 排查 |
 |---|---|
 | 页面能开但没数据 | 隧道 -R 没建立:云端 `ss -tlnp \| grep 3300`;工控机 ssh 窗口是否退出 |
-| 后端报数据库连接失败 | 隧道 -L 没建立:工控机 `curl localhost:5432` 或看 ssh 窗口 |
+| 后端报数据库连接失败 | 本机 PostgreSQL 没起 / `DATABASE_URL` 密码不对 / 没执行 `db\init\001_init.sql` 建表 |
 | 工控机无外网装不了依赖 | 从开发机整体拷贝 line-twin(含 node_modules) |
 | Docker 拉镜像失败(无外网) | 开发机 `docker pull` 后 `docker save` 成 tar,U盘拷入后 `docker load` |
 | 页面白屏/样式乱 | dist 没放对位置:应在云服务器的 `deploy/dist/` |
 | 推送实时数据不更新 | Nginx 的 /socket.io 段 Upgrade 头缺失——确认用的是仓库里的 cloud.conf |
-| 数据库容器起来了但表是空的 | init SQL 权限问题:`chmod 644 db/init/001_init.sql` 后 `docker exec lt-cloud-db psql -U postgres -d linetwin -f /docker-entrypoint-initdb.d/001_init.sql` 手工执行一次 |
-| 80 端口被占(caddy 等) | compose.cloud.yml 里把 nginx 改为 `"8081:80"` 临时跑,或在控制台停掉占用方后改回 80 |
+| 数据库本地表是空的 | 工控机执行 `psql -U postgres -d linetwin -f db\init\001_init.sql` 建表(见 U 盘手册 §3.2) |
+| 80 端口被占(caddy 等) | `compose.cloud.yml` 默认就是 `8081:80`;80 空闲的机器可以改成 `"80:80"` |
 
 ## 5. 部署完回传给开发的信息
 

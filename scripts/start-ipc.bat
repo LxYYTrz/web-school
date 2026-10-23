@@ -38,9 +38,9 @@ rem   -o ServerAliveInterval=15  每 15 秒发一次保活包
 rem   -o ServerAliveCountMax=3    连续 3 次没回应就断开（触发重连）
 rem   -o ExitOnForwardFailure=yes 端口转发失败就直接退出（避免"假活"隧道）
 rem   -R 3300:127.0.0.1:3000 云端 3300 → 工控机 3000（Web 流量）
-rem   -L 5432:127.0.0.1:5432 工控机 5432 → 云端 5432（数据库）
+rem   -R 3300:127.0.0.1:3000 云端 3300 → 工控机 3000（后端/网站转发）
 echo [4/4] 建立 SSH 隧道(此窗口不能关)...
-start "lt-tunnel" cmd /k "ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 %CLOUD_USER%@%CLOUD_HOST%"
+start "lt-tunnel" cmd /k "ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 3300:127.0.0.1:3000 %CLOUD_USER%@%CLOUD_HOST%"
 
 rem ---- 完成提示 ----
 echo.

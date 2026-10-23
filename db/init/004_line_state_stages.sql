@@ -19,7 +19,7 @@
 --   - plc_collector.py 直接透传 PLC 整数,不做映射
 --
 -- 触发场景:
---   1. 全新部署:docker-entrypoint-initdb.d 按字典序执行 001 → 002 → 003 → 004
+--   1. 全新部署:按文件名顺序执行 db/init/*.sql(001 → … → 004)
 --   2. 已在运行的库:
 --      psql -U postgres -d linetwin -f db/init/004_line_state_stages.sql
 --

@@ -144,12 +144,14 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
     const cmdId = String(r.rows[0].idempotency_key);
 
     // 契约 §5 第 5 条:全流程落 audit_logs
+    // detail 里带 operator —— 机器通道的 operator 是 'ai:feishu:ou_xxx' 这种,
+    // 光看 user_id(会兜底成 admin)追不到人,必须把操作者身份写进 detail。
     this.pool
       .query(
         `INSERT INTO audit_logs (user_id, action, target, detail)
          VALUES ($1, 'command:execute', $2, $3::jsonb)`,
         [userId, `${body.type} @ ${lineCode}/${body.deviceId}`,
-         JSON.stringify({ cmdId, params: body.params ?? {} })],
+         JSON.stringify({ cmdId, params: body.params ?? {}, operator })],
       )
       .catch((e) => this.logger.error(`写 audit_logs 失败: ${e.message}`));
 

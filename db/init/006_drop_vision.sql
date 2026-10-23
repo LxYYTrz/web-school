@@ -10,7 +10,7 @@
 --     4. 收紧 devices.type 取值范围(plc|robot)
 --
 -- 触发场景:
---   1. 全新部署:docker-entrypoint-initdb.d 按字典序执行 001 → 002 → … → 006
+--   1. 全新部署:按文件名顺序执行 db/init/*.sql(001 → … → 006)
 --   2. 已在运行的库:
 --      psql -U postgres -d linetwin -f db/init/006_drop_vision.sql
 --

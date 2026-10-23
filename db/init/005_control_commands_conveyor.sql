@@ -19,7 +19,7 @@
 --   PLC 侧联锁负责否决(契约 §5 第 3 条),本系统不做此判断。
 --
 -- 触发场景:
---   1. 全新部署:docker-entrypoint-initdb.d 按字典序执行 001 → 002 → 003 → 004 → 005
+--   1. 全新部署:按文件名顺序执行 db/init/*.sql(001 → … → 005)
 --   2. 已在运行的库:
 --      psql -U postgres -d linetwin -f db/init/005_control_commands_conveyor.sql
 --

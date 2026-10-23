@@ -42,7 +42,7 @@
   lt-middleware  EMQX + Redis（Docker）
   lt-backend     后端
   lt-collector   mock 采集器
-  lt-tunnel      SSH 双隧道  ★ 这个窗口绝对不能关
+  lt-tunnel      SSH 隧道（云端 3300 → 工控机 3000）  ★ 这个窗口绝对不能关
 ```
 
 **使用前必须修改**脚本顶部的两个变量：

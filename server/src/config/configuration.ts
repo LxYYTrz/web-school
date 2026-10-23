@@ -75,6 +75,13 @@ export const config = {
   // 所有 MQTT 主题以此开头：tl/v1/{lineId}/...
   // 契约版本升级（如 v1 → v2）时只改这里 + 各端对齐，破坏性变更可灰度并行
   topicPrefix: process.env.TOPIC_PREFIX ?? 'tl/v1',
+  // ---------------- 机器通道(AI / 脚本直控)----------------
+  // 给「不是浏览器」的控制入口用:hermes 的 MCP server 用它调 /api/machine/commands,
+  // 让飞书里的 AI 能直接下发指令(演示阶段用)。
+  // 留空 = 通道关闭,端点一律 503 —— 不静默放行,也不静默失败。
+  machine: {
+    commandToken: process.env.MACHINE_COMMAND_TOKEN ?? '',
+  },
   ai: {
     // Hermes 自带的 OpenAI 兼容 API Server。只绑 loopback,外部够不着;
     // 浏览器也永远拿不到 apiKey —— 所有调用都从这里出。

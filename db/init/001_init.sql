@@ -1,6 +1,9 @@
 -- =============================================================
 -- 产线数字孪生平台 初始化 DDL(PostgreSQL 16 + TimescaleDB)
--- 首次启动 timescaledb 容器时自动执行(docker-entrypoint-initdb.d)
+-- 主库在工控机本地(Windows 原生安装的 PostgreSQL 16 + TimescaleDB)。
+-- 执行方式:按文件名顺序把 db/init/*.sql 全部跑一遍
+--   psql -U postgres -d linetwin -f db\init\001_init.sql
+--   (开发机 compose 仍会把本目录挂到 /docker-entrypoint-initdb.d 自动执行)
 -- =============================================================
 
 -- 启用 TimescaleDB 扩展：提供 hypertable（自动分区）、压缩、连续聚合等能力

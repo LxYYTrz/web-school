@@ -86,6 +86,43 @@ T_ACK    = f"tl/v1/{LINE_ID}/cmd_ack"
 # 用字符串注解延后求值(Signal 在本文件下方定义)
 _cmd_signals: dict = {}
 
+# 单实例锁文件:同一台机器**只允许一个采集器**。
+#   原因:PLC 的 MB_SERVER 只接受 1 条 Modbus TCP 连接,第二个采集器永远连不上;
+#   而且两个采集器用同一个 MQTT client_id 会互相把对方踢下线(见 make_mqtt),
+#   结果是「状态偶尔能上、指令永远收不到」——2026-10-23 实测踩过。
+#   所以这里用**文件独占锁**做硬保证:拿不到锁就直接退出,不去抢 PLC 也不去踢 MQTT。
+LOCK_FILE = Path(os.getenv("COLLECTOR_LOCK_FILE",
+                           str(Path(__file__).with_name(".plc_collector.lock"))))
+
+
+def acquire_single_instance_lock(path: Path):
+    """拿独占锁;拿不到说明已经有采集器在跑 → 返回 None(调用方应退出)。
+
+    Windows 用 msvcrt.locking,Linux/macOS 用 fcntl.flock。
+    锁随进程退出自动释放(文件句柄被关闭),不会留下"死锁"。
+    """
+    try:
+        fh = path.open("a+b")
+    except OSError as exc:
+        LOG.warning("锁文件打不开(%s),不启用单实例保护", exc)
+        return None
+    try:
+        if os.name == "nt":
+            import msvcrt
+            fh.seek(0)
+            if fh.tell() == 0:
+                fh.write(b"0")
+                fh.flush()
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        fh.close()
+        return None
+    return fh  # 必须在整个进程生命周期里持有这个句柄,锁才有效
+
 
 # ---------- 点位表加载与解码 ----------
 @dataclass
@@ -353,8 +390,12 @@ def setup_logging():
 # ---------- MQTT 客户端 ----------
 def make_mqtt() -> mqtt.Client:
     # client_id 必须唯一（同一时刻两个同 ID 的连接，Broker 会踢掉前一个）
+    # ★ 带 PID:万一真起了两个采集器,它们不会在 Broker 上互相踢下线。
+    #   （2026-10-23 踩过：两个采集器同 client_id 互踢,表现为"状态偶尔上得来、
+    #   下行指令一条也收不到",排查起来极费时间。真正的防线是单实例锁,
+    #   这里只是让"万一有两个"不至于互相破坏。）
     c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
-                    client_id=f"plc-edge-{LINE_ID}")
+                    client_id=f"plc-edge-{LINE_ID}-{os.getpid()}")
     # 需要认证才设置账号密码
     if MQTT_USERNAME:
         c.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
@@ -509,6 +550,17 @@ def on_command(c: mqtt.Client, plc: Plc):
 def main():
     # 配置日志
     setup_logging()
+
+    # ★ 单实例保护:拿不到独占锁 = 已经有一个采集器在跑,直接退出。
+    #   PLC 的 MB_SERVER 只接受一条连接,两个采集器必然有一个连不上;
+    #   更糟的是同 client_id 会在 Broker 上互踢,导致下行指令收不到。
+    lock_fh = acquire_single_instance_lock(LOCK_FILE)
+    if lock_fh is None:
+        LOG.error("已有采集器在运行(锁 %s 被占用),本进程退出。"
+                  "重复起采集器会抢 PLC 连接并互踢 MQTT,不要再起第二个。", LOCK_FILE)
+        sys.exit(1)
+    LOG.info("单实例锁已获取: %s", LOCK_FILE)
+
     # 打印关键配置，排障时第一眼就能确认连的是哪台 PLC、哪个 Broker
     LOG.info("PLC: %s:%d  unit=%d  poll=%dms", PLC_HOST, PLC_PORT, PLC_UNIT_ID, PLC_POLL_MS)
     LOG.info("MQTT: %s:%d  line=%s  robot=%s", MQTT_HOST, MQTT_PORT, LINE_ID, ROBOT_ID)
@@ -603,6 +655,11 @@ def main():
         mq.loop_stop()
         # 断开 MQTT
         mq.disconnect()
+        # 释放单实例锁(进程退出也会自动释放,这里只是别留文件句柄)
+        try:
+            lock_fh.close()
+        except Exception:
+            pass
         # 关 PLC 连接
         plc.close()
 
