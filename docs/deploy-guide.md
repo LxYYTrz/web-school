@@ -138,16 +138,33 @@ ssh-keygen -t ed25519
 :: 建隧道(保持窗口开着)
 ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes ^
     -R 172.18.0.1:3300:127.0.0.1:3000 linetwin@119.91.145.27
+    # ★ 数据库在工控机本地（2026-10-23 起云端库下线），不再需要 -L 5432 转发
 ```
 
-✅ 命令不报错、不退出。验证:云服务器上 `ss -tlnp | grep 3300` 有监听。
+> ⚠️ **`-R` 必须绑 `172.18.0.1`,不能绑 `127.0.0.1`。**
+> 云端 nginx 跑在容器里,容器内的 `127.0.0.1` 是容器自己,连不到宿主机的 ssh -R 监听;
+> `172.18.0.1` 是云端宿主机的 docker0 网关地址,容器可达。
+> 绑错的后果:公网 `/api` 全部 502(`nginx ... connect() failed (111: Connection refused)`)。
 
-**稳定后做成开机自启**:用 NSSM(nssm.cc)把这条 ssh 命令注册成 Windows 服务,
-失败自动重启。隧道断 = 网站打不开,务必做。
+✅ 命令不报错、不退出。验证:云服务器上 `ss -ltnp | grep 3300` 有监听。
 
-### 2.7 一键启动(可选)
+**稳定后做成开机自启**(推荐用仓库里现成的看门狗,别手搓 NSSM):
+```bat
+powershell -ExecutionPolicy Bypass -File scripts\tunnel-keepalive.ps1 -InstallTask
+```
+它会注册一个 SYSTEM 身份的 Windows 计划任务:开机自启 + 进程挂了自动重启 + 30s 巡检一次。
 
-日常启动也可以用 `scripts\start-ipc.bat`(改一下里面的云服务器地址),
+### 2.7 一键启动(推荐用脚本,幂等)
+
+```powershell
+:: 工控机一键拉起全栈并自检(中间件 → 隧道 → 后端 → 采集器 → 体检)
+.\scripts\ipc-recover.ps1
+
+:: 单独体检(只读,不下发任何控制指令)
+.\scripts\verify-line.ps1
+```
+
+老办法也可以:`scripts\start-ipc.bat`(改一下里面的云服务器地址),
 它会开 4 个窗口:中间件 / 后端 / 采集器 / 隧道。
 
 ## 3. 整体验收顺序
@@ -161,6 +178,14 @@ ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailur
 | 5 | 浏览器刷新云端页面 | 机械臂在动、计数在涨 |
 
 ## 4. 常见问题
+
+> **2026-10-23 事故复盘(2026-10-23 工控机重启后公网 /api 长时间 502)**
+>
+> | 现象 | 排查 |
+> |---|---|
+> | 公网页面能开,但 `/api` 全 502 | 隧道断了。云端 `docker logs lt-cloud-nginx --tail 20` 看是不是 `connect() failed (111)`;工控机看 ssh 进程在不在;跑 `scripts\verify-line.ps1` 一眼定位 |
+> | 云端 `ss -ltnp` 里没有 3300 监听 | 隧道没建起来:工控机 ssh 窗口是否退出;`-R` 是否绑 `172.18.0.1:3300`(绑成 127.0.0.1 容器访问不到) |
+> | 机器重启后站点就一直 502 | 隧道/中间件/后端没自启。执行 `scripts\ipc-recover.ps1` 恢复,并用 `scripts\tunnel-keepalive.ps1 -InstallTask` 装上开机自启 |
 
 | 现象 | 排查 |
 |---|---|

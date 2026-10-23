@@ -5,8 +5,11 @@ rem  用法:把本文件放在 line-twin 根目录,先修改下方两个变量
 rem  会打开 4 个窗口:中间件 / 后端 / 采集器 / SSH 隧道
 rem ============================================================
 
-rem 隧道用的云服务器 SSH 用户名（不要用 root）
-set CLOUD_USER=linetwin
+rem 隧道用的云服务器 SSH 用户名
+rem ⚠️ 云端 linetwin 账号目前没有可用公钥(/home/linetwin/.ssh/authorized_keys 为空),
+rem    实际在用的是 root + 专用密钥(authorized_keys 里带 line-twin-ipc / line-twin-tunnel-system 注释的那两把)。
+rem    先跟云端管理员确认用哪把密钥,再改 CLOUD_USER / SSH_KEY。
+set CLOUD_USER=root
 rem 云服务器 IP（或域名）
 set CLOUD_HOST=119.91.145.27
 
@@ -28,19 +31,26 @@ rem node dist\main.js = 运行编译后的产物（dist 由 npm run build 生成
 echo [2/4] 启动后端...
 start "lt-backend" cmd /k "cd /d %ROOT%server && node dist\main.js"
 
-rem ---- ③ 启动采集器(mock)----
-echo [3/4] 启动采集器(mock)...
-start "lt-collector" cmd /k "cd /d %ROOT%edge && python mock_collector.py"
+rem ---- ③ 启动采集器(现场=真实 PLC)----
+echo [3/4] 启动采集器(plc_collector)...
+start "lt-collector" cmd /k "cd /d %ROOT%edge && python plc_collector.py"
 
 rem ---- ④ 建立 SSH 隧道 ----
 rem   -N                     不执行远程命令，只做端口转发
 rem   -o ServerAliveInterval=15  每 15 秒发一次保活包
 rem   -o ServerAliveCountMax=3    连续 3 次没回应就断开（触发重连）
 rem   -o ExitOnForwardFailure=yes 端口转发失败就直接退出（避免"假活"隧道）
-rem   -R 172.18.0.1:3300:127.0.0.1:3000 云端 3300 → 工控机 3000（Web 流量）
 rem   -R 172.18.0.1:3300:127.0.0.1:3000 云端 3300 → 工控机 3000（后端/网站转发）
+rem     ⚠️ 必须绑 172.18.0.1（云端宿主机的 docker0 网关）：nginx 跑在容器里，
+rem        容器内的 127.0.0.1 是容器自己，连不到宿主的 ssh -R 监听 → 公网 /api 全 502。
+rem   ★ 数据库在工控机本地（2026-10-23 起云端库已下线），不需要数据库方向的转发，
+rem     故不再带 -L 5432:127.0.0.1:5432。
 echo [4/4] 建立 SSH 隧道(此窗口不能关)...
 start "lt-tunnel" cmd /k "ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 172.18.0.1:3300:127.0.0.1:3000 %CLOUD_USER%@%CLOUD_HOST%"
+
+rem ---- 推荐改用 PowerShell 脚本（幂等 / 后台 / 带体检）----
+rem   scripts\ipc-recover.ps1                一键拉起中间件+隧道+后端+采集器并自检
+rem   scripts\tunnel-keepalive.ps1 -InstallTask   隧道开机自启 + 断线重连
 
 rem ---- 完成提示 ----
 echo.

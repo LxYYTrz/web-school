@@ -335,6 +335,24 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 - ✅ **飞书依赖补齐** —— `lark-oapi 1.6.8` + `qrcode 7.4.2` 装进 hermes 运行时 venv
   (`pm install --extra feishu` 只下到 uv cache,不落到 venv,必须手动 `uv pip install`)
 
+**2026-10-23 本轮(公网 502 事故复盘 + 恢复脚本)**
+
+- 🔴 **公网 `/api` 502 根因定位** —— 云端 nginx 报错 `connect() failed (111)`、
+  上游 `http://172.18.0.1:3300` 无监听 → **工控机侧的 SSH 反向隧道断了**;
+  工控机 8:21 重启后,中间件 / 后端 / 采集器 / 隧道**一个都没自动拉起**
+  (隧道断 = 本架构唯一单点,老早就写在待办里)。
+- ✅ **隧道绑定地址的历史坑已写进文档** —— `-R` 必须绑 `172.18.0.1:3300`
+  (云端宿主 docker0 网关),**不能**绑 `127.0.0.1:3300`(nginx 在容器里连不到宿主机的监听)。
+  仓库 `deploy/nginx/cloud.conf` 原来写的是 `127.0.0.1`,已按线上实际修正 + 补 `/assets/` 404 与隐藏文件拦截。
+- ✅ **恢复流程脚本化(幂等)** —— 新增:
+  - `scripts/ipc-recover.ps1` —— 一键拉起 中间件 → 隧道 → 后端 → 采集器,末尾自动体检
+  - `scripts/tunnel-keepalive.ps1` —— 隧道看门狗,`-InstallTask` 装开机自启(关掉待办里的"隧道做成开机自启")
+  - `scripts/verify-line.ps1` —— 全链路只读体检(Docker/端口/隧道/本地 API/公网 API/PLC 状态)
+  - `edge/plc_read_state.py` —— PLC 只读探针(打印 state/IO/关节角,不做任何写操作)
+- ⚠️ **现场仍未恢复**:本机(开发机)到厂区/工控机的网络被网关挡死
+  (192.168.10.x 全端口"可连"但无任何服务回应;云端也 ping 不通厂区),
+  **隧道只能由工控机侧发起 → 必须在工控机上跑 `scripts\ipc-recover.ps1`**。
+
 **2026-10-16 本轮(现场扩点 11 → 17 word)**
 
 - ✅ **TIA HOLD 区扩到 17 word 并实测通过** —— word 0..16 整块连读成功,无 Illegal Data Address
@@ -370,6 +388,11 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 
 ### 5.2 待办
 
+- [ ] **🔴 现场恢复公网实时数据(最高优先,2026-10-23 起)** —— 工控机上跑
+      `powershell -ExecutionPolicy Bypass -File scripts\ipc-recover.ps1`,
+      再 `scripts\tunnel-keepalive.ps1 -InstallTask` 装开机自启;
+      最后 `scripts\verify-line.ps1` 必须全绿(公网 `/api` 200 + PLC 状态读得到)。
+      恢复不了 → 控制指令验证没法做(前端要连后端)。
 - [ ] **收紧飞书访问控制 + 关掉直控通道** —— 当前 `FEISHU_ALLOW_ALL_USERS=true`
       (任何人可私聊 hermes)且 `MACHINE_COMMAND_TOKEN` 非空(任何人可让产线动起来)。
       投产前:飞书改白名单/配对审批,`server/.env` 的 `MACHINE_COMMAND_TOKEN` 留空
@@ -380,17 +403,21 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
       2026-10-23 飞书直控又跑了完整三步(停止→获取手动→传送带正转),全部 acked。
       当时写的"从未真正写过 PLC 寄存器"已经不成立,PLC 侧动作需人工复核是否
       与产线实际动作一致(传送带正转是否真的转、停止信号是否真的停)。
-- [ ] **机器人动起来后验证 3D 孪生** —— 目前 `joints` 全 0(机器人静止或未接入),
-      机械臂不会动。机器人一动,孪生页应同步摆动
+- [ ] **机器人动起来后验证 3D 孪生** —— 2026-10-23 从公网快照看到 joints 已非零
+      (`[86.7, 2.4, -65.9, 21, -90, 87]`,mode=manual),说明**机器人其实在动**;
+      但公共机侧快照又读到 `joints` 全 0(静止或未接入)—— 两次观测不一致,
+      需恢复链路后开孪生页目检摆动是否同步
 - [x] **隧道做成开机自启** —— 已完成:计划任务 `line-twin-tunnel-{boot,logon,watchdog}`
       以 SYSTEM 身份跑 `ensure_tunnel.ps1`,已做互斥锁 + 端到端实测自愈
-      (见 §4.5)
+      (见 §4.5);开发机侧另有 `scripts/tunnel-keepalive.ps1 -InstallTask` 可交叉验证
 - [ ] **本机数据库备份** —— 数据只存在工控机这一台机器上了(云端库已删),
       必须配 `pg_dump` 定期备份(备份文件再同步到云端/离线盘)。
       当前 `server/.env` 的 `DATABASE_URL` 是 `postgres://postgres:postgres123@localhost:5432/linetwin`
 - [ ] **生产安全收尾** —— `server/.env` 的 `ADMIN_PASSWORD=admin123` 和
       `SESSION_SECRET` 必须改;Mosquitto 目前 `allow_anonymous true` 且只监听回环,
-      若要厂区多机访问需配密码文件
+      若要厂区多机访问需配密码文件;
+      云端 `linetwin` 账号 `/home/linetwin/.ssh/authorized_keys` 是空的(实际用 root 跑隧道),
+      要么补公钥要么建专用隧道账号;公网站点仍是纯 HTTP(443 没配)且裸露在公网被扫描
 
 ### 5.3 不做(用户决定)
 
