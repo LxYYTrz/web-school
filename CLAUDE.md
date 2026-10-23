@@ -1,8 +1,26 @@
 # CLAUDE.md
 
 > 产线数字孪生监控平台(`line-twin`)的项目级指引。
-> **新 Claude Code session 第一件事**:读这个文件 + `docs/contract/README.md` + `docs/deployment.md`。
+> **新 Claude Code session 第一件事**:读这个文件 + `docs/README.md`(文档地图)。
 > 这一份是 2026-10-14 拉通"中转站对齐 + RBAC + 云端部署"后写的,记录关键决策、当前状态、待办,让另一台电脑(产线现场 Windows)上的新 session 能"续接"上下文。
+
+---
+
+## 0. 文档地图(先花 30 秒看这个)
+
+| 你要写 / 要查的东西 | 去哪 |
+|---|---|
+| **给 AI 的项目上下文**(决策 / 踩坑 / 现状 / 待办) | **本文件** |
+| 讲给别人听、投屏、评审 | `docs/walkthrough/`(《代码讲解》+《讲稿》,与飞书同源) |
+| 边缘 / 后端 / 前端 三方的唯一约定 | `docs/contract/README.md` |
+| 怎么部署、踩过哪些坑 | `docs/deployment.md` + `docs/deploy-guide.md` |
+| hermes / 飞书通道运维 | `docs/feishu-hermes.md` |
+| **写讲解稿的规范**(两栏对照表、记忆锚点、防串台) | `.claude/skills/code-walkthrough-script/SKILL.md` |
+| 解读一个陌生代码库(通用) | `.claude/skills/codebase-explainer/SKILL.md` |
+| 本机连不上 github.com 怎么推 | `.claude/skills/lt-push/SKILL.md` |
+
+> **分工**:本文件 = 给 AI 看的"速查 + 决策记录",只留**不能忘的**;`docs/` = **给人看的完整文档**。
+> 两者不重复:细节写 `docs/`,本文件留一行指路。新增一条决策 → 改本文件;要给人讲清楚 → 写 `docs/` 对应那份。
 
 ---
 
@@ -492,6 +510,11 @@ ssh -o ControlMaster=no -o ControlPath=none \
 
 | 路径 | 作用 |
 |---|---|
+| `docs/README.md` | **文档索引**(每份文档给谁看、什么时候更新) |
+| `docs/walkthrough/` | **汇报讲解材料**:《代码讲解》(展示用)+《讲稿》(演讲者自用),与飞书同源 |
+| `.claude/skills/code-walkthrough-script/` | **产线讲解稿写作规范**(两栏对照表、记忆锚点、防串台) |
+| `.claude/skills/codebase-explainer/` | 通用:解读陌生代码库(报告 + demo + 踩坑) |
+| `.claude/skills/lt-push/` | 借云服务器中转推 GitHub(本机连不上 github.com:443) |
 | `docs/contract/README.md` | **数据契约 v1.3**(边缘/后端/前端唯一约定) |
 | `docs/feishu-hermes.md` | **hermes ↔ 飞书通道运维手册**(凭据位置、命令、访问控制、踩坑) |
 | `docs/deployment.md` | 架构 + 实战部署记录(踩坑 + 验证清单) |
