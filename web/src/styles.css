@@ -77,8 +77,9 @@ html, body, #app {
 @keyframes blink { 50% { opacity: 0.3; } }
 
 /* 产线状态语义色(契约 v1.1 的 10 态工序状态 + 原 4 态)
-   见 edge/plc_collector.py STATE_MAP / db/init/004_line_state_stages.sql */
-.st-running, .st-feeding, .st-assembling, .st-unloading, .st-unload_done {
+   见 edge/plc_collector.py STATE_MAP / db/init/004+005_line_state_stages.sql */
+.st-running, .st-feeding, .st-assembling, .st-waiting_robot, .st-unload_done,
+.st-unloading {
   color: var(--ok);           /* 产线在动 */
 }
 .st-waiting_feed, .st-waiting_next, .st-idle {

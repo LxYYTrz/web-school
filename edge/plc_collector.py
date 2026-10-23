@@ -437,12 +437,18 @@ MODE_TOGGLE_VALUE = {'acquire': 1, 'release': 2}
 CONVEYOR_VALUE = {'stop': 0, 'forward': 1}
 
 # 产线状态:PLC dataDB[6](Modbus word 6)整数 → 契约字符串
-# 依据 DB3-Modbus-映射表.xls「产线状态」枚举(契约 v1.1,见 db/init/004_line_state_stages.sql)
+# 依据 DB3-Modbus-映射表1.csv「产线状态」枚举(契约 v1.1,见 db/init/004_line_state_stages.sql)
+#
+# ★ 2026-10-23 按现场给的 DB3-Modbus-映射表1.csv 校正:
+#   表里原文是 "3 = 等待机器人" —— 之前误当成「下料中」(unloading)了。
+#   现在 3 → waiting_robot(等待机器人完成),4 → unload_done(下料完成)不变。
+#   旧契约值 'unloading' 只在历史数据里保留(DB 约束不删,见 005 迁移),
+#   采集端不再产出。
 STATE_MAP = {
     0:   'waiting_feed',   # 等待入料
     1:   'feeding',        # 入料中
     2:   'assembling',     # 装配中
-    3:   'unloading',      # 下料中
+    3:   'waiting_robot',  # 等待机器人完成
     4:   'unload_done',    # 下料完成
     5:   'waiting_next',   # 等待后站入料
     100: 'init_error',     # 初始化错误状态

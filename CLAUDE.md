@@ -138,12 +138,17 @@
 | 0 | `waiting_feed` | 等待入料 |
 | 1 | `feeding` | 入料中 |
 | 2 | `assembling` | 装配中 |
-| 3 | `unloading` | 下料中 |
+| 3 | `waiting_robot` | 等待机器人完成 |
 | 4 | `unload_done` | 下料完成 |
 | 5 | `waiting_next` | 等待后站入料 |
 | 100 | `init_error` | 初始化错误状态 |
 | 101 | `stopped` | 停止状态 |
 | 102 | `manual_mode` | 手动控制模式 |
+
+> **2026-10-23 校正**:依据现场原件 `DB3-Modbus-映射表1.csv`(GBK),枚举里
+> `3 = 等待机器人`(之前误标成 `unloading` 下料中)。采集端 3 现在输出
+> `waiting_robot`;旧值 `unloading` 按"只增不改"只保留给历史数据
+> (DB 约束见 `db/init/005_line_state_waiting_robot.sql`)。
 
 原 4 态(`running`/`idle`/`alarm`/`offline`)保留,与 10 态并存(DB 约束见 §4.6)。
 

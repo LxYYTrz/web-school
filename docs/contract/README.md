@@ -76,12 +76,18 @@ state 枚举(v1.1 扩展,见 `db/init/004_line_state_stages.sql`):
 | `waiting_feed` | 等待入料 | PLC dataDB[6] = 0 |
 | `feeding` | 入料中 | PLC = 1 |
 | `assembling` | 装配中 | PLC = 2 |
-| `unloading` | 下料中 | PLC = 3 |
+| `waiting_robot` | 等待机器人完成 | PLC = 3 |
 | `unload_done` | 下料完成 | PLC = 4 |
 | `waiting_next` | 等待后站入料 | PLC = 5 |
 | `init_error` | 初始化错误状态 | PLC = 100 |
 | `stopped` | 停止状态 | PLC = 101 |
 | `manual_mode` | 手动控制模式 | PLC = 102 |
+| `unloading` | 下料中(状态 3 的**旧口径**) | 历史数据,采集端不再产出 |
+
+> **2026-10-23 校正**:现场给的 `DB3-Modbus-映射表1.csv` 原件里「产线状态」枚举是
+> `3 = 等待机器人`(不是"下料中"),之前误标成了 `unloading`。现在采集端 3 输出
+> `waiting_robot`;旧值 `unloading` 按"只增不改"保留在 DB 约束里,只服务历史数据
+> (见 `db/init/005_line_state_waiting_robot.sql`)。
 
 **PLC 原始整数 → 契约字符串的转换由 edge 完成**(`edge/plc_collector.py` `STATE_MAP`),
 云端与前端只处理已转换的字符串。

@@ -199,9 +199,9 @@ async function onLogout() {
  *
  * ★ 映射表是单点定义（services/lineState.ts），这里不要再自己写一份。
  *   之前这里只映射了原 4 态(running/idle/alarm/offline)，PLC 的 10 态工序
- *   (waiting_feed/feeding/assembling/unloading/...) 查不到 → 直接把英文原值
- *   显示出来（如 "unloading"），浏览器翻译后就成了"等待机器人完成"这种鬼话，
- *   实际应为「下料中」。现在统一走 lineState.ts。
+ *   (waiting_feed/feeding/assembling/waiting_robot/...) 查不到 → 直接把英文原值
+ *   显示出来（如 "waiting_robot"），浏览器翻译后就会变成半通不通的英文/中文。
+ *   现在统一走 lineState.ts，页面显示的都是标准中文。
  */
 const statusText = computed(() => (status.value ? stateText(status.value.state) : ''));
 

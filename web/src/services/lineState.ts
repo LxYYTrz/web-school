@@ -1,16 +1,14 @@
 // 产线状态映射(契约 v1.1,见 db/init/004_line_state_stages.sql)
 // 单点定义,StatusView / IoPanel / 其它组件都从这里取,避免三处各写一份。
 //
-// 来源:DB3-Modbus-映射表.xls「产线状态」枚举 + PLC dataDB[6](Modbus word 6)
+// 来源:DB3-Modbus-映射表1.csv「产线状态」枚举 + PLC dataDB[6](Modbus word 6)
 // PLC 原始整数 → 契约字符串的转换在 edge/plc_collector.py STATE_MAP 完成,
 // 前端只处理已经转成字符串的契约值。
 //
-// ⚠ 状态 3 的文案口径(DB3-Modbus-映射表1.csv 原文写的是「3 = 等待机器人」,
-//   而 edge/DB/契约统一用的是 unloading =「下料中」):
-//   现场口径以「下料中」为准,并且任何指向状态 3 的别名
-//   (waiting_robot_done / 等待机器人完成 / …)都归一到 unloading,
-//   页面上永远显示「下料中」,不会再冒出「等待机器人完成」这种半通不通的文案。
-//   详见下面 STATE_ALIAS 的注释。
+// ★ 状态 3 = 等待机器人完成(2026-10-23 按现场给的映射表原件校正):
+//   现场表原文 "3 = 等待机器人"。之前误标成 unloading(下料中),现已改正:
+//     - 采集端 3 → 'waiting_robot' → 页面显示「等待机器人完成」
+//     - 'unloading'(下料中)是旧口径,只留在历史数据里,DB 约束不删(见 005 迁移)
 
 /** 原 4 态(mock / 旧数据) + PLC 10 态工序 */
 export const STATE_TEXT: Record<string, string> = {
@@ -23,12 +21,14 @@ export const STATE_TEXT: Record<string, string> = {
   waiting_feed: '等待入料',      //   0
   feeding: '入料中',             //   1
   assembling: '装配中',          //   2
-  unloading: '下料中',           //   3
+  waiting_robot: '等待机器人完成',//   3  ★ 现场口径(旧口径 unloading 保留给历史数据)
   unload_done: '下料完成',       //   4
   waiting_next: '等待后站入料',  //   5
   init_error: '初始化错误',      // 100
   stopped: '停止',               // 101
   manual_mode: '手动模式',       // 102
+  // 旧口径(2026-10-23 之前把状态 3 叫成「下料中」,历史数据里还有 2.8 万行)
+  unloading: '下料中',
 };
 
 /** 语义色分组:CSS class 前缀 st- */
@@ -38,8 +38,9 @@ export const STATE_TONE: Record<string, StateTone> = {
   running: 'run',
   feeding: 'run',
   assembling: 'run',
-  unloading: 'run',
+  waiting_robot: 'run',
   unload_done: 'run',
+  unloading: 'run',
 
   idle: 'wait',
   waiting_feed: 'wait',
@@ -61,13 +62,13 @@ export const KNOWN_STATES = new Set(Object.keys(STATE_TEXT));
  * PLC 原始整数 → 契约字符串。
  * 与 edge/plc_collector.py 的 STATE_MAP 一一对应(单一事实来源在边缘端,
  * 这里只是兜底):万一后端/历史数据里直接透传了 PLC 整数(如 3),
- * 前端也能显示成「下料中」,而不是把裸数字 "3" 丢到界面上。
+ * 前端也能显示成「等待机器人完成」,而不是把裸数字 "3" 丢到界面上。
  */
 export const PLC_STATE_BY_INT: Record<number, string> = {
   0: 'waiting_feed',
   1: 'feeding',
   2: 'assembling',
-  3: 'unloading',
+  3: 'waiting_robot',
   4: 'unload_done',
   5: 'waiting_next',
   100: 'init_error',
@@ -79,20 +80,18 @@ export const PLC_STATE_BY_INT: Record<number, string> = {
  * 别名 → 契约状态值。
  *
  * 为什么需要:同一个 PLC 工序在现场/不同版本的采集端里可能有不同的叫法,
- * 例如状态 3(下料中)有时会被写成 "waiting_robot_done" 或直接写中文
- * "等待机器人完成"。前端拿到别名时如果不归一化,就会把这种半通不通的
- * 字符串原样显示到页面上(用户看到的"等待机器人完成"就是这种)。
- * 这里统一归一到契约值,页面上永远显示标准中文:
- *   下料中 / 下料完成 / 等待入料 …
+ * 例如状态 3 有时会被写成 "waiting_robot_done" 或直接写中文"等待机器人完成"。
+ * 前端拿到别名时如果不归一化,就会把这种半通不通的字符串原样显示到页面上。
+ * 这里统一归一到契约值,页面上永远显示标准中文。
  */
 export const STATE_ALIAS: Record<string, string> = {
-  // ── 状态 3 = 下料中(unloading) ──
-  'unload': 'unloading',
+  // ── 状态 3 = 等待机器人完成(waiting_robot) ──
+  'waiting_robot_done': 'waiting_robot',
+  'robot_waiting_done': 'waiting_robot',
+  '等待机器人完成': 'waiting_robot',
+  '等待机器人': 'waiting_robot',
+  // ── 状态 3 旧口径(历史数据)──
   'unloading_process': 'unloading',
-  'waiting_robot_done': 'unloading',
-  'waiting_robot': 'unloading',
-  'robot_waiting_done': 'unloading',
-  '等待机器人完成': 'unloading',
   '下料中': 'unloading',
   // ── 状态 4 = 下料完成(unload_done) ──
   'unload_finished': 'unload_done',

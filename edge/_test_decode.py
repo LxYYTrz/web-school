@@ -49,7 +49,7 @@ STATE_CASES = {
     0:   "waiting_feed",
     1:   "feeding",
     2:   "assembling",
-    3:   "unloading",
+    3:   "waiting_robot",
     4:   "unload_done",
     5:   "waiting_next",
     100: "init_error",

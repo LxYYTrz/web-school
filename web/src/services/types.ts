@@ -19,9 +19,11 @@ export interface LineStatus {
   // PLC 整数对照见 edge/plc_collector.py STATE_MAP 与 db/init/004_line_state_stages.sql
   state:
     | 'running' | 'idle' | 'alarm' | 'offline'
-    | 'waiting_feed' | 'feeding' | 'assembling' | 'unloading'
+    | 'waiting_feed' | 'feeding' | 'assembling' | 'waiting_robot'
     | 'unload_done' | 'waiting_next'
     | 'init_error' | 'stopped' | 'manual_mode'
+    // 旧口径:2026-10-23 之前状态 3 叫 unloading(下料中),历史数据里还有
+    | 'unloading'
     | string;
   productCode: string;
   goodCount: number;

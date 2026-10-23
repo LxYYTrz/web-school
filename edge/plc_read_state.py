@@ -14,12 +14,12 @@ import sys
 
 from pymodbus.client import ModbusTcpClient
 
-# 与 plc_collector.py 保持一致(契约 v1.1 §3.8 / db/init/004_line_state_stages.sql)
+# 与 plc_collector.py 保持一致(契约 v1.1 §3.8 / db/init/004+005_line_state_stages.sql)
 STATE_MAP = {
     0: "waiting_feed",   # 等待入料
     1: "feeding",        # 入料中
     2: "assembling",     # 装配中
-    3: "unloading",      # 下料中
+    3: "waiting_robot",  # 等待机器人完成
     4: "unload_done",    # 下料完成
     5: "waiting_next",   # 等待后站入料
     100: "init_error",   # 初始化错误状态

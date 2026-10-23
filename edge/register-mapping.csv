@@ -44,7 +44,7 @@ robot.joints[4],4,INT,0.1,0,deg,J5 关节角 (dataDB[4] 字节8)
 robot.joints[5],5,INT,0.1,0,deg,J6 关节角 (dataDB[5] 字节10)
 
 # --- 产线状态 (UINT;word 6) ---
-# 0=等待入料 1=入料中 2=装配中 3=下料中 4=下料完成 5=等待后站入料
+# 0=等待入料 1=入料中 2=装配中 3=等待机器人 4=下料完成 5=等待后站入料
 # 100=初始化错误状态 101=停止状态 102=手动控制模式
 # → plc_collector.py STATE_MAP 负责整数→契约字符串
 line.state,6,UINT,1.0,0,,产线状态 (dataDB[6] 字节12) 10值枚举见 STATE_MAP
