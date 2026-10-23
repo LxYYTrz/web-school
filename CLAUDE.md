@@ -1,26 +1,30 @@
 # CLAUDE.md
 
 > 产线数字孪生监控平台(`line-twin`)的项目级指引。
-> **新 Claude Code session 第一件事**:读这个文件 + `docs/README.md`(文档地图)。
+> **新 Claude Code session 第一件事**:读这个文件(它就是全部上下文)。
 > 这一份是 2026-10-14 拉通"中转站对齐 + RBAC + 云端部署"后写的,记录关键决策、当前状态、待办,让另一台电脑(产线现场 Windows)上的新 session 能"续接"上下文。
 
 ---
 
 ## 0. 文档地图(先花 30 秒看这个)
 
+> **2026-10-23 起仓库做了"代码最小化"**:原 `docs/deployment.md`、`docs/deploy-guide.md`、
+> `docs/feishu-hermes.md`、`docs/工控机部署手册-U盘版.md`、`docs/产线数字孪生平台-技术设计文档.md`
+> 全部删除,**知识已压进本文件对应小节**(§2 / §4.4 / §4.5 / §4.7 / §6);`docs/` 现在只剩 `contract/`。
+> 讲解稿《代码讲解》《讲稿》**只存飞书**,不进仓库。
+
 | 你要写 / 要查的东西 | 去哪 |
 |---|---|
-| **给 AI 的项目上下文**(决策 / 踩坑 / 现状 / 待办) | **本文件** |
-| 讲给别人听、投屏、评审 | `docs/walkthrough/`(《代码讲解》+《讲稿》,与飞书同源) |
+| **给 AI 的项目上下文**(决策 / 踩坑 / 现状 / 待办 / 运维速查) | **本文件** |
 | 边缘 / 后端 / 前端 三方的唯一约定 | `docs/contract/README.md` |
-| 怎么部署、踩过哪些坑 | `docs/deployment.md` + `docs/deploy-guide.md` |
-| hermes / 飞书通道运维 | `docs/feishu-hermes.md` |
+| 各目录是干什么的(逐目录贴代码) | `db/ deploy/ edge/ scripts/ server/ web/README.md` |
+| 投屏 / 讲给别人听 | **飞书**(链接见 §8),仓库里不留 |
 | **写讲解稿的规范**(两栏对照表、记忆锚点、防串台) | `.claude/skills/code-walkthrough-script/SKILL.md` |
 | 解读一个陌生代码库(通用) | `.claude/skills/codebase-explainer/SKILL.md` |
 | 本机连不上 github.com 怎么推 | `.claude/skills/lt-push/SKILL.md` |
 
-> **分工**:本文件 = 给 AI 看的"速查 + 决策记录",只留**不能忘的**;`docs/` = **给人看的完整文档**。
-> 两者不重复:细节写 `docs/`,本文件留一行指路。新增一条决策 → 改本文件;要给人讲清楚 → 写 `docs/` 对应那份。
+> **本文件 = 唯一的上下文入口**。新增一条决策 / 踩坑 → 改本文件;
+> 需要贴代码的目录说明 → 改对应目录的 README.md。
 
 ---
 
@@ -62,7 +66,7 @@
 > **2026-10-23 决策**:数据库**只走本地**。云端的 PostgreSQL 容器(`lt-cloud-db`)
 > 已删除,云端不再有数据库端口,隧道也只挂一条 `-R 3300` 转发。
 
-详细架构与部署:`docs/deployment.md`
+详细架构与部署:本文件 §2 / §4.4 / §4.5
 
 ## 3. 契约优先
 
@@ -189,9 +193,35 @@
   ★ 云端数据库容器 `lt-cloud-db` 已于 2026-10-23 删除(数据库只走本地,见 §2)
 - 部署位置:`/opt/line-twin/`(`deploy/` + `dist/`)
 - **腾讯云安全组**已加 8081 端口规则(自定义 / TCP / 8081 / 0.0.0.0/0 / 允许 / 备注:line-twin nginx)
-- 实战部署过程、踩坑:`docs/deployment.md` §7
+  ⚠ 腾讯云控制台默认只放行常见端口,**自定义端口必须手动加规则**,忘了就整个站点不通。
 - **2026-10-15 补充**:sshd 已设 `GatewayPorts clientspecified`,
   nginx upstream 改为 `172.18.0.1:3300`(见 §4.5 为什么不能用 127.0.0.1)
+
+**更新前端(唯一需要频繁做的部署动作)**:
+
+```bash
+# 开发机
+cd web && npm run build
+scp -i <key> -r web/dist root@119.91.145.27:/opt/line-twin/dist_new
+# 云服务器
+mv /opt/line-twin/deploy/dist /opt/line-twin/deploy/dist.bak.$(date +%Y%m%d)
+mv /opt/line-twin/dist_new /opt/line-twin/deploy/dist
+docker compose -f /opt/line-twin/deploy/docker-compose.cloud.yml up -d --force-recreate nginx
+```
+
+**验证清单**:
+
+| 检查 | 命令 / 方式 | 期望 |
+|---|---|---|
+| 容器 | `docker ps --format "{{.Names}}\t{{.Status}}"` | **只有** `lt-cloud-nginx` 一个 Up |
+| 容器内 dist | `docker exec lt-cloud-nginx stat -c "%y" /usr/share/nginx/html/index.html` | 新时间戳 |
+| 公网入口 | `curl http://119.91.145.27:8081/` | HTTP 200,title「产线数字孪生监控平台」 |
+| 公网接口 | `curl -i http://119.91.145.27:8081/api/auth/me` | 401(未登录)= 隧道+后端都通 |
+| 本机库 | `psql -h 127.0.0.1 -U postgres -d linetwin -c "\dt"` | 业务表都在 |
+
+> ⚠️ **别拿仓库版 compose 覆盖线上那份** —— 2026-10-23 踩过:仓库版端口映射写的是
+> `80:80`,而线上那台机器的 80 被 DSH caddy 占着,实际跑的是 `8081:80`。
+> 用仓库版覆盖 → nginx 起不来 → **网站中断**。上传前先 `ssh` 看服务器上那份长什么样。
 
 ### 4.5 SSH 通道(命脉)—— 已建通 ✅
 
@@ -218,6 +248,25 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 - 云端 nginx upstream 指向 `172.18.0.1:3300`
 
 注意:宿主机上 `curl 127.0.0.1:3300` 会失败(HTTP 000),这是**正常的** —— 只绑了网桥。
+
+**怎么验隧道是通的**(三项都过才算):
+
+```bash
+# ① 云端有监听
+ssh root@119.91.145.27 "ss -ltnp | grep 3300"
+# ② 公网接口有响应(走完 公网 → 云 nginx → 隧道 → 工控机后端)
+curl -i http://119.91.145.27:8081/api/auth/me     # 401 = 通了
+# ③ 本机后端活着
+curl http://localhost:3000/api/lines/line-01/snapshot
+```
+
+**出问题了怎么查**:
+
+| 现象 | 排查 |
+|---|---|
+| 公网页面能开但 `/api` 全 502 | 隧道断了。云端 `docker logs lt-cloud-nginx --tail 20` 看是不是 `connect() failed (111)`;工控机看 ssh 进程在不在;跑 `scripts\verify-line.ps1` 一眼定位 |
+| 云端 `ss -ltnp` 没有 3300 | 隧道没建起来:ssh 窗口退出没?`-R` 是不是绑成了 `127.0.0.1`(绑错容器访问不到) |
+| 重启后站点一直 502 | 隧道/中间件/后端没自启。跑 `scripts\ipc-recover.ps1` 恢复,再用 `scripts\tunnel-keepalive.ps1 -InstallTask` 装开机自启 |
 
 - **数据库只走本地(2026-10-23)**:工控机自己的 PostgreSQL 16 + TimescaleDB(:5432),
   历史数据和业务表都在本机。**云端没有数据库,隧道也没有数据库方向的转发。**
@@ -320,8 +369,46 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
   8642 没监听),所以网页 AI 抽屉一直是 503。已随本次修复。
 - ⚠️ **本次发现的老问题 2**:**两个 PLC 采集器在互相踢 MQTT**(见 §4.8),
   导致「上行状态偶尔上得来、下行指令一条也收不到」,AI 下的指令永远 timeout。
-- 完整运维手册(装法、命令、访问控制、踩坑、依赖清单、实测记录):
-  **`docs/feishu-hermes.md`**
+
+**hermes 装在哪 / 凭据在哪**:
+
+| 项 | 位置 |
+|---|---|
+| hermes home | `C:\Users\Administrator\AppData\Local\hermes` |
+| 凭据(飞书 / 模型 / API_SERVER_KEY) | `...\hermes\.env`(`FEISHU_*`)—— **不进仓库** |
+| 配置 | `...\hermes\config.yaml` |
+| 日志 | `...\hermes\logs\gateway.log`、`...\hermes\logs\mcp-stderr.log` |
+| 飞书插件源码 | `...\hermes\hermes-agent\plugins\platforms\feishu\` |
+| 开机自启 | Windows 计划任务 `Hermes_Gateway` |
+
+**常用命令**:
+
+```bash
+hermes gateway status        # 看连通(gateway_state.json 里 platforms.feishu.state)
+hermes gateway restart       # 改完 .env 或 MCP 代码后必须重启(MCP 是 gateway 的子进程,不热重载)
+hermes send -t feishu:ou_xxx "内容"   # 往飞书发一条(不经 LLM)
+```
+
+**依赖坑(2026-10-23 实测)**:`lark-oapi 1.6.8` + `qrcode 7.4.2` 必须装进 hermes **运行时 venv**
+(`hermes pm install --extra feishu` 只把包下到 uv cache,**不落到 venv**,得手动
+`uv pip install --python <hermes home>\installs\<id>\environments\<id>\venv\Scripts\python.exe`)。
+`hermes pm update` / `repair` 重建 venv 后要**复查它还在不在**。
+
+**其它踩坑**:卡片按钮点了报 `200340` = 飞书没配卡片回调
+(开发配置 → 事件与回调 → **回调配置** 标签页加 `card.action.trigger`,并**发布版本**);
+群聊不回应 = 必须 @ 机器人;`Another local Hermes gateway is already using this Feishu app_id`
+= 同一个 app_id 只能一个实例在用。
+
+**投产收紧三处**(当前是演示阶段,三处全开):
+
+```bash
+# ① 飞书谁能私聊(hermes .env)
+FEISHU_ALLOW_ALL_USERS=false
+FEISHU_ALLOWED_USERS=ou_你的open_id,ou_同事的open_id
+# ② 机器通道关掉(line-twin server/.env)—— 留空 = 直控通道整体 503
+MACHINE_COMMAND_TOKEN=
+# ③ 群里按群设规则(hermes config.yaml → platforms.feishu.extra.group_rules)
+```
 
 ### 4.8 采集器单实例(2026-10-23 修)
 
@@ -419,7 +506,7 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 - [ ] **收紧飞书访问控制 + 关掉直控通道** —— 当前 `FEISHU_ALLOW_ALL_USERS=true`
       (任何人可私聊 hermes)且 `MACHINE_COMMAND_TOKEN` 非空(任何人可让产线动起来)。
       投产前:飞书改白名单/配对审批,`server/.env` 的 `MACHINE_COMMAND_TOKEN` 留空
-      (见 `docs/feishu-hermes.md` §6)
+      (见 §4.7)
 - [x] **控制指令真实下发验证** —— **已完成,证据在库里**:
       `control_commands` 里 2026-10-22 有 12 条 `acked`
       (start / stop / mode_set acquire|release / conveyor forward|stop),
@@ -450,10 +537,20 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 
 ### 6.1 装环境
 
-- [Claude Code for Windows](https://claude.com/claude-code) 安装
-- Python 3.11+(plc_collector.py 用,装 pymodbus 3.10+ 和 paho-mqtt 2.0+)
-- Node.js 20+(前端 dev/build)
+| 软件 | 必需? | 说明 |
+|---|---|---|
+| [Claude Code for Windows](https://claude.com/claude-code) | 建议 | AI 改代码用 |
+| Python 3.11+ | 必需 | 采集器(pymodbus 3.10+ / paho-mqtt 2.0+) |
+| Node.js 20+ | 必需 | 后端 + 前端 dev/build |
+| PostgreSQL 16 + TimescaleDB | 必需 | 数据库,**Windows 原生安装**(端口 5432) |
+| EMQX(或原生 Mosquitto) | 必需 | MQTT Broker(端口 1883) |
+| Redis(或原生 Memurai) | 必需 | 快照缓存(端口 6379) |
+| Docker Desktop | 二选一 | 用它跑 EMQX+Redis;不装就装原生版,端口一致即可 |
+
 - Git
+
+> ⚠ **PG 必须是 16.6 或更新**(16.5 的 TimescaleDB 装不上);装完要用 TimescaleDB 的
+> `setup.exe` 装扩展,并让它改 `postgresql.conf` 的 `shared_preload_libraries`(选 Yes)。
 
 ### 6.2 拉代码
 
@@ -480,6 +577,32 @@ cd ../edge
 pip install -r requirements.txt
 python plc_collector.py
 # (或本地试 mock: COLLECTOR=mock python mock_collector.py)
+```
+
+**工控机无外网时的离线装法**(仓库自带 wheel):
+
+```bat
+python -m pip install --no-index --find-links=edge\wheels paho-mqtt pymodbus
+```
+
+**建库**(数据库在**工控机本机**,按文件名顺序把 `db/init/*.sql` 全跑一遍):
+
+```bat
+set PGPASSWORD=postgres123
+psql -U postgres -c "CREATE DATABASE linetwin;"
+for %F in (db\init\*.sql) do psql -U postgres -d linetwin -f %F
+psql -U postgres -d linetwin -c "SELECT code FROM production_lines;"
+```
+
+> ⚠ 上面是**全新安装**用的(空库)。存量库已经有表,重跑 001 会报
+> "relation already exists" —— 存量库只补跑缺失的迁移文件即可。
+
+**一键拉起全栈**(幂等,重复跑安全):
+
+```powershell
+.\scripts\ipc-recover.ps1      # 中间件 → 隧道 → 后端 → 采集器 → 自动体检
+.\scripts\verify-line.ps1      # 只读体检,不下发任何控制指令
+.\scripts\tunnel-keepalive.ps1 -InstallTask   # 隧道开机自启 + 30s 巡检
 ```
 
 ### 6.4 SSH 密钥(工控机 → 云服务器)—— 已就位 ✅
@@ -509,20 +632,19 @@ ssh -o ControlMaster=no -o ControlPath=none \
 
 ### 6.6 部署前端(云服务器,一次)
 
-按 `docs/deployment.md` §7.4-7.7:本地 build → scp dist → ssh 上 mv + docker compose up -d --force-recreate nginx。
+按 §4.4:本地 build → scp dist → ssh 上 mv + docker compose up -d --force-recreate nginx。
 
 ## 7. 文件指引(按重要性)
 
 | 路径 | 作用 |
 |---|---|
-| `docs/README.md` | **文档索引**(每份文档给谁看、什么时候更新) |
-| `docs/walkthrough/` | **汇报讲解材料**:《代码讲解》(展示用)+《讲稿》(演讲者自用),与飞书同源 |
 | `.claude/skills/code-walkthrough-script/` | **产线讲解稿写作规范**(两栏对照表、记忆锚点、防串台) |
 | `.claude/skills/codebase-explainer/` | 通用:解读陌生代码库(报告 + demo + 踩坑) |
 | `.claude/skills/lt-push/` | 借云服务器中转推 GitHub(本机连不上 github.com:443) |
-| `docs/contract/README.md` | **数据契约 v1.3**(边缘/后端/前端唯一约定) |
-| `docs/feishu-hermes.md` | **hermes ↔ 飞书通道运维手册**(凭据位置、命令、访问控制、踩坑) |
-| `docs/deployment.md` | 架构 + 实战部署记录(踩坑 + 验证清单) |
+| `docs/contract/README.md` | **数据契约 v1.3**(边缘/后端/前端唯一约定)—— `docs/` 下只剩这一份 |
+| `scripts/ipc-recover.ps1` | 工控机一键幂等恢复(中间件→隧道→后端→采集器→体检) |
+| `scripts/tunnel-keepalive.ps1` | 隧道看门狗(-InstallTask 装开机自启 + 巡检) |
+| `scripts/verify-line.ps1` | 全链路只读体检(只查不下发) |
 | `edge/register-mapping.csv` | **17 点位** Modbus 映射(现场实测;电气工程师 xls 为准) |
 | `edge/plc_collector.py` | 真实 PLC 采集器(pymodbus 3.x + `STATE_MAP` + `CMD_DISPATCH` + 字序可配) |
 | `edge/_test_decode.py` | 解码测试(7 读点 + 10 态枚举 + 4 写点地址,双字序) |
@@ -559,3 +681,15 @@ ssh -o ControlMaster=no -o ControlPath=none \
 - SSH 私钥 `agent-claude-line-twin-dev` 位置
 - session 密钥 `SESSION_SECRET`、admin 密码 `ADMIN_PASSWORD`(在 `server/.env`)
 - 本机数据库密码 `postgres123`(在 `server/.env` 的 `DATABASE_URL`)
+
+### 8.1 汇报材料在飞书(不在仓库)
+
+仓库做了"代码最小化",讲解材料只存飞书,链接:
+
+| 文档 | 链接 | 用途 |
+|---|---|---|
+| 《代码讲解》 | https://bcnvmiga7m0x.feishu.cn/wiki/K1ruwhmumiHABTkQqW2cEbw3nTf | 投屏展示用(结构事实) |
+| 《讲稿》 | https://bcnvmiga7m0x.feishu.cn/wiki/VwDawXJURiVEAtkmnvQcFbLdnCg | 演讲者自用(屏幕显示 \| 你说) |
+
+> 写作规范见 `.claude/skills/code-walkthrough-script/SKILL.md`。
+> 代码结构变了要改讲解稿时:**先《代码讲解》后《讲稿》**(见该 SKILL 的「工作顺序(铁律)」)。

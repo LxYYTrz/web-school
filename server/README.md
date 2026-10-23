@@ -94,7 +94,7 @@ npm run start:dev           # tsx watch;如遇问题改用 npm run build && npm 
 
 前置条件：`deploy/` 的基础设施已启动，`edge/` 的 `mock_collector.py` 正在运行。
 
-生产运行：`npm run build && node dist/main.js`（部署手册里用的是这一条）。
+生产运行：`npm run build && node dist/main.js`（现场用的是这一条）。
 
 ---
 
@@ -162,4 +162,4 @@ PLC/机器人 → edge 采集器 →(MQTT publish, TCP 1883/8883)→ EMQX
 - 第 4 步:登录 + JWT;WS 订阅与指令接口的 RBAC / `user_line_scope` 校验(当前均无鉴权,仅联调!)
 - 第 6 步:指令超时器(15s 无 ack → status=timeout)
 - 生产部署:MQTT 走 8883/TLS;CORS 收敛;EMQX 关闭匿名登录
-- `/api/health` 健康检查接口(部署手册要求云端定时探测隧道状态,尚未实现)
+- `/api/health` 健康检查接口(CLAUDE.md §4.5 提到云端定时探测隧道状态,尚未实现)

@@ -85,7 +85,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
   // 8) 监听端口：HTTP REST 与 WebSocket(socket.io) 共用这一个端口
   await app.listen(config.http.port);
-  // 9) 启动成功日志：部署人员看到这行即代表后端已就绪（对应部署手册验收标准）
+  // 9) 启动成功日志：部署人员看到这行即代表后端已就绪（对应 CLAUDE.md §6 验收标准）
   console.log(`[server] HTTP/WebSocket listening on :${config.http.port}`);
 }
 

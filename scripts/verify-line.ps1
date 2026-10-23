@@ -109,7 +109,7 @@ Write-Host ""
 $results | Format-Table -AutoSize | Out-String | Write-Host
 $failed = @($results | Where-Object { $_.结果 -eq 'FAIL' })
 if ($failed.Count -gt 0) {
-    Write-Host "有 $($failed.Count) 项 FAIL —— 对照 docs/deploy-guide.md §4 排查表" -ForegroundColor Red
+    Write-Host "有 $($failed.Count) 项 FAIL —— 对照 CLAUDE.md §4.5 排查表" -ForegroundColor Red
     exit 1
 }
 Write-Host "全部通过 ✅" -ForegroundColor Green

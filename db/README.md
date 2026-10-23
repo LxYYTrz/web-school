@@ -17,7 +17,7 @@
 
 | 场景 | 怎么执行 |
 |---|---|
-| **工控机本地(主场景)** | 把 `db/init/` 下的 `.sql` 按文件名顺序全部跑一遍:`psql -U postgres -d linetwin -f db\init\001_init.sql` …(见 docs/工控机部署手册-U盘版.md 3.2) |
+| **工控机本地(主场景)** | 把 `db/init/` 下的 `.sql` 按文件名顺序全部跑一遍:`psql -U postgres -d linetwin -f db\init\001_init.sql` … |
 | 开发机 compose | 容器首次启动自动执行 `docker-entrypoint-initdb.d/` 下的 `.sql`（按文件名顺序）。**只在空库时执行一次** |
 | 存量环境补执行单个迁移 | `psql -U postgres -d linetwin -f db\init\00X_xxx.sql` |
 

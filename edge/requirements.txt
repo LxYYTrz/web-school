@@ -19,7 +19,7 @@
 #   仓库里带了预下载的 wheel 包：edge/wheels/
 #     paho_mqtt-2.1.0-py3-none-any.whl
 #     pymodbus-*.whl
-#   离线安装命令（见 docs/工控机部署手册-U盘版.md 第 4 节）：
+#   离线安装命令：
 #     python -m pip install --no-index --find-links=edge\wheels paho-mqtt pymodbus
 #   --no-index 表示不联网，直接从本地目录找包。
 # ============================================================================

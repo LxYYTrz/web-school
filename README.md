@@ -218,8 +218,8 @@
 
 | 顺序 | 文件 | 看什么 |
 |---|---|---|
-| 6.1 | `docs/deployment.md` | ★ 拓扑、隧道命令、端口清单、取舍记录 |
-| 6.2 | `docs/deploy-guide.md` | 照做即可的部署手册 |
+| 6.1 | `CLAUDE.md` §2 / §4.4 | ★ 拓扑、隧道命令、端口清单、取舍记录 |
+| 6.2 | `CLAUDE.md` §6 + `scripts/README.md` | 照做即可的部署步骤 |
 | 6.3 | `deploy/docker-compose.ipc.yml` | 工控机跑什么 |
 | 6.4 | `deploy/docker-compose.cloud.yml` | 云端跑什么 |
 | 6.5 | `deploy/nginx/cloud.conf` | ★ 浏览器是怎么访问到工控机后端的 |
@@ -237,7 +237,7 @@
 | `db/` | **数据库结构** | `init/001_init.sql`（DDL+种子）、`init/006_drop_vision.sql`（迁移） |
 | `deploy/` | **部署编排** | 三个 `docker-compose*.yml`（开发/工控机/云端）、`nginx/cloud.conf`（转发配置） |
 | `scripts/` | **一键启动** | `start-local.bat`（本地闭环）、`start-ipc.bat`（工控机+云端） |
-| `docs/` | **文档** | `contract/`（★数据契约）、`deployment.md`（部署方案）、`deploy-guide.md`（部署手册）、`产线数字孪生平台-技术设计文档.md`（设计文档）、`工控机部署手册-U盘版.md`（U 盘人工版） |
+| `docs/` | **文档** | 只剩 `contract/`（★数据契约，三方唯一约定）；架构/部署/运维上下文都在根目录 `CLAUDE.md` |
 
 每个子目录都有**自己的 README.md**，逐个文件说明作用。
 
@@ -276,7 +276,7 @@ cd edge && python mock_collector.py
 cd web && npm run dev
 ```
 
-详见 `docs/deploy-guide.md`（照做即可）与 `docs/工控机部署手册-U盘版.md`（人工版）。
+详见 `CLAUDE.md` §6（现场操作清单）与 `scripts/README.md`。
 
 ---
 
@@ -314,7 +314,7 @@ python mock_collector.py
 6. [x] 控制链路:指令白名单 + 审计 + MQTT 下行 + ack 回执 —— `server/src/command/`
 7. [x] AI 产线助手(hermes agent)—— `server/src/ai/` + `web/src/components/AiDrawer.vue`
 8. [x] 上云:云服务器跑 docker-compose.cloud.yml(只有 Nginx),工控机跑 docker-compose.ipc.yml + 后端 + 采集器
-       + 本机 PostgreSQL,建 SSH 隧道(见 docs/deployment.md);隧道/后端/采集器均已挂开机自启与 5 分钟自愈巡检
+       + 本机 PostgreSQL,建 SSH 隧道(见 CLAUDE.md §4.5);隧道/后端/采集器均已挂开机自启与 5 分钟自愈巡检
        2026-10-23 收敛:云端数据库已删除,数据库只走工控机本地
 9. [x] 到现场:真实 PLC 采集器 `edge/plc_collector.py`(Modbus TCP,11 word 点位表)+ 现场工具脚本
 10. [x] 视觉检测域整体移除(2026-10-22):图片上传链路、视觉页、相机设备、`vision_images` 表

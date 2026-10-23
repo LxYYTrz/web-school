@@ -15,7 +15,7 @@
  *   由 NestJS 的 CommandService.issue() 完成白名单校验、审计落库、MQTT 发布。
  *   也就是说:AI 直控 = 换了一种认证方式,**不是绕过校验的野路子**。
  *   收紧方式:后端 MACHINE_COMMAND_TOKEN 留空 = 整条通道 503 关闭
- *   (MCP 侧没有 token 也会直接拒发)。详见 docs/feishu-hermes.md §6。
+ *   (MCP 侧没有 token 也会直接拒发)。详见 CLAUDE.md §4.7。
  *
  * ⚠️ stdout 是 MCP 的 stdio 传输通道 —— **任何日志都必须走 stderr**,
  *    往 stdout 写一个字节就会污染 JSON-RPC 帧。
@@ -260,7 +260,7 @@ async function proposeAction(lineId, deviceId, type, params, reason) {
 // 【演示阶段的取舍】
 //   网页那条路依然是「人工点确认」;这条机器路是给飞书演示用的直通通道。
 //   收紧方式:后端 MACHINE_COMMAND_TOKEN 留空 = 通道整体关闭(503)。
-//   详见 docs/feishu-hermes.md §6。
+//   详见 CLAUDE.md §4.7。
 
 const MACHINE_TOKEN = process.env.MACHINE_COMMAND_TOKEN || '';
 const API_BASE = (process.env.LINE_TWIN_API_BASE || 'http://127.0.0.1:3000').replace(/\/+$/, '');
