@@ -46,15 +46,10 @@
     </div>
 
     <!--
-      以下字段在契约里保留(只增不改),但现场 11 word 表未提供,
-      edge 输出默认值 0 / 空串,不代表真实测量值。
+      注:契约里的 goodCount / ngCount / beatMs / speedPct 仍保留(只增不改),
+      但现场 PLC 点位表未提供这些实测值,edge 输出默认值 0 —— 展示出来只会
+      误导成"真实计数为 0",故已从面板移除(2026-10-23)。
     -->
-    <div v-if="status" class="stats is-default">
-      <div class="stat"><div class="val ok">{{ status.goodCount }}</div><div class="lbl">良品</div></div>
-      <div class="stat"><div class="val ng">{{ status.ngCount }}</div><div class="lbl">不良</div></div>
-      <div class="stat"><div class="val">{{ (status.beatMs / 1000).toFixed(1) }}s</div><div class="lbl">节拍</div></div>
-      <div class="stat" v-if="robot"><div class="val">{{ robot.speedPct }}%</div><div class="lbl">倍率</div></div>
-    </div>
 
     <div class="meta">
       <span>程序 {{ robot?.program || '—' }}</span>
@@ -184,15 +179,7 @@ const joints = computed<(number | null)[]>(() => {
 .joints .val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent); }
 .joints .lbl { font-size: 9px; color: var(--text-dim); margin-top: 1px; }
 
-/* 数值字段 */
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; padding: 4px 0; }
-.stats .val { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.stats .val.ok  { color: var(--ok); }
-.stats .val.ng  { color: var(--ng); }
-.stats .lbl { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
-
-/* 未接现场点位的字段:整块淡化,提示这不是实测值 */
-.stats.is-default { opacity: 0.45; }
+/* 数值字段样式已随 良品/不良/节拍/倍率 一同移除 */
 
 .meta {
   margin-top: 8px; padding-top: 6px;

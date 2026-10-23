@@ -96,6 +96,13 @@
 `speedPct`(0)/ `robot.mode`('manual')/ `alarmCode`(0)/ `tcp`(null)/
 `program`('')/ `productCode`('')/ `goodCount`(0)/ `ngCount`(0)/ `beatMs`(0)
 
+> **2026-10-23**:孪生页 `IoPanel` 里那行「良品 / 不良 / 节拍 / 倍率」数值已**移除**。
+> 原因:这 4 个字段现场 PLC 点位表根本没提供,edge 恒输出默认值 0,
+> 摆出来会被误读成"真实计数是 0"(良品率 100%、节拍 0 秒),属于假数据。
+> 契约字段本身仍保留(只增不改),将来 PLC 补点位后可以再展示。
+> 同理 `robot.mode` / `alarmCode` / `program` / `productCode` 目前也是默认值,
+> 需要时同样应考虑隐藏而非展示假值。
+
 - **`edge/plc_collector.py`**:pymodbus 3.x(`slave=` → `device_id=`,3.10 强制);
   `PLC_WORD_ORDER` 环境变量(BIG 默认 / LITTLE);
   `STATE_MAP` 负责 PLC 整数 → 契约字符串;`io_payload()` 组 IO 报文;
