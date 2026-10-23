@@ -21,7 +21,6 @@ param(
     [string]$KeyPath = "$env:USERPROFILE\.ssh\id_ed25519",
     [string]$RemoteBind = '172.18.0.1:3300',
     [int]$LocalBackendPort = 3000,
-    [int]$RemoteDbPort = 5432,
     [int]$IntervalSec = 30,
     [switch]$InstallTask,
     [switch]$UninstallTask,
@@ -58,7 +57,7 @@ function Start-Tunnel {
         '-o', 'StrictHostKeyChecking=accept-new',
         '-i', $KeyPath,
         '-R', "${RemoteBind}:127.0.0.1:${LocalBackendPort}",
-        '-L', "${RemoteDbPort}:127.0.0.1:${RemoteDbPort}",
+        # ★ 数据库只走本地(2026-10-23 云端库下线),不再建立 -L 5432 的数据库方向转发
         "${CloudUser}@${CloudHost}"
     )
     Write-Log "拉起隧道: ssh $($args -join ' ')"

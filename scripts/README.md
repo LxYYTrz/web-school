@@ -31,7 +31,7 @@
 按依赖顺序拉起并在结束时自检：
 
 1. Docker Desktop → `docker compose -f deploy/docker-compose.ipc.yml up -d`（EMQX/Redis）
-2. **SSH 反向隧道**（后端要用经 `-L 5432` 的云端库，所以必须先于后端）
+2. **SSH 反向隧道**（后端经 `-R 172.18.0.1:3300` 连云端转发，所以必须先于后端）
 3. 后端 `node server/dist/main.js`（dist 缺失会先 `npm run build`）
 4. 采集器 `python edge/plc_collector.py`
 5. 调 `verify-line.ps1` 输出体检表
@@ -102,7 +102,8 @@ python edge/plc_read_state.py
   lt-middleware  EMQX + Redis（Docker）
   lt-backend     后端
   lt-collector   采集器（现场=plc_collector）
-  lt-tunnel      SSH 双隧道  ★ 这个窗口绝对不能关
+  lt-tunnel      SSH 隧道（云端 3300 → 工控机 3000）  ★ 这个窗口绝对不能关
+                 （数据库只走本地，2026-10-23 起不再有数据库方向的隧道）
 ```
 
 **使用前必须修改**脚本顶部的两个变量：

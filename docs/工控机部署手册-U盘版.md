@@ -138,16 +138,23 @@
 
 ### 3.2 初始化数据库
 
+数据库在**本机**(PostgreSQL 16 + TimescaleDB),云端不存数据。
+
 管理员 cmd 逐条执行:
 
 ```bat
 set PGPASSWORD=postgres123
-"C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -c "CREATE DATABASE linetwin;"
-"C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -d linetwin -f "D:\line-twin\db\init\001_init.sql"
-"C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -d linetwin -c "SELECT code FROM production_lines;"
+set PSQL="C:\Program Files\PostgreSQL\16\bin\psql.exe"
+%PSQL% -U postgres -c "CREATE DATABASE linetwin;"
+:: 按文件名顺序把 db\init\ 下所有 .sql 跑一遍(001 建表 → 002~006 迁移)
+for %%F in (D:\line-twin\db\init\*.sql) do %PSQL% -U postgres -d linetwin -f "%%F"
+%PSQL% -U postgres -d linetwin -c "SELECT code FROM production_lines;"
 ```
 
 **验收**:无 `ERROR` 字样;最后一条查询显示 `line-01`
+
+> ⚠ 上面的 for 循环是**全新安装**用的(空库)。存量库已经有表了,重跑 001 会报
+> "relation already exists" —— 存量库只补跑缺失的迁移文件(002~006)即可。
 
 ---
 

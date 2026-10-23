@@ -40,12 +40,13 @@ rem   -N                     不执行远程命令，只做端口转发
 rem   -o ServerAliveInterval=15  每 15 秒发一次保活包
 rem   -o ServerAliveCountMax=3    连续 3 次没回应就断开（触发重连）
 rem   -o ExitOnForwardFailure=yes 端口转发失败就直接退出（避免"假活"隧道）
-rem   -R 172.18.0.1:3300:127.0.0.1:3000 云端 172.18.0.1:3300 → 工控机 3000（Web 流量）
+rem   -R 172.18.0.1:3300:127.0.0.1:3000 云端 3300 → 工控机 3000（后端/网站转发）
 rem     ⚠️ 必须绑 172.18.0.1（云端宿主机的 docker0 网关）：nginx 跑在容器里，
 rem        容器内的 127.0.0.1 是容器自己，连不到宿主的 ssh -R 监听 → 公网 /api 全 502。
-rem   -L 5432:127.0.0.1:5432 工控机 5432 → 云端 5432（数据库）
+rem   ★ 数据库在工控机本地（2026-10-23 起云端库已下线），不需要数据库方向的转发，
+rem     故不再带 -L 5432:127.0.0.1:5432。
 echo [4/4] 建立 SSH 隧道(此窗口不能关)...
-start "lt-tunnel" cmd /k "ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 172.18.0.1:3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 %CLOUD_USER%@%CLOUD_HOST%"
+start "lt-tunnel" cmd /k "ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 172.18.0.1:3300:127.0.0.1:3000 %CLOUD_USER%@%CLOUD_HOST%"
 
 rem ---- 推荐改用 PowerShell 脚本（幂等 / 后台 / 带体检）----
 rem   scripts\ipc-recover.ps1                一键拉起中间件+隧道+后端+采集器并自检

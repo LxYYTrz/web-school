@@ -31,12 +31,13 @@
 
 ```
 ┌───────────────┐  局域网   ┌──────────────────────────────────────┐   SSH    ┌──────────────┐
-│  机器人 / PLC │ ────────▶ │ 工控机（Windows, 高配）              │  双隧道   │ 云服务器      │
+│  机器人 / PLC │ ────────▶ │ 工控机（Windows, 高配）              │   隧道   │ 云服务器      │
 │               │  Modbus   │                                      │ ────────▶ │ (Linux,低配) │
 │  现场设备      │  OPC UA   │  ★ edge 采集器（Python）             │  Web 流量  │              │
-│               │  S7       │  ★ EMQX Broker（本机 MQTT）          │ ← 数据库 →│ ★ Nginx      │
+│               │  S7       │  ★ EMQX Broker（本机 MQTT）          │           │ ★ Nginx      │
 │               │           │  ★ NestJS 后端 :3000 ★全部数据处理   │           │   前端 dist  │
-│               │           │  ★ Redis（本机快照缓存）              │           │ ★ PostgreSQL │
+│               │           │  ★ Redis（本机快照缓存）              │           │              │
+│               │           │  ★ PostgreSQL（历史数据,本机）        │           │              │
 │               │           └──────────────────────────────────────┘           └──────────────┘
 └───────────────┘                                                     ↑                    │
                                                                           浏览器只跟云服务器说话 ↓
@@ -44,8 +45,8 @@
 
 | 机器 | 跑什么 | 特点 |
 |---|---|---|
-| **云服务器**（低配 Linux） | Nginx（静态前端 + 纯转发）+ PostgreSQL/TimescaleDB | **零业务逻辑**；只对公网开 80/443/22 |
-| **工控机**（高配 Windows） | 采集器 + EMQX + NestJS 后端 + Redis | **所有数据处理都在这里**；断外网时产线照常运行 |
+| **云服务器**（低配 Linux） | Nginx（静态前端 + 纯转发） | **零业务逻辑、不存数据**；只对公网开 80/443/22 |
+| **工控机**（高配 Windows） | 采集器 + EMQX + NestJS 后端 + Redis + PostgreSQL | **所有数据处理和存储都在这里**；断外网时产线照常运行 |
 | **开发机** | 构建前端、跑开发版 | 只负责 `npm run build` 出 `dist/` |
 
 ### 1.3 三条核心设计原则
@@ -147,7 +148,7 @@
 1. **开发期**：Vite 代理 —— `vite.config.ts` 把 `/api` 与 `/socket.io` 转发到 `localhost:3000`，
    浏览器只跟 5173 说话 → 天然同源，无跨域。
 2. **生产期**：Nginx 同源反代 —— `deploy/nginx/cloud.conf` 把 `/api/`、`/socket.io/`
-   转发到 SSH 隧道入口 `127.0.0.1:3300` → 浏览器只跟云服务器说话 → 依然同源。
+   转发到 SSH 隧道入口 `172.18.0.1:3300` → 浏览器只跟云服务器说话 → 依然同源。
 3. **消息名对齐**（前后端必须一致）：
 
 | 服务端 emit | 前端监听 | 频率 |
@@ -256,7 +257,7 @@ cd server && node dist\main.js
 cd edge && python mock_collector.py
 # 隧道（★ 做成开机自启服务，断了网站就不可访问）
 ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes \
-    -R 3300:127.0.0.1:3000 -L 5432:127.0.0.1:5432 linetwin@云服务器IP
+    -R 172.18.0.1:3300:127.0.0.1:3000 linetwin@云服务器IP
 ```
 
 ### 5.2 本地闭环（工控机 U 盘部署包）
@@ -312,8 +313,9 @@ python mock_collector.py
 5. [x] 产线 IO 只读信号(契约 v1.3 §3.8,DB3 word 11~16)—— `web/src/views/IoView.vue` + `IoPanel.vue`
 6. [x] 控制链路:指令白名单 + 审计 + MQTT 下行 + ack 回执 —— `server/src/command/`
 7. [x] AI 产线助手(hermes agent)—— `server/src/ai/` + `web/src/components/AiDrawer.vue`
-8. [x] 上云:云服务器跑 docker-compose.cloud.yml(Nginx + 数据库),工控机跑 docker-compose.ipc.yml + 后端 + 采集器,
-       建 SSH 双隧道(见 docs/deployment.md);隧道/后端/采集器均已挂开机自启与 5 分钟自愈巡检
+8. [x] 上云:云服务器跑 docker-compose.cloud.yml(只有 Nginx),工控机跑 docker-compose.ipc.yml + 后端 + 采集器
+       + 本机 PostgreSQL,建 SSH 隧道(见 docs/deployment.md);隧道/后端/采集器均已挂开机自启与 5 分钟自愈巡检
+       2026-10-23 收敛:云端数据库已删除,数据库只走工控机本地
 9. [x] 到现场:真实 PLC 采集器 `edge/plc_collector.py`(Modbus TCP,11 word 点位表)+ 现场工具脚本
 10. [x] 视觉检测域整体移除(2026-10-22):图片上传链路、视觉页、相机设备、`vision_images` 表
        与相关权限全部删除;存量库执行 `db/init/006_drop_vision.sql` 即可对齐

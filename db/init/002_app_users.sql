@@ -1,22 +1,132 @@
--- =============================================================
--- 002_app_users.sql
--- 应用层账号表(与 linetwin 业务数据隔离;放独立 schema)
--- 密码:bcryptjs hash($2a$10$...);level:1=普通 2=二级 3=管理员
--- 三级权限规则严格对照 origin/1.0.1 的 userServer/main.py
--- 详见 server/src/users/users.service.ts 与 docs/deployment.md
--- =============================================================
+-- ============================================================================
+-- 002_app_users.sql —— 应用层账号表（app.app_users）：能登录这个系统的人
+-- 所属目录：db/init/（产线数字孪生平台 · 数据层）
+-- ============================================================================
+--
+-- 【文件作用】
+--   给"登录账号"单独准备一小块表，放在数据库自己的 app schema 里，
+--   与产线业务数据（public schema）物理隔开。本文件建 1 个 schema + 1 张表
+--   + 1 个索引。
+--
+-- 【为什么要单独隔一个 schema】
+--   登录账号是**安全边界**，产线业务数据是**业务内容**，两者生命周期完全不同：
+--     · 业务表会随需求反复改结构（002~006 就是证据）
+--     · 账号表应该稳，不该跟着业务需求抖
+--   分开放的好处：即使某次业务表重建、或者业务数据被清空、被误删，
+--   登录体系完全不受影响——还能登进去把数据捞回来。
+--   PostgreSQL 的 schema 是数据库原生的命名空间，权限也能按 schema 单独授，
+--   将来要让某个角色只碰 app schema 是很自然的事。
+--
+-- 【在数据流中的位置】
+--   浏览器 ──POST /api/auth/login──▶ server/src/auth/auth.service.ts
+--                                        └─▶ 查 app.app_users，比对 bcrypt
+--   校验通过后把 {username, level} 写进 cookie-session；
+--   后续请求由 AuthGuard 校验 session，接口里用 @CurrentUser() 取当前用户。
+--
+-- 【谁执行 / 什么时候执行】
+--   1. 全新部署：容器首次启动时按文件名字典序自动执行（001 → 002 → 003 → …）。
+--   2. 存量库补执行：
+--        psql -U postgres -d linetwin -f db\init\002_app_users.sql
+--
+-- 【幂等性】
+--   本脚本**幂等**：建 schema / 建表 / 建索引都带 IF NOT EXISTS，
+--   重复执行安全，不会报"已存在"。
+--
+-- 【与 public.users 的关系（★ 容易误解，务必分清）】
+--   系统里有**两张用户表**，各管各的，不是重复建设：
+--     · public.users（001 建）  完整的权限模型：角色、权限点、权限矩阵、数据权限。
+--                               它是"组织与授权"的那一套，谁有什么角色和权限看它。
+--     · app.app_users（本文件）  当前登录链路**实际在用**的那张：
+--                               只有账号名、密码散列、权限等级三样。
+--   两者靠**用户名**对齐：command.service.ts 的 resolveUserId()
+--   用 session 里的用户名去 public.users 查 id，作为 control_commands.user_id。
+--   这是项目从原始版本（origin/1.0.1 的 userServer/main.py）演进过来的痕迹，
+--   不是设计缺陷 —— 讲解时如被问到，可以如实说明。
+--
+-- 【三级权限规则】
+--   level 严格对照 origin/1.0.1 的 userServer/main.py：
+--     1 = 普通用户  2 = 二级用户  3 = 管理员
+--   规则要点（代码见 server/src/users/users.service.ts）：
+--     · 只有 level=3 能建号、删号、改别人的等级
+--     · 改自己的密码谁都能做；改别人的密码按等级判定
+--     · 管理员不能删自己（防止把最后一个管理账号删掉，系统没人能管了）
+--
+-- 【本文件用到的 SQL 关键字】
+--   CREATE SCHEMA    建命名空间（表、函数、权限都可以按 schema 隔离）
+--   IF NOT EXISTS   已存在就跳过，不报错（幂等的关键）
+--   CREATE TABLE    建表
+--   TEXT            变长字符串
+--   SMALLINT        16 位整数（-32768~32767，三级权限够用）
+--   TIMESTAMPTZ     带时区的时间戳
+--   PRIMARY KEY     主键：唯一 + 非空 + 自动建索引
+--   NOT NULL        不允许为 NULL
+--   DEFAULT         插入时若不指定就取这个值
+--   CHECK           行级校验，写不进表
+--   CREATE INDEX    建普通索引
+--   ON              索引里指定排序列与排序方向（DESC = 倒序）
+-- ============================================================================
+--
+-- 【契约与来源】
+--   应用层账号表（与 linetwin 业务数据隔离；放独立 schema）。
+--   密码：bcryptjs hash($2a$10$...)；level：1=普通 2=二级 3=管理员。
+--   三级权限规则严格对照 origin/1.0.1 的 userServer/main.py，
+--   详见 server/src/users/users.service.ts 与 docs/deployment.md。
+--   ★ 不预置默认账号；首次启动时由 server（UsersBootstrapService）在空表时
+--     自动插入 username=admin(level=3)，初始密码取自环境变量 ADMIN_PASSWORD（默认 admin123）。
+--     生产部署后必须立即通过用户管理页修改默认密码。
+
+-- 独立 schema：与 public 里的业务表物理隔开。
+--   CREATE SCHEMA = 建命名空间
+--   IF NOT EXISTS = 已存在就跳过（幂等）
 CREATE SCHEMA IF NOT EXISTS app;
 
+-- 账号表：当前登录链路真正使用的用户表。
+--   只有三样东西：账号名、密码散列、权限等级 —— 够用且不含多余信息。
+--   app.app_users = schema 名 . 表名（跨 schema 引用就是这么写）
 CREATE TABLE IF NOT EXISTS app.app_users (
   username   TEXT PRIMARY KEY,
-  password   TEXT NOT NULL,                      -- bcryptjs 哈希串
+             -- TEXT = 变长字符串
+             -- PRIMARY KEY = 主键：唯一 + 非空 + 自动建索引
+             -- ★ 直接做主键（不另设 id）：登录就是按名字查，
+             --   没有"先查 id 再查别的"这一步，也就不存在 id 冲突问题
+  password   TEXT NOT NULL,
+             -- TEXT = 口令散列串
+             -- NOT NULL = 必填：没有散列就没法校验
+             -- 内容形如 $2a$10$... ：$2a$ 是 bcrypt 算法标识，10 是 cost（计算强度）。
+             -- ★ 库里存的是散列不是明文。bcrypt 自带盐，相同口令两次散列也不同，
+             --   所以这里不需要另存 salt 列。
+             -- ★ 注意生成方是 bcryptjs（Node 侧），与 001 里 pgcrypto 的 crypt()
+             --   不是同一种格式——那张表是给 public.users 用的，两套不要混用。
   level      SMALLINT NOT NULL CHECK (level IN (1, 2, 3)),
+             -- SMALLINT = 16 位整数（够放 1/2/3，还省内存）
+             -- NOT NULL = 必填
+             -- CHECK = 权限等级写死在数据库层：代码里万一漏了校验，
+             --   也写不进第 4 种等级
+             -- 取值：1 = 普通用户，2 = 二级用户，3 = 管理员
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+             -- TIMESTAMPTZ = 带时区的时间戳
+             -- NOT NULL = 必填
+             -- DEFAULT now() = 插入时自动取数据库当前时间
+             --   （取库的时间，不依赖应用服务器时钟）
+             -- 用途：查"这个账号什么时候建的"
 );
 
+-- 索引：按等级排序查（用户管理页默认按 level DESC, username 排）。
+--   CREATE INDEX = 建普通索引
+--   IF NOT EXISTS = 已存在就跳过（幂等）
+--   ON app.app_users(level) = 索引建在 app schema 的这张表上，索引这一列
+--   等级取值只有 3 种、区分度低，索引收益有限，这里建它主要是为了
+--   "列出所有管理员"这类查询不必走全表扫。
 CREATE INDEX IF NOT EXISTS app_users_level_idx
   ON app.app_users(level);
 
--- 不预置默认账号;首次启动时由 server(UsersBootstrapService)在空表时
--- 自动插入 username=admin(level=3),初始密码取自环境变量 ADMIN_PASSWORD(默认 admin123)。
--- 生产部署后必须立即通过用户管理页修改默认密码。
+-- ★ 不预置任何默认账号。
+--   001 里那个 admin/Admin@123 是给 public.users 用的，**不是**给登录用的。
+--   登录账号的首次创建由后端负责：
+--     server/src/auth/users-bootstrap.service.ts
+--       ① 启动时查 app.app_users 是否为空
+--       ② 空表且环境变量 ADMIN_PASSWORD 已配置 → 自动插入 username=admin、level=3
+--       ③ 未配置 ADMIN_PASSWORD → 只打一条 WARN，跳过，提示手动创建首个管理员
+--   这样做的意义：生产环境的初始口令来自部署配置，不写死在代码里，
+--   也就不会出现"所有人用的都是同一个默认密码"的情况。
+--   ⚠ 生产部署后必须立刻在用户管理页改掉初始口令。

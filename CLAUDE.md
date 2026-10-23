@@ -22,7 +22,8 @@
 - [x] 8 到现场 —— **PLC 已真实连通**,17 word 点位表落地(11→17 于 2026-10-16),
       10 态 state + 6 个产线 IO 只读点流通到公网
 
-> **当前唯一未验证项**:控制指令从未真正写过 PLC 寄存器(不可逆动作,须人工在产线旁执行)。
+> **当前唯一未验证项**:控制指令的 **PLC 侧物理动作**是否与回执一致
+> (回执 acked 说明写寄存器成功了,但传送带是否真转、停止是否真停要人看一眼)。
 > 详见 §5.2。
 
 ## 2. 架构(铁律)
@@ -30,14 +31,18 @@
 ```
 产线设备(机器人 / PLC)
     │ 产线局域网
-工控机(高配 Windows): EMQX + Redis + NestJS 后端 + edge 采集器
-    │ SSH 双隧道(工控机主动外连;工厂防火墙零配置)
-云服务器(低配 Linux): Nginx 静态前端 + PostgreSQL/TimescaleDB + 纯转发
+工控机(高配 Windows): EMQX + Redis + PostgreSQL/TimescaleDB + NestJS 后端 + edge 采集器
+    │ SSH 反向隧道(工控机主动外连;工厂防火墙零配置)
+云服务器(低配 Linux): Nginx 静态前端 + 纯转发
     │ HTTPS
 浏览器(Vue3 + Three.js)
 ```
 
-**关键**:云服务器**只做**展示 + 数据库 + 纯转发,**全部数据处理在工控机**。契约层(见 §3)保证换设备不动云端代码。
+**关键**:云服务器**只做**展示 + 纯转发,**全部数据处理和数据存储都在工控机**。
+契约层(见 §3)保证换设备不动云端代码。
+
+> **2026-10-23 决策**:数据库**只走本地**。云端的 PostgreSQL 容器(`lt-cloud-db`)
+> 已删除,云端不再有数据库端口,隧道也只挂一条 `-R 3300` 转发。
 
 详细架构与部署:`docs/deployment.md`
 
@@ -150,8 +155,9 @@
 
 - 云服务器:`119.91.145.27`(OpenClaw 龙芯,腾讯云轻量云,VM-0-3-ubuntu)
 - 公网入口:`http://119.91.145.27:8081/`(8081 是因为 DSH caddy 占 80)
-- 容器:`lt-cloud-nginx`(nginx:1.27-alpine)+ `lt-cloud-db`(timescale/timescaledb:latest-pg16)
-- 部署位置:`/opt/line-twin/`(`deploy/` + `db/` + `dist/`)
+- 容器:**只有 `lt-cloud-nginx`**(nginx:1.27-alpine)。
+  ★ 云端数据库容器 `lt-cloud-db` 已于 2026-10-23 删除(数据库只走本地,见 §2)
+- 部署位置:`/opt/line-twin/`(`deploy/` + `dist/`)
 - **腾讯云安全组**已加 8081 端口规则(自定义 / TCP / 8081 / 0.0.0.0/0 / 允许 / 备注:line-twin nginx)
 - 实战部署过程、踩坑:`docs/deployment.md` §7
 - **2026-10-15 补充**:sshd 已设 `GatewayPorts clientspecified`,
@@ -162,8 +168,9 @@
 工控机**主动**建隧道(**工厂防火墙零配置**):
 
 ```bash
+# 只有一条转发:云端 3300 → 工控机 3000(网站流量)
 ssh -N -R 172.18.0.1:3300:127.0.0.1:3000 \
-    -i ~/.ssh/agent-claude-line-twin-dev \
+    -i C:\ProgramData\line-twin\tunnel_ed25519 \
     -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
     -o ExitOnForwardFailure=yes \
     -o ControlMaster=no -o ControlPath=none \
@@ -182,9 +189,20 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 
 注意:宿主机上 `curl 127.0.0.1:3300` 会失败(HTTP 000),这是**正常的** —— 只绑了网桥。
 
-- `-L` DB 那条暂未建(用户决定暂不接云端 DB)
+- **数据库只走本地(2026-10-23)**:工控机自己的 PostgreSQL 16 + TimescaleDB(:5432),
+  历史数据和业务表都在本机。**云端没有数据库,隧道也没有数据库方向的转发。**
 - **必须用密钥**(免密)+ `ControlMaster=no`(否则复用 socket 导致 hang)
 - **隧道断 = 网站不可访问**(架构唯一单点),需做成开机自启 + 断线重连(见 §5.2)
+- ⚠️ **隧道密钥是 SYSTEM 属主的专用密钥**
+  `C:\ProgramData\line-twin\tunnel_ed25519` —— OpenSSH 要求「私钥属主 == 运行身份」,
+  所以 **Administrator 身份用不了它**(别去改它的 ACL)。巡检脚本跑在 SYSTEM 上下文。
+- ⚠️ **巡检的健康检查不用 ssh 探测(2026-10-23 改)**:实测 `ssh.exe` 在 SYSTEM 身份下
+  **会间歇性卡死**(打印了版本/跑完命令都不退出,同一台机器用 Administrator 完全正常),
+  靠 ssh 探测会把好端端的隧道误杀、或者隧道真断了不自愈。改成**端到端实测**:
+  ① 隧道进程在 ② 公网 `http://119.91.145.27:8081/api/auth/me` 有 HTTP 响应
+  (走完「公网 → 云 nginx → 隧道 → 工控机后端」,证明 -R 那半边真的通)。
+  两项全过才算健康,否则才重建。
+
 
 ### 4.6 控制链路(路线 6,2026-10-15 拍板 + 现场点位落地)
 
@@ -242,9 +260,73 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 - **params 枚举校验**:后端 `command.service.ts` 的 `PARAM_ENUMS` 拦非法值,
   非法请求根本不会 publish 到 MQTT,PLC 不会被写。
 
+### 4.7 飞书通道(hermes ↔ 飞书,2026-10-23 落地)
+
+- **飞书是 hermes 自带的插件**,不是 line-twin 的模块。line-twin 侧只提供了
+  MCP 工具与一个「机器通道」HTTP 端点,其余都是 hermes 的事。
+- **两条并行入口,同一个 agent**:
+  - 网页 AI 抽屉 → `server/src/ai/` → hermes `api_server`(127.0.0.1:8642)
+  - 飞书私聊/群 @ → hermes `feishu` 适配器 → 同一个 agent + 同一套 MCP 工具
+- **连接方式:WebSocket 长连接**(工控机主动外连,不需要公网地址/端口映射,
+  工厂防火墙零配置,与 §4.5 SSH 隧道同一思路)。
+- **飞书应用是扫码自动建的**(hermes 官方 device-code 流程),凭据在
+  `C:\Users\Administrator\AppData\Local\hermes\.env` 的 `FEISHU_*`。
+- **飞书通道支持直控产线(演示阶段)** —— MCP 新增 `run_operation` /
+  `execute_action`,「传送带启动」= 停止 → 等 stopped → 获取手动 → 等
+  manual_mode → 传送带正转(PLC 联锁规定只有手动模式能动传送带,顺序写死在
+  工具里,不指望模型记住)。走的是新的机器通道端点:
+  `POST /api/machine/commands`(header `x-machine-token`)。
+  - ★ **MCP 里没有 MQTT 客户端、没有 Modbus 代码**。直控 = 换了一种认证方式
+    (机器令牌),**不是绕过校验的野路子**:白名单/枚举/审计/MQTT 仍然只有
+    `CommandService.issue()` 这一份实现。
+  - ★ **网页通道不受影响**:仍走 `propose_action` + 人工点确认;
+    `ai.service.ts` 的 system prompt 显式禁用直控工具。
+  - ★ **投产前必须关掉**:`server/.env` 的 `MACHINE_COMMAND_TOKEN` 留空
+    = 整条通道 503。
+- **gateway 必须常驻**:飞书通道和网页 AI 抽屉都靠它。
+  已注册 Windows 计划任务 `Hermes_Gateway` 开机自启;
+  `hermes gateway status` 看连通(`gateway_state.json` 里 `platforms.feishu.state=connected`)。
+- ⚠️ **本次发现的老问题**:hermes gateway 之前**根本没在跑**(陈旧状态文件,
+  8642 没监听),所以网页 AI 抽屉一直是 503。已随本次修复。
+- ⚠️ **本次发现的老问题 2**:**两个 PLC 采集器在互相踢 MQTT**(见 §4.8),
+  导致「上行状态偶尔上得来、下行指令一条也收不到」,AI 下的指令永远 timeout。
+- 完整运维手册(装法、命令、访问控制、踩坑、依赖清单、实测记录):
+  **`docs/feishu-hermes.md`**
+
+### 4.8 采集器单实例(2026-10-23 修)
+
+- **PLC 的 MB_SERVER 只接受 1 条 Modbus TCP 连接** —— 第二个采集器永远连不上。
+- 更隐蔽的坑:两个采集器用**同一个 MQTT client_id**,会在 Broker 上**互相踢下线**,
+  表现是「状态偶尔能上、下行指令一条收不到」。现场排查了半天才定位。
+- 现在有**三道防线**:
+  1. `edge/plc_collector.py` 加**单实例文件锁**(`edge/.plc_collector.lock`),
+     拿不到锁直接退出,不去抢 PLC 也不去踢 MQTT;
+  2. client_id 带 PID(`plc-edge-{line}-{pid}`),万一有两个也不会互踢;
+  3. `ensure_collector.ps1` 加**互斥锁**,把「检查有没有采集器 + 启动采集器」
+     变成原子动作(boot/logon/watchdog 三个计划任务会在同一秒触发,
+     2026-10-23 就是这么起了两个)。
+- ⚠️ `register-mapping.csv` 现在是 **13 读点位 + 4 写点位**(日志实测),
+  与 §4.1 的 17 点位表对不上 —— 现场点位表有过改动,**以 CSV 实际内容为准**。
+
 ## 5. 已就位 / 待办
 
 ### 5.1 已完成 ✅
+
+**2026-10-23 本轮(飞书通道 + 直控)**
+
+- ✅ **hermes ↔ 飞书打通** —— 扫码自动创建飞书机器人应用,WebSocket 长连接,
+  gateway 实测 `feishu: connected`,`hermes send` 出站验证成功
+- ✅ **飞书直控产线(演示阶段)** —— 新增 `run_operation` / `execute_action`
+  两个 MCP 工具 + 后端 `POST /api/machine/commands` 机器通道;
+  实测「传送带启动」三步(停止→获取手动→正转)全部 acked,测试后产线已恢复原状
+- ✅ **网页通道护栏没被绕过** —— 同样问「传送带启动」,网页 AI 只提建议,
+  新增指令数 = 0
+- ✅ **修掉采集器互踢的老 bug** —— 单实例文件锁 + client_id 带 PID +
+  启动脚本互斥锁;之前两个采集器把下行指令全吞了
+- ✅ **hermes gateway 恢复常驻** —— 注册 Windows 计划任务 `Hermes_Gateway` 开机自启;
+  修复了「状态文件显示 running 但进程早没了」的假象(网页 AI 抽屉此前一直 503)
+- ✅ **飞书依赖补齐** —— `lark-oapi 1.6.8` + `qrcode 7.4.2` 装进 hermes 运行时 venv
+  (`pm install --extra feishu` 只下到 uv cache,不落到 venv,必须手动 `uv pip install`)
 
 **2026-10-23 本轮(公网 502 事故复盘 + 恢复脚本)**
 
@@ -293,7 +375,7 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
 **此前已完成**
 
 - RBAC 后端 + 前端 + 路由守卫 + 角色菜单 + 用户管理页,端到端验证通过
-- 云端部署(`lt-cloud-nginx` :8081 + `lt-cloud-db`)
+- 云端部署(`lt-cloud-nginx` :8081,**只有 Nginx**)
 - 控制链路代码骨架(CommandGuard level>=2 / audit_logs / 15s 超时 / WS cmd_ack)
 - 前端 IoPanel + ControlButtons(确认弹窗 + ack 状态机)
 
@@ -304,23 +386,26 @@ nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器
       再 `scripts\tunnel-keepalive.ps1 -InstallTask` 装开机自启;
       最后 `scripts\verify-line.ps1` 必须全绿(公网 `/api` 200 + PLC 状态读得到)。
       恢复不了 → 控制指令验证没法做(前端要连后端)。
-- [ ] **控制指令真实下发验证(唯一剩下的硬骨头)** —— 代码路径已通、参数已校验、
-      但**从未真正写过一次 PLC 寄存器**。这类动作不可逆(会启动产线/转传送带),
-      必须**由人在产线旁盯着再点**。建议顺序:
-  0. 先跑 `python edge/plc_read_state.py` 确认产线是 `stopped(101)`(不是就停线,别硬点)
-  1. 确认产线处于 `stopped(101)` 状态
-  2. 点「获取手动模式」→ TIA 里看 `dataDB[8]` 是否出现 1 然后被采集器回写成 0(脉冲)
-  3. 手动模式下点「传送带正转」→ TIA 里看 `dataDB[10]` 是否变成 1 并**保持**(电平)
-  4. 点「传送带停止」→ 确认 `dataDB[10]` 回 0
-  5. 手动模式下点「启动」→ 确认 `dataDB[9]` 脉冲 + 产线状态跳到 0(等待入料)
+- [ ] **收紧飞书访问控制 + 关掉直控通道** —— 当前 `FEISHU_ALLOW_ALL_USERS=true`
+      (任何人可私聊 hermes)且 `MACHINE_COMMAND_TOKEN` 非空(任何人可让产线动起来)。
+      投产前:飞书改白名单/配对审批,`server/.env` 的 `MACHINE_COMMAND_TOKEN` 留空
+      (见 `docs/feishu-hermes.md` §6)
+- [x] **控制指令真实下发验证** —— **已完成,证据在库里**:
+      `control_commands` 里 2026-10-22 有 12 条 `acked`
+      (start / stop / mode_set acquire|release / conveyor forward|stop),
+      2026-10-23 飞书直控又跑了完整三步(停止→获取手动→传送带正转),全部 acked。
+      当时写的"从未真正写过 PLC 寄存器"已经不成立,PLC 侧动作需人工复核是否
+      与产线实际动作一致(传送带正转是否真的转、停止信号是否真的停)。
 - [ ] **机器人动起来后验证 3D 孪生** —— 2026-10-23 从公网快照看到 joints 已非零
       (`[86.7, 2.4, -65.9, 21, -90, 87]`,mode=manual),说明**机器人其实在动**;
-      恢复链路后直接开孪生页目检摆动是否同步
-- [ ] **云端 DB 分层**(用户已决定暂不接)—— 历史数据目前仍写本机 PG。
-      若要上云:`-L 15432:127.0.0.1:5432` 避开本机 PG 占的 5432,
-      后端 `DATABASE_URL` 指向 15432,密码取云端 `/opt/line-twin/deploy/.env`
-- [ ] **隧道做成开机自启** —— 脚本已就绪(`scripts/tunnel-keepalive.ps1 -InstallTask`),
-      **但还没在工控机上装**;装完这条就销掉
+      但公共机侧快照又读到 `joints` 全 0(静止或未接入)—— 两次观测不一致,
+      需恢复链路后开孪生页目检摆动是否同步
+- [x] **隧道做成开机自启** —— 已完成:计划任务 `line-twin-tunnel-{boot,logon,watchdog}`
+      以 SYSTEM 身份跑 `ensure_tunnel.ps1`,已做互斥锁 + 端到端实测自愈
+      (见 §4.5);开发机侧另有 `scripts/tunnel-keepalive.ps1 -InstallTask` 可交叉验证
+- [ ] **本机数据库备份** —— 数据只存在工控机这一台机器上了(云端库已删),
+      必须配 `pg_dump` 定期备份(备份文件再同步到云端/离线盘)。
+      当前 `server/.env` 的 `DATABASE_URL` 是 `postgres://postgres:postgres123@localhost:5432/linetwin`
 - [ ] **生产安全收尾** —— `server/.env` 的 `ADMIN_PASSWORD=admin123` 和
       `SESSION_SECRET` 必须改;Mosquitto 目前 `allow_anonymous true` 且只监听回环,
       若要厂区多机访问需配密码文件;
@@ -401,6 +486,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | 路径 | 作用 |
 |---|---|
 | `docs/contract/README.md` | **数据契约 v1.3**(边缘/后端/前端唯一约定) |
+| `docs/feishu-hermes.md` | **hermes ↔ 飞书通道运维手册**(凭据位置、命令、访问控制、踩坑) |
 | `docs/deployment.md` | 架构 + 实战部署记录(踩坑 + 验证清单) |
 | `edge/register-mapping.csv` | **17 点位** Modbus 映射(现场实测;电气工程师 xls 为准) |
 | `edge/plc_collector.py` | 真实 PLC 采集器(pymodbus 3.x + `STATE_MAP` + `CMD_DISPATCH` + 字序可配) |
@@ -426,7 +512,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `web/src/components/ControlButtons.vue` | 4 个可执行按钮(启动/停止/手动模式/传送带)+ 3 个置灰 + 确认弹窗 + ack 状态机 + 15s UI 超时 |
 | `web/src/composables/useLineData.ts` | 产线数据 composable(mock fallback) |
 | `edge/_test_cmd.py` | **路线 6**:控制命令 dispatch 单元测试(8 用例) |
-| `deploy/docker-compose.cloud.yml` | 云服务器 compose(nginx + timescaledb) |
+| `deploy/docker-compose.cloud.yml` | 云服务器 compose(**只有 nginx**) |
 | `deploy/docker-compose.ipc.yml` | 工控机 compose(EMQX + Redis) |
 
 ## 8. 重要环境信息(**敏感**,不进仓库**)
@@ -436,5 +522,5 @@ ssh -o ControlMaster=no -o ControlPath=none \
 - 云服务器:`119.91.145.27`,root 凭据
 - 腾讯云账号(控制台登录)、API key(改安全组用)
 - SSH 私钥 `agent-claude-line-twin-dev` 位置
-- 数据库密码 `POSTGRES_PASSWORD`(在 `deploy/.env`)
 - session 密钥 `SESSION_SECRET`、admin 密码 `ADMIN_PASSWORD`(在 `server/.env`)
+- 本机数据库密码 `postgres123`(在 `server/.env` 的 `DATABASE_URL`)

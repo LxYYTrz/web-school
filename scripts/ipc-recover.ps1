@@ -6,7 +6,7 @@
 
     本脚本按依赖顺序拉起并自检(全部幂等,已在跑的不会重复起):
         1. Docker Desktop → docker compose -f deploy/docker-compose.ipc.yml up -d (EMQX/Redis)
-        2. SSH 反向隧道(云端 -R 172.18.0.1:3300 + -L 5432)—— 后端要用云端库,必须先有
+        2. SSH 反向隧道(云端 -R 172.18.0.1:3300)—— 后端经云端转发访问,必须先有
         3. NestJS 后端(node dist\main.js)
         4. PLC 采集器(python edge/plc_collector.py)
         5. 调 scripts\verify-line.ps1 自检
@@ -73,7 +73,7 @@ if ($dockerOk) {
     Write-Host ("MQTT 1883 = {0} / Redis 6379 = {1}" -f (Test-Port 1883), (Test-Port 6379))
 }
 
-# ---------- 2. SSH 隧道(先于后端:后端要用经 -L 5432 的云端库) ----------
+# ---------- 2. SSH 隧道(先于后端:后端经云端转发访问) ----------
 Write-Step '确保 SSH 反向隧道在线'
 $sshProc = Get-CimInstance Win32_Process -Filter "Name='ssh.exe'" -ErrorAction SilentlyContinue |
     Where-Object { $_.CommandLine -and $_.CommandLine -like '*172.18.0.1:3300*' }

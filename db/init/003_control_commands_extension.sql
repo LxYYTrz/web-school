@@ -1,19 +1,98 @@
--- =============================================================
+-- ============================================================================
 -- 003_control_commands_extension.sql
--- 契约 v1.1 扩展:control_commands.type 白名单追加 mode_set / alarm_clear
--- (commit: control_commands_extension)
+--   契约 v1.1 扩展：control_commands.type 白名单追加 mode_set / alarm_clear
+-- 所属目录：db/init/（产线数字孪生平台 · 数据层 · 增量迁移）
+-- ============================================================================
 --
--- 触发场景:
---   1. 全新部署:docker-entrypoint-initdb.d 按字典序执行 001 → 002 → 003
---   2. 已在运行的库:docker exec -i lt-cloud-db psql -U postgres -d line_twin
---                  \i /docker-entrypoint-initdb.d/003_control_commands_extension.sql
+-- 【文件作用】
+--   一次**小步扩权**：把控制指令的允许清单从原来 4 项扩到 6 项，
+--   新增 "切换手动模式"(mode_set) 和 "清除报警"(alarm_clear) 两种指令类型。
 --
--- 注意:003 用 ALTER ... DROP/ADD CONSTRAINT,001/002 不动,符合"只增不改"
--- =============================================================
+-- 【为什么单独开一个脚本，而不是直接改 001】
+--   001 是"从零建库"的版本。一旦有库在跑了就不能再改它——
+--   改了会导致老库和新库结构不一致：老库缺新约束，新库有多余的。
+--   所以规矩是：**001 永远保持初始状态，规则变化一律新开一条迁移脚本往上叠**。
+--   这条脚本只动一条约束，表结构、已有数据、其它脚本一概不碰，
+--   所以可以在系统跑了很久之后补执行，也不会影响任何历史记录。
+--
+-- 【影响面：只改一行约束，但这一行是安全底线】
+--   control_commands.type 的 CHECK 约束是"只允许下发白名单指令"的最后一道闸：
+--   后端 command.service.ts 在落库前会先按 ALLOWED_TYPES 校验一遍，
+--   但万一那层校验漏了，数据库这一层就把脏指令挡在门外。
+--   ★ 白名单在代码里另有一份权威来源：server/src/command/command-contract.ts
+--     读的是 command-contract.json（契约 v1.2）。DB 里的 CHECK 与它保持一致，
+--     两侧都要改，改一边不改另一边就会出现"页面能点但存不进库"或反之。
+--
+-- 【现场到底能不能执行（★ 别把白名单当能力）】
+--   扩的是**契约层面的白名单**，不等于现场就能执行。
+--   现场 PLC 开放了哪几个写入点，是采集器那边的事（见 edge/plc_collector.py）。
+--   没有对应点位的指令，采集器会明确回 "rejected"，绝不假装成功。
+--   此刻现场真能执行的是 4 项：start / stop / mode_set / conveyor（005 追加）；
+--   reset / changeover / alarm_clear 保留在清单里是为了契约完整性，
+--   将来现场加了寄存器，不用再动数据库就能直接用。
+--
+-- 【执行方式】
+--   1. 全新部署：docker-entrypoint-initdb.d 按字典序执行 001 → 002 → 003
+--   2. 已在运行的库：
+--        psql -U postgres -d linetwin \
+--          -f /docker-entrypoint-initdb.d/003_control_commands_extension.sql
+--      或（Windows 原生部署）
+--        psql -U postgres -d linetwin -f db\init\003_control_commands_extension.sql
+--
+-- 【幂等性与执行注意事项】
+--   ★ 本脚本**不幂等**：第一条 DROP CONSTRAINT 没带 IF EXISTS，
+--     对着没跑过 001 的库执行，或重复执行第二次，会报"约束不存在"而中断。
+--     原因：这条约束是 001 用内联 CHECK 建的，PostgreSQL 自动命名为
+--     control_commands_type_check；不写 IF EXISTS 是**故意的**——
+--     万一约束名对不上，宁可报错停下来，也不要以为改成功了。
+--   · ADD CONSTRAINT 会对存量行做一次全表校验。本次是"放宽"（新集合是旧集合的
+--     超集），存量行一定还能通过，所以不会因为老数据而失败。
+--   · ALTER TABLE 会拿 ACCESS EXCLUSIVE 锁，事务期间这张表不能读写。
+--     在线上的库里执行时挑个业务低峰，或用 LOCK TIMEOUT 控制等待上限。
+--   · 如果只想知道改没改成功，可以执行完查一下约束定义：
+--       SELECT pg_get_constraintdef(oid) FROM pg_constraint
+--        WHERE conname = 'control_commands_type_check';
+--
+-- 【注意】001/002 不动，符合"只增不改"
+--
+-- 【本文件用到的 SQL 关键字】
+--   ALTER TABLE     改表结构（加列、加约束、改约束…）
+--   DROP CONSTRAINT 删掉一条约束
+--   ADD CONSTRAINT  加一条约束
+--   CHECK           行级校验，写不进表
+--   IN (...)        枚举白名单，配合 CHECK 使用
+-- ============================================================================
+--
+-- 【契约与来源】
+--   契约 v1.1 扩展：control_commands.type 白名单追加 mode_set / alarm_clear。
+--
+-- 【触发场景】
+--   1. 全新部署：按字典序执行 001 → 002 → 003
+--   2. 已在运行的库（本机 PostgreSQL）：
+--      "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -d linetwin ^
+--        -f "D:\line-twin\db\init\003_control_commands_extension.sql"
+--
+-- 【注意】
+--   003 用 ALTER ... DROP/ADD CONSTRAINT，001/002 不动，符合"只增不改"。
 
+-- ① 先删掉 001 建的旧约束（4 项白名单）。
+--    ALTER TABLE = 改表结构；这里改的是"约束"，不是列。
+--    DROP CONSTRAINT = 删掉一条约束。
+--    约束名 control_commands_type_check：PostgreSQL 给内联 CHECK 自动起的名字，
+--    规则是 <表名>_<列名>_check。
+--    ★ 这里刻意不加 IF EXISTS：约束名对不上时要报错停下来，而不是静默跳过。
 ALTER TABLE control_commands
   DROP CONSTRAINT control_commands_type_check;
 
+-- ② 再加回新约束（6 项白名单）。
+--    ADD CONSTRAINT = 加一条约束；CHECK = 行级校验条件。
+--    type IN ('start','stop',...) = 枚举白名单，只有列在这 6 个字符串里的行才写得进。
+--    ★ 这是"只增不改"的字面含义：原 4 项 start/stop/reset/changeover 一个没删，
+--      新增的 mode_set/alarm_clear 并排加在后面。老数据、模拟数据都还能正常写，
+--      兼容性零风险。
+--    · mode_set     = 切换手动模式（对应现场 word 8，脉冲型，
+--                   params.action = acquire | release）
+--    · alarm_clear = 清除报警（现场暂未开放对应寄存器，edge 会回 rejected）
 ALTER TABLE control_commands
   ADD CONSTRAINT control_commands_type_check
   CHECK (type IN ('start','stop','reset','changeover','mode_set','alarm_clear'));
