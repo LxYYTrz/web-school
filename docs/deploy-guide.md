@@ -137,7 +137,7 @@ ssh-keygen -t ed25519
 
 :: 建隧道(保持窗口开着)
 ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes ^
-    -R 3300:127.0.0.1:3000 linetwin@119.91.145.27
+    -R 172.18.0.1:3300:127.0.0.1:3000 linetwin@119.91.145.27
 ```
 
 ✅ 命令不报错、不退出。验证:云服务器上 `ss -tlnp | grep 3300` 有监听。

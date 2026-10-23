@@ -148,7 +148,7 @@
 1. **开发期**：Vite 代理 —— `vite.config.ts` 把 `/api` 与 `/socket.io` 转发到 `localhost:3000`，
    浏览器只跟 5173 说话 → 天然同源，无跨域。
 2. **生产期**：Nginx 同源反代 —— `deploy/nginx/cloud.conf` 把 `/api/`、`/socket.io/`
-   转发到 SSH 隧道入口 `127.0.0.1:3300` → 浏览器只跟云服务器说话 → 依然同源。
+   转发到 SSH 隧道入口 `172.18.0.1:3300` → 浏览器只跟云服务器说话 → 依然同源。
 3. **消息名对齐**（前后端必须一致）：
 
 | 服务端 emit | 前端监听 | 频率 |
@@ -257,7 +257,7 @@ cd server && node dist\main.js
 cd edge && python mock_collector.py
 # 隧道（★ 做成开机自启服务，断了网站就不可访问）
 ssh -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes \
-    -R 3300:127.0.0.1:3000 linetwin@云服务器IP
+    -R 172.18.0.1:3300:127.0.0.1:3000 linetwin@云服务器IP
 ```
 
 ### 5.2 本地闭环（工控机 U 盘部署包）

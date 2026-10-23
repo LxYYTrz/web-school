@@ -21,7 +21,7 @@
  * 【生产环境下的完整访问路径】
  *   浏览器 → http://云服务器IP/api/lines/line-01/snapshot
  *          → 云端 Nginx（location /api/ 反向代理）
- *          → 127.0.0.1:3300（SSH 反向隧道入口）
+ *          → 172.18.0.1:3300（SSH 反向隧道入口）
  *          → 工控机 NestJS（本控制器）
  *          → Redis 查询快照
  *          → 原路返回
