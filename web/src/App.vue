@@ -149,6 +149,7 @@ import { useRouter } from 'vue-router';
 import { Monitor, User, ChatDotRound, Switch } from '@element-plus/icons-vue';
 import { useLineData } from './composables/useLineData';
 import { useAuthStore } from './stores/auth';
+import { stateText, stateTagType } from './services/lineState';
 import AiDrawer from './components/AiDrawer.vue';
 import { setAiUnauthorizedHandler } from './services/ai';
 
@@ -195,26 +196,21 @@ async function onLogout() {
  * 产线状态 → 中文文案。
  * computed 是「计算属性」：依赖的 status 变化时自动重新计算并更新 DOM，
  * 模板里写 statusText 就能拿到最新值。
+ *
+ * ★ 映射表是单点定义（services/lineState.ts），这里不要再自己写一份。
+ *   之前这里只映射了原 4 态(running/idle/alarm/offline)，PLC 的 10 态工序
+ *   (waiting_feed/feeding/assembling/unloading/...) 查不到 → 直接把英文原值
+ *   显示出来（如 "unloading"），浏览器翻译后就成了"等待机器人完成"这种鬼话，
+ *   实际应为「下料中」。现在统一走 lineState.ts。
  */
-const statusText = computed(() => {
-  // 契约里 state 的四个枚举值 → 中文
-  const map: Record<string, string> = {
-    running: '运行中', idle: '待机', alarm: '报警', offline: '离线',
-  };
-  // 有状态就查表，查不到就原样显示（防止新枚举值显示空白）
-  return status.value ? map[status.value.state] ?? status.value.state : '';
-});
+const statusText = computed(() => (status.value ? stateText(status.value.state) : ''));
 
 /**
  * 产线状态 → 标签颜色类型。
  * Element Plus 的 el-tag type 决定配色：success 绿 / info 灰 / danger 红 / warning 橙
+ * 同样取自 lineState.ts（stateTagType），保证顶栏与孪生页配色一致。
  */
-const statusTagType = computed(() => {
-  const map: Record<string, 'success' | 'info' | 'danger' | 'warning'> = {
-    running: 'success', idle: 'info', alarm: 'danger', offline: 'warning',
-  };
-  return status.value ? map[status.value.state] ?? 'info' : 'info';
-});
+const statusTagType = computed(() => stateTagType(status.value?.state));
 </script>
 
 <style scoped>
