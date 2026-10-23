@@ -96,22 +96,29 @@ $scp = 'C:\Windows\System32\OpenSSH\scp.exe'
    git 会把 BOM 当成标题的第一个字符(提交标题变成 `﻿feat(...)`)。
    用 `[IO.File]::WriteAllText($path, $msg, (New-Object Text.UTF8Encoding($false)))`。
 
-3. **token 用完必须删** —— 云服务器上落地过的 token / `.lt_cred` 凭据文件 / bundle /
+3. **`.ps1` 脚本必须存成 UTF-8 with BOM** —— ★ 本 skill 自己的脚本第一版就栽在这:
+   PowerShell 5.1 读 `.ps1` 默认按**系统 ANSI(GBK)**解码,文件里是 UTF-8 无 BOM 时
+   中文会变成乱码,乱码里混进的引号/花括号直接把语法搞坏,报
+   `MissingEndCurlyBrace` / `Try 语句缺少 Catch 或 Finally 块`。
+   存法:`[IO.File]::WriteAllText($p, $txt, (New-Object Text.UTF8Encoding($true)))`。
+   (`.sh` 相反:给 Linux 跑,保持 UTF-8 **无 BOM**。`.md` 无所谓。)
+
+4. **token 用完必须删** —— 云服务器上落地过的 token / `.lt_cred` 凭据文件 / bundle /
    临时克隆,推完立刻删干净(脚本第 4 步做的就是这件事,别跳过)。
 
-4. **别用仓库文件覆盖服务器上"打过补丁"的文件** —— 2026-10-23 踩过:
+5. **别用仓库文件覆盖服务器上"打过补丁"的文件** —— 2026-10-23 踩过:
    仓库里的 `docker-compose.cloud.yml` 写的是 `80:80`,而线上那台机器的 80 被 DSH caddy 占着,
    实际跑的是 `8081:80`。用仓库版覆盖 → nginx 起不来 → **网站中断**。
    上传前先 `ssh` 看一下服务器上那份长什么样,或者先把仓库改对再传。
 
-5. **服务器上没有 `.git` 就用 bundle,别用 clone** —— 云服务器上只有 `deploy/`、`dist/` 这些
+6. **服务器上没有 `.git` 就用 bundle,别用 clone** —— 云服务器上只有 `deploy/`、`dist/` 这些
    部署文件,不是 git 仓库。`git clone <bundle>` 会报 "remote HEAD refers to nonexistent ref",
    **这是正常的**,后面 `git checkout <分支>` 就行。
 
-6. **`git credential reject` 的语法** —— 是 `git credential reject <url>`,
+7. **`git credential reject` 的语法** —— 是 `git credential reject <url>`,
    但配合 `credential.helper=store --file` 时它报的错可以忽略(`|| true`)。
 
-7. **push 完把本地跟踪引用对齐** —— `git update-ref refs/remotes/origin/$BRANCH <sha>`,
+8. **push 完把本地跟踪引用对齐** —— `git update-ref refs/remotes/origin/$BRANCH <sha>`,
    否则 `git status` 一直显示落后 33 个 commit(因为本机根本 fetch 不了 github.com)。
 
 ## 配套:提交规范

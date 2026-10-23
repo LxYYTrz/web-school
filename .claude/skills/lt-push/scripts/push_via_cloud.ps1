@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 <#
 .SYNOPSIS
     在 github.com 直连不通的机器上,借云服务器中转把提交推上 GitHub。
@@ -89,3 +89,4 @@ try {
 finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
+exit 0
