@@ -1,5 +1,5 @@
 // 产线状态映射(契约 v1.1,见 db/init/004_line_state_stages.sql)
-// 单点定义,StatusView / IoPanel / 其它组件都从这里取,避免三处各写一份。
+// 单点定义,App / IoPanel / 其它组件都从这里取,避免多处各写一份。
 //
 // 来源:DB3-Modbus-映射表1.csv「产线状态」枚举 + PLC dataDB[6](Modbus word 6)
 // PLC 原始整数 → 契约字符串的转换在 edge/plc_collector.py STATE_MAP 完成,

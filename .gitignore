@@ -33,7 +33,3 @@ __pycache__/
 
 # 采集器单实例锁(运行时产生,见 edge/plc_collector.py)
 edge/.plc_collector.lock
-
-# 运行期数据(视觉图片等,见 server/src/vision)。绝不入库:
-# 图片是二进制大文件,仓库会瞬间膨胀到几十 GB
-data/

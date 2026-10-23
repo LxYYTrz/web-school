@@ -20,6 +20,7 @@
   word 10 传送带控制     电平,1=正转 0=停止
 """
 import sys
+import threading
 import time as _time
 from pathlib import Path
 
@@ -27,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import plc_collector
 from plc_collector import (
-    _read_csv, _cmd_signals, _dispatch_cmd,
+    Plc, _read_csv, _cmd_signals, _dispatch_cmd,
     CMD_DISPATCH, MODE_TOGGLE_VALUE, CONVEYOR_VALUE,
 )
 
@@ -42,6 +43,7 @@ class _FakePlc:
 
     def __init__(self, connected: bool = True, raise_exc: bool = False):
         self.connected = connected
+        self.lock = threading.Lock()
         self.unit = 2
         self.writes: list[tuple[int, int, int]] = []
         self._raise = raise_exc
@@ -56,6 +58,7 @@ class _FakePlc:
 
         class _Cli:
             def write_register(_self, address, value, device_id):
+                assert outer.lock.locked(), 'PLC 写操作必须持有连接锁'
                 if outer._raise:
                     raise RuntimeError("mock PLC 故障")
                 outer.writes.append((address, value, device_id))
@@ -175,6 +178,39 @@ def main() -> int:
     ok, msg = _dispatch_cmd(fake, "start", {})
     if ok or "通信异常" not in msg:
         failures.append(f"PLC 异常应 rejected, got (ok={ok}, msg={msg!r})")
+
+    # 同一 Modbus 连接的读和写必须串行，防止采集线程与 MQTT 回调交错收包。
+    read_started = threading.Event()
+    release_read = threading.Event()
+    write_started = threading.Event()
+
+    class _LockedCli:
+        def read_holding_registers(self, address, count, device_id):
+            read_started.set()
+            if not release_read.wait(2):
+                raise TimeoutError("mock 读超时")
+            return type("Reply", (), {"registers": [0] * count, "isError": lambda self: False})()
+
+        def write_register(self, address, value, device_id):
+            write_started.set()
+            return type("Reply", (), {"isError": lambda self: False})()
+
+    plc = Plc("127.0.0.1", 503, 2)
+    plc.cli = _LockedCli()
+    plc.connected = True
+    reader = threading.Thread(target=plc.read_all, args=([sigs[0]],), daemon=True)
+    writer = threading.Thread(target=_dispatch_cmd, args=(plc, "start", {}), daemon=True)
+    reader.start()
+    if not read_started.wait(1):
+        failures.append("读线程未进入 Modbus 调用")
+    writer.start()
+    if write_started.wait(0.05):
+        failures.append("读操作尚未结束时，写操作进入了同一 Modbus 连接")
+    release_read.set()
+    reader.join(2)
+    writer.join(2)
+    if not write_started.is_set():
+        failures.append("读操作结束后写操作仍未执行")
 
     print(f"CMD_DISPATCH types: {sorted(CMD_DISPATCH)}")
     print(f"现场可执行: {sorted(set(CMD_DISPATCH) - set(NO_PLC_POINT))}")

@@ -28,6 +28,7 @@ import logging
 import os
 import struct
 import sys
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -243,7 +244,7 @@ def decode_signal(regs: list[int], sig: Signal) -> Any:
     return None
 
 
-# ---------- PLC 客户端封装(合并请求、容错) ----------
+# ---------- PLC 客户端封装(串行读写、容错) ----------
 class Plc:
     def __init__(self, host, port, unit_id):
         # PLC 地址信息
@@ -252,23 +253,27 @@ class Plc:
         self.unit = unit_id
         # pymodbus 客户端。timeout=2 秒 —— 2 秒读不到就当通信异常
         self.cli = ModbusTcpClient(host=host, port=port, timeout=2)
+        # MQTT 回调与采集循环位于不同线程，不能并发操作同一个 Modbus 连接。
+        self.lock = threading.Lock()
         # 连接状态标记（自己维护，不依赖库的内部状态）
         self.connected = False
 
     def connect(self):
         # connect() 返回布尔值：True 表示 TCP 握手成功
-        if not self.cli.connect():
-            self.connected = False
-            return False
-        self.connected = True
-        return True
+        with self.lock:
+            if not self.cli.connect():
+                self.connected = False
+                return False
+            self.connected = True
+            return True
 
     def close(self):
-        self.cli.close()
-        self.connected = False
+        with self.lock:
+            self.cli.close()
+            self.connected = False
 
     def read_all(self, signals: list[Signal]) -> dict[str, Any]:
-        """一次性读所有点位(把同区段合并成一次请求,减少 IO)。"""
+        """逐个读取已配置点位，返回本轮采集结果。"""
         # 没连上 → 先尝试连接，失败就直接返回空字典（主循环会 sleep 后重试）
         if not self.connected:
             if not self.connect():
@@ -282,8 +287,9 @@ class Plc:
             for s in sigs_sorted:
                 # ★ 核心读操作：读保持寄存器（功能码 0x03）
                 #   address=起始地址，count=读几个寄存器，slave=从站号
-                rr = self.cli.read_holding_registers(
-                    address=s.address, count=s.count, device_id=self.unit)
+                with self.lock:
+                    rr = self.cli.read_holding_registers(
+                        address=s.address, count=s.count, device_id=self.unit)
                 # isError() 表示 Modbus 异常码（地址越界等），不是 Python 异常
                 if rr.isError():
                     LOG.warning("读 %s @%d 失败: %s", s.name, s.address, rr)
@@ -359,7 +365,7 @@ def io_payload(signals: list[Signal], values: dict[str, Any]) -> dict | None:
 
 def line_status_payload(values: dict[str, Any]) -> dict:
     # 注意:state 的 0(等待入料)是合法值,不能用 `or 1` 兜底,否则 0 被吞成 1。
-    # 现场 11 word 表不提供 productCode / goodCount / ngCount / beatMs,
+    # 现场 17 word 表不提供 productCode / goodCount / ngCount / beatMs,
     # 这些按契约"只增不改"原则保留字段、输出默认值。
     raw_state = values.get("line.state")
     state = STATE_MAP.get(int(raw_state), "offline") if isinstance(raw_state, (int, float)) else "offline"
@@ -428,7 +434,7 @@ CMD_DISPATCH = {
     'alarm_clear': (None,              'noop'),
     'conveyor':    ('cmd.conveyor',    'conveyor'),
 }
-# 现场 11 word 表没有 reset / changeover / alarm_clear 对应寄存器,
+# 现场 17 word 表没有 reset / changeover / alarm_clear 对应寄存器,
 # 这三个指令回 rejected 而不是假装 acked —— 避免操作员以为生效了。
 
 # 手动模式切换:PLC word 8,值域 {1,2};PLC 完成模式切换后自动置 0
@@ -501,13 +507,12 @@ def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
 
     plc.connected=False → 直接 rejected,不下发(不假 ack)。
     """
-    if not plc.connected:
-        # 不能假 ack:PLC 都没连上,操作员若看到 acked 会以为指令生效了。
-        # 与 CMD_DISPATCH 里 reset/changeover/alarm_clear 的处理保持同一原则。
-        LOG.error('PLC 未连接,拒绝下发 addr=%d,value=%d(不假 ack)', address, value)
-        return False, 'PLC 未连接,指令未下发'
     try:
-        rr = plc.cli.write_register(address=address, value=value, device_id=plc.unit)
+        with plc.lock:
+            if not plc.connected:
+                LOG.error('PLC 未连接,拒绝下发 addr=%d,value=%d(不假 ack)', address, value)
+                return False, 'PLC 未连接,指令未下发'
+            rr = plc.cli.write_register(address=address, value=value, device_id=plc.unit)
         if rr.isError():
             return False, f'PLC 写寄存器失败: {rr}'
         return True, ''
@@ -584,7 +589,6 @@ def main():
     # 订阅下行指令
     on_command(mq, plc)
 
-    # 上线声明
     # 上线声明（retained）：后端任何时候订阅都能立刻拿到 online
     publish(mq, T_EDGE, {"ts": now_ms(), "lineId": LINE_ID, "status": "online"},
             qos=1, retain=True)
@@ -632,7 +636,6 @@ def main():
             if io_msg is not None:
                 publish(mq, T_IO, io_msg, qos=0)
 
-            # 3) 产线状态 (1Hz, retained)
             # ---- 2) 产线状态 (1Hz, retained) ----
             now = time.time()
             # 距离上次发布已超过 1 秒才发

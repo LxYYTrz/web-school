@@ -2,7 +2,7 @@
   "name": "line-twin-server",
   "version": "0.1.0",
   "private": true,
-  "description": "产线数字孪生平台 - 云端后端(NestJS 最小链路:MQTT → TimescaleDB/Redis → WebSocket)",
+  "description": "产线数字孪生平台 - 工控机后端(MQTT → TimescaleDB/Redis → WebSocket)",
   "engines": {
     "node": ">=20"
   },
@@ -28,7 +28,8 @@
     "mqtt": "^5.10.1",
     "pg": "^8.13.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/cookie-session": "^2.0.49",

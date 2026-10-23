@@ -2,11 +2,11 @@
     verify-line.ps1 —— line-twin 全链路只读体检(工控机侧)
 
     检查项(全部只读,不下发任何控制指令):
-      1. Docker / 中间件容器(EMQX 1883、Redis 6379)
-      2. SSH 隧道进程(云端 -R 172.18.0.1:3300)
+      1. 本机服务端口(MQTT 1883、Redis 6379、PostgreSQL 5432)
+      2. SSH 隧道进程(云端 -R 127.0.0.1:3300)
       3. 本地后端 http://localhost:3000/api/lines/line-01/snapshot
       4. 云端公网 http://<云IP>:8081/api/lines/line-01/snapshot
-      5. PLC 实时状态(只读,见 edge/plc_read_state.py)
+      5. 从后端快照确认 PLC 数据持续更新(不与采集器争抢 Modbus 连接)
 
     用法:
         .\scripts\verify-line.ps1
@@ -22,14 +22,7 @@ param(
 
 $ErrorActionPreference = 'Continue'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
-$root = Split-Path -Parent $PSCommandPath
-$root = Split-Path -Parent $root   # 仓库根
 $results = New-Object System.Collections.ArrayList
-
-function Test-DockerRunning {
-    $v = (docker info --format '{{.ServerVersion}}' 2>$null | Select-Object -First 1)
-    return ($v -match '^\d+\.')
-}
 
 function Add-Result([string]$Name, [bool]$Ok, [string]$Detail) {
     [void]$results.Add([pscustomobject]@{ 检查项 = $Name; 结果 = $(if ($Ok) { 'OK' } else { 'FAIL' }); 说明 = $Detail })
@@ -57,21 +50,14 @@ function Get-Json([string]$Url, [int]$TimeoutSec = 8) {
 
 Write-Host "=== line-twin 全链路体检 $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===" -ForegroundColor Cyan
 
-# 1. Docker / 中间件
-$dockerOk = Test-DockerRunning
-Add-Result 'Docker 守护进程' $dockerOk $(if ($dockerOk) { 'running' } else { '未运行 —— docker compose 起不来' })
-if ($dockerOk) {
-    $ems = docker ps --filter 'name=lt-ipc-emqx' --format '{{.Status}}'
-    $rds = docker ps --filter 'name=lt-ipc-redis' --format '{{.Status}}'
-    Add-Result '容器 lt-ipc-emqx' ([bool]$ems) ($ems -join ' ')
-    Add-Result '容器 lt-ipc-redis' ([bool]$rds) ($rds -join ' ')
-}
-Add-Result 'MQTT 1883' (Test-Port 1883) 'EMQX(容器或原生)'
+# 1. 本机服务
+Add-Result 'MQTT 1883' (Test-Port 1883) '消息代理'
 Add-Result 'Redis 6379' (Test-Port 6379) '快照存储'
+Add-Result 'PostgreSQL 5432' (Test-Port 5432) '历史与业务数据'
 
 # 2. SSH 隧道
 $sshProc = Get-CimInstance Win32_Process -Filter "Name='ssh.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -and $_.CommandLine -like '*172.18.0.1:3300*' }
+    Where-Object { $_.CommandLine -and $_.CommandLine -like '*127.0.0.1:3300*' }
 Add-Result 'SSH 反向隧道进程' ([bool]$sshProc) $(if ($sshProc) { "pid=$($sshProc.ProcessId -join ',')" } else { '没在跑 —— 公网 API 必然 502' })
 
 # 3. 本地后端
@@ -80,30 +66,23 @@ Add-Result '本地后端 /api' $local.ok "HTTP $($local.code)"
 if ($local.ok) {
     try {
         $j = $local.body | ConvertFrom-Json
-        Add-Result '快照状态' $true "state=$($j.status.state) edge=$($j.edge.status) 数据时间=$([DateTimeOffset]::FromUnixTimeMilliseconds([int64]$j.ts).ToLocalTime().ToString('yyyy-MM-dd HH:mm:ss'))"
+        if ($j.error) {
+            Add-Result '快照状态' $false "后端读取 Redis 失败: $($j.error)"
+        } elseif (-not $SkipPlc) {
+            $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            $statusFresh = $j.status -and $j.status.ts -and (($nowMs - [int64]$j.status.ts) -le 15000)
+            $robotFresh = @($j.robots.PSObject.Properties | Where-Object {
+                $_.Value -and $_.Value.ts -and (($nowMs - [int64]$_.Value.ts) -le 15000)
+            }).Count -gt 0
+            $ok = $statusFresh -and $robotFresh -and ($j.edge.status -eq 'online')
+            Add-Result 'PLC 采集数据' $ok "state=$($j.status.state) edge=$($j.edge.status) statusTs=$($j.status.ts) robotFresh=$robotFresh"
+        }
     } catch { Add-Result '快照解析' $false $_.Exception.Message }
 }
 
 # 4. 公网
 $cloud = Get-Json "http://${CloudHost}:${CloudPort}/api/lines/line-01/snapshot"
 Add-Result '公网 API' $cloud.ok "HTTP $($cloud.code) $(if (-not $cloud.ok) { '(502 = 隧道断)' } else { '' })"
-
-# 5. PLC 只读
-if (-not $SkipPlc) {
-    $py = $null
-    foreach ($c in @('python', 'py -3')) {
-        $cmd = Get-Command $c -ErrorAction SilentlyContinue
-        if ($cmd) { $py = $c; break }
-    }
-    if ($py) {
-        $out = & $py (Join-Path $root 'edge\plc_read_state.py') 2>&1 | Out-String
-        $plcOk = $out -match '\[OK\]'
-        Add-Result 'PLC 只读状态' $plcOk (($out -split "`n" | Where-Object { $_ -match '产线状态|FAIL' }) -join ' | ').Trim()
-        Write-Host $out -ForegroundColor DarkGray
-    } else {
-        Add-Result 'PLC 只读状态' $false '没找到 python'
-    }
-}
 
 Write-Host ""
 $results | Format-Table -AutoSize | Out-String | Write-Host

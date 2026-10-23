@@ -143,11 +143,6 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
     //    INSERT INTO 表名(列...) VALUES (一行),(另一行)...
     //    这是 PostgreSQL 的"多行 VALUES"批量插入语法，一条语句插 N 行，
     //    只做一次网络往返、一次 WAL fsync，效率远高于 N 条单行 INSERT。
-    // ③ 单条 INSERT 落库
-    // ③ UPDATE：按 idempotency_key（= cmdId）定位指令。
-    //    WHERE 里加 `status IN ('pending','sent')` 保证**状态机单向推进**：
-    //    已终态(acked/rejected/failed)的指令不会被重复的 ack 覆盖，
-    //    也不会把 rejected 改成 acked（迟到的重复回执被忽略）。
     this.pool
       .query(
         `INSERT INTO robot_joint_states
@@ -236,15 +231,17 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
   ackCommand(msg: any) {
     // ① 没有 cmdId 的回执无法定位指令，直接忽略
     if (!msg.cmdId) return;
-    // ② 白名单校验 status。非法状态一律按 'acked' 处理（保守优先，
-    //    避免因为边缘发了个未知状态而让审计记录卡在 pending）
-    const status = ['acked', 'rejected', 'failed'].includes(msg.status) ? msg.status : 'acked';
+    // 未知状态不能冒充执行成功；保留原状态，交由超时扫描处理。
+    if (!['acked', 'rejected', 'failed'].includes(msg.status)) {
+      this.logger.warn(`忽略非法指令回执状态: ${String(msg.status)}`);
+      return;
+    }
     this.pool
       .query(
         `UPDATE control_commands
            SET status = $2, ack_payload = $3, acked_at = now()
          WHERE idempotency_key = $1 AND status IN ('pending','sent')`,
-        [String(msg.cmdId), status, JSON.stringify(msg)],
+        [String(msg.cmdId), msg.status, JSON.stringify(msg)],
       )
       .then((r) => {
         // rowCount === 0 说明没匹配到行：要么 cmdId 未知，要么指令已是终态

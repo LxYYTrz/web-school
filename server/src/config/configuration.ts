@@ -21,13 +21,11 @@
  *
  *   mqtt.url    ──▶ EMQX / Mosquitto 的 MQTT 端口
  *                  工控机本机部署 → mqtt://localhost:1883
- *                  云端部署     → mqtt://<云服务器IP>:8883（TLS，见 CLAUDE.md §4.4）
  *   mqtt.clientId ─▶ MQTT 客户端标识。Broker 要求每个在线客户端 ID 唯一，
  *                  否则新连接会把旧连接踢下线（MQTT 协议规定的行为）。
- *                  这里用 `cloud-server-${进程PID}`：同一台机器跑多个实例也不会冲突。
+ *                  这里用 `line-twin-server-${进程PID}`：同一台机器跑多个实例也不会冲突。
  *   pg.connectionString ─▶ PostgreSQL/TimescaleDB 连接串
- *                  注意：**最终部署形态下，这里的 localhost:5432 是 SSH 隧道的入口**，
- *                  隧道另一端才是云服务器上的真实数据库（见 CLAUDE.md §4.5）。
+ *                  生产数据库在工控机本机，不经 SSH 隧道。
  *   redis.url   ──▶ Redis（工控机本机 Memurai / Redis）地址
  *   http.port   ──▶ 后端 HTTP + WebSocket 共用端口（默认 3000）
  *   http.corsOrigin ─▶ 跨域白名单。生产应收敛为前端域名（当前是 '*'）
@@ -46,7 +44,7 @@ export const config = {
     username: process.env.MQTT_USERNAME || undefined,
     password: process.env.MQTT_PASSWORD || undefined,
     // 客户端 ID：必须全局唯一。这里拼上进程 PID 防止多实例互相踢线
-    clientId: `cloud-server-${process.pid}`,
+    clientId: `line-twin-server-${process.pid}`,
   },
   // ---------------- PostgreSQL / TimescaleDB（历史数据 + 业务表）配置 ----------------
   pg: {

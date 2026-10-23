@@ -28,7 +28,7 @@
  *   createLineData() 创建一个内部闭包，保存了 socket 事件监听 + 所有 ref。
  *   它的实例被存在模块级变量 shared 里，useLineData() 每次都返回同一个实例。
  *   好处：
- *     ① App.vue 顶栏和 TwinView/StatusView 页面用的是同一份数据 → 天然同步
+ *     ① App.vue 顶栏和 TwinView/IoView 页面用的是同一份数据 → 天然同步
  *     ② 路由切换时组件卸载/重建，但数据层不重建 → WebSocket 连接不断、状态不丢
  *     ③ 只注册一份 socket 监听器 → 不会重复消费同一条消息
  *
@@ -126,6 +126,8 @@ function createLineData(lineId: string) {
   // 事件滚动列表（最新在前，因为用 unshift）
   const events = ref<ProductionEvent[]>([]);
   const lastEventAt = ref(0);
+  // 快照和实时推送并行到达时，不能用较早的快照覆盖已收到的新帧。
+  const liveSeen = { robot: false, status: false, io: false, edge: false, event: false };
 
   // ---------- 快照预载(首屏立即有数据,不等下一帧) ----------
   /**
@@ -137,26 +139,26 @@ function createLineData(lineId: string) {
       // 调用 REST 快照接口
       const snap = (await fetchSnapshot(lineId)) as LineSnapshot;
       // 有产线状态就填上
-      if (snap.status) status.value = snap.status;
+      if (snap.status && !liveSeen.status) status.value = snap.status;
       // 有边缘状态就换算成布尔：只有 'online' 才算在线
-      if (snap.edge) edgeOnline.value = snap.edge.status === 'online';
-      if (snap.io) io.value = snap.io;
+      if (snap.edge && !liveSeen.edge) edgeOnline.value = snap.edge.status === 'online';
+      if (snap.io && !liveSeen.io) io.value = snap.io;
       // robots 是 { deviceId: RobotState } 字典。
       // 当前前端只驱动一台机器人，所以取第一个（Object.values[0]）用即可。
-      // 多机器人支持见 web/README.md 的 TODO。
+      // 当前只驱动一台机器人；支持多机器人时需要按 deviceId 分发到多个视图。
       const first = Object.values(snap.robots ?? {})[0];
-      if (first) robot.value = first;
+      if (first && !liveSeen.robot) robot.value = first;
     } catch (e) {
       // 后端没起或网络异常:静默,等待 socket 实时数据
       console.warn('[lineData] snapshot 预载失败', e);
       // dev 演示 fallback:无后端时填 mock,让视图有数据可见
       if (MOCK_ENABLED) {
-        robot.value = MOCK_ROBOT;
-        status.value = MOCK_STATUS;
-        events.value = MOCK_EVENTS;
-        edgeOnline.value = true;
-        io.value = MOCK_IO;
-        lastEventAt.value = MOCK_EVENTS[0].ts;
+        if (!liveSeen.robot) robot.value = MOCK_ROBOT;
+        if (!liveSeen.status) status.value = MOCK_STATUS;
+        if (!liveSeen.event) events.value = MOCK_EVENTS;
+        if (!liveSeen.edge) edgeOnline.value = true;
+        if (!liveSeen.io) io.value = MOCK_IO;
+        if (!liveSeen.event) lastEventAt.value = MOCK_EVENTS[0].ts;
       }
     }
   }
@@ -180,17 +182,21 @@ function createLineData(lineId: string) {
   });
   // 机器人六轴帧（10Hz）—— 覆盖写，只保留最新一帧
   socket.on('robot_state', (msg: RobotState) => {
+    liveSeen.robot = true;
     robot.value = msg;
   });
   // 产线状态（1Hz）
   socket.on('line_status', (msg: LineStatus) => {
+    liveSeen.status = true;
     status.value = msg;
   });
   socket.on('io_state', (msg: IoState) => {
+    liveSeen.io = true;
     io.value = msg;
   });
   // 生产事件 —— unshift 插到最前面（最新的在上面）
   socket.on('event', (msg: ProductionEvent) => {
+    liveSeen.event = true;
     events.value.unshift(msg);
     // 超过上限就截断（直接改 length 是 Vue3 响应式数组支持的做法）
     if (events.value.length > MAX_FEED) events.value.length = MAX_FEED;
@@ -198,6 +204,7 @@ function createLineData(lineId: string) {
   });
   // 边缘在线状态（低频，仅连接/断开时）
   socket.on('edge_status', (msg: { status: 'online' | 'offline' }) => {
+    liveSeen.edge = true;
     edgeOnline.value = msg.status === 'online';
   });
 

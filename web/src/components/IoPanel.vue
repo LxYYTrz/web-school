@@ -13,7 +13,7 @@
       <span class="alarm-text">{{ alarmText || `产线异常(${statusText})` }}</span>
     </div>
 
-    <!-- I/O 信号灯矩阵:现场 11 word 表提供 产线状态 + 6 轴关节 + 边缘在线 -->
+    <!-- I/O 信号灯矩阵:现场 17 word 表提供产线状态、6 轴关节与 6 路 IO -->
     <div v-if="status || robot" class="io-grid">
       <div class="io-cell">
         <span class="io-dot" :class="modeDot" />
@@ -78,7 +78,7 @@ const statusText = computed(() =>
 
 const stateTagType = computed(() => tagTypeOf(status.value?.state));
 
-// 现场 PLC 11 word 表只上送 joints[0..5] + 产线状态,没有 alarmCode;
+// 现场 PLC 17 word 表上送 joints[0..5]、产线状态和 6 路 IO,没有 alarmCode;
 // 该字段保留在契约里(只增不改),edge 无数据时输出 0。
 const alarmOn = computed(() =>
   (robot.value?.alarmCode !== undefined && robot.value.alarmCode !== 0) ||

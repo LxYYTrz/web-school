@@ -14,7 +14,7 @@
  *      │  (Modbus/OPC UA/S7 —— 现场协议，由采集器适配)
  *      ▼
  *   ┌──────────────┐   MQTT publish      ┌──────────────┐
- *   │ edge 采集器  │ ───────────────────▶ │ EMQX Broker  │ (工控机本机)
+ *   │ edge 采集器  │ ───────────────────▶ │ MQTT Broker  │ (工控机本机)
  *   │ (Python)     │   tl/v1/...         └──────┬───────┘
  *   └──────────────┘                              │ subscribe
  *                                                 ▼
@@ -38,7 +38,7 @@
  * 【二、MQTT 协议在这里到底发生了什么】（回答"TCP 是怎么通信的"）
  *
  *   MQTT 跑在 TCP 之上。连接建立过程：
- *     1) TCP 三次握手：采集器 ←→ EMQX 建立字节流连接（1883 明文 / 8883 TLS 加密）
+ *     1) TCP 三次握手：采集器 ←→ Broker 建立字节流连接
  *     2) MQTT CONNECT 报文：携带 clientId / username / password / keepalive
  *     3) Broker 回 CONNACK：连接成功
  *     4) MQTT SUBSCRIBE 报文：本进程订阅 5 类主题，Broker 回 SUBACK
@@ -141,7 +141,6 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
     // ⑥ 消息事件：每收到一条报文就调用 dispatch 分发。
     //    这是整个上行链路唯一的"数据入口函数"
     this.client.on('message', (topic, payload) => this.dispatch(topic, payload));
-  // 注意：ack **不推给前端** —— 前端是通过 REST 查询指令状态来获知的
   }
 
   /**
@@ -161,7 +160,7 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
    *   浏览器 POST /api/lines/line-01/commands
    *     → CommandController → CommandService（校验白名单 + 落审计表）
    *     → 本方法 publish 到 tl/v1/{lineId}/cmd/{deviceId}
-   *     → EMQX 转发给订阅了该主题的采集器
+   *     → Broker 转发给订阅了该主题的采集器
    *     → 采集器写 PLC → 回 cmd_ack → 又回到本文件的 dispatch（kind === 'cmd_ack'）
    *
    * @param lineId   产线编码（主题第 2 段）

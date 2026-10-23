@@ -21,6 +21,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -46,6 +47,10 @@ export class MachineTokenGuard implements CanActivate {
     }
 
     const req = context.switchToHttp().getRequest<Request>();
+    const remote = req.socket.remoteAddress;
+    if (remote !== '127.0.0.1' && remote !== '::1' && remote !== '::ffff:127.0.0.1') {
+      throw new ForbiddenException({ code: 403, msg: '机器通道仅允许本机调用' });
+    }
     const provided = String(req.headers['x-machine-token'] ?? '');
     if (!provided) {
       throw new UnauthorizedException({ code: 401, msg: '缺少 x-machine-token' });

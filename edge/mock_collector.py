@@ -17,7 +17,7 @@ import time
 
 import paho.mqtt.client as mqtt
 
-# MQTT Broker 的主机地址。默认本机 —— 工控机上 EMQX/Mosquitto 就在本机
+# MQTT Broker 的主机地址，默认本机。
 MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
 # MQTT Broker 的端口。1883 = 明文；8883 = TLS 加密（生产用）
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))

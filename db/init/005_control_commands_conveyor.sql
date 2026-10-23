@@ -48,8 +48,7 @@
 --     至于这条指令在当前产线状态下合不合法，由 PLC 和前端各管一段。
 --
 -- 【执行方式】
---   1. 全新部署：docker-entrypoint-initdb.d 按字典序执行 001 → 002 → 003 → 004 → 005
---   2. 已在运行的库：
+--   全新部署按文件名顺序执行；存量库只执行尚未应用的迁移：
 --        psql -U postgres -d linetwin -f db\init\005_control_commands_conveyor.sql
 --
 -- 【幂等性与执行注意事项】

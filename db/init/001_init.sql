@@ -17,15 +17,9 @@
 --   发生过什么（时序流水）；谁动过什么（指令与审计）。
 --
 -- 【谁执行 / 什么时候执行】
---   1. 全新部署：TimescaleDB 容器**首次启动**时，PostgreSQL 会自动执行
---      /docker-entrypoint-initdb.d/ 下的 .sql，按**文件名字典序**执行。
---      deploy/docker-compose.yml 与 docker-compose.cloud.yml 已把 db/init 目录
---      挂载进去，所以新机器不需要手工建库。
---      ★ 只在数据目录为空时执行一次；库里已有数据时容器不会再跑这些脚本。
---   2. Windows 原生部署（工控机 U 盘，无 Docker）：手工执行
+--   1. 全新部署：在工控机本地 PostgreSQL 空库中手工执行，随后按文件名顺序执行迁移。
 --        psql -U postgres -d linetwin -f db\init\001_init.sql
---      见 CLAUDE.md §6 第 3.2 节。
---   3. 存量库补结构：**不要重跑本文件**，改走 002~006 里的对应脚本。
+--   2. 存量库补结构：**不要重跑本文件**，改走 002~006 里的对应脚本。
 --
 -- 【幂等性】
 --   本脚本**不幂等**（建表语句没有 IF NOT EXISTS），只允许对空库执行一次；
@@ -80,12 +74,10 @@
 --   COMMENT ON        给表/列写数据库注释（psql \d+ 能看到）
 -- ============================================================================
 --
--- ★ 部署位置(2026-10-23 云端数据库下线后补记)：
+-- 部署位置：
 --   主库在**工控机本地**（Windows 原生安装的 PostgreSQL 16 + TimescaleDB），
---   云端不再保留 PostgreSQL 容器（lt-cloud-db 已删除）。
 --   执行方式：按文件名顺序把 db/init/*.sql 全部跑一遍：
 --     psql -U postgres -d linetwin -f db\init\001_init.sql
---   开发机 compose 仍会把本目录挂到 /docker-entrypoint-initdb.d 自动执行。
 
 -- ---------------------------------------------------------------------------
 -- 0. 扩展：先给数据库装两个"能力"
@@ -244,7 +236,7 @@ CREATE TABLE production_lines (
 --   【为什么必须落在后端】前端的过滤只是"界面不显示"，改个 URL 或直接调接口
 --     就能看到别人的数据；只有查询语句里带上这张表的约束才是真隔离。
 --   【边界】当前代码里这张表**还没接上**（见 server/src/command/command.service.ts
---     与 realtime/telemetry.gateway.ts 的 TODO：第 4 步接 JWT + RBAC + user_line_scope）。
+--     WebSocket 订阅的产线范围校验仍需单独处理（见 realtime/telemetry.gateway.ts）。
 --     表先建好，权限模型先落地，接口随后接。
 CREATE TABLE user_line_scope (
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

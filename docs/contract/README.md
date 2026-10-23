@@ -1,13 +1,13 @@
 # 数据契约 v1
 
-本文件是**边缘采集层、云端后端、前端**三方之间唯一的数据约定。所有代码只依赖本契约;
+本文件是**边缘采集层、工控机后端、前端**三方之间唯一的数据约定。所有代码只依赖本契约;
 PLC 寄存器等现场细节,由边缘采集适配器负责翻译成本契约格式。
 
 **修改规则:只增字段,不改名、不删字段。** 破坏性变更必须升级主题版本号(见文末)。
 
 ## 1. 通用约定
 
-- 传输:MQTT over TLS(本地开发可用明文 1883 端口)
+- 传输:工控机本机使用 MQTT TCP 1883；跨主机传输时配置 TLS 与认证
 - 报文编码:UTF-8 JSON
 - 时间戳 `ts`:Unix 毫秒(epoch ms),由**产生方(边缘)**打
 - 单位:角度 = 度(deg),长度 = 毫米(mm),时长 = 毫秒(ms),计数 = pcs
@@ -237,19 +237,17 @@ word 7~10 是控制写点不走本主题)。全部字段为 `number`,采集器�
 
 ## 4. 控制链路约定
 
-1. 前端 → 后端 REST(带 JWT)
-2. 后端:校验角色(`api:command:execute`)+ 产线数据权限(`user_line_scope`)
-   → 写 `control_commands`(pending)→ publish cmd(置 sent)
+1. 前端 → 后端 REST(带 Cookie 会话)
+2. 后端:校验登录会话与 `level >= 2`、指令白名单和参数值域
+   → 写 `control_commands`(`sent`)及审计日志 → publish cmd
 3. 边缘:收到 cmd → 写入 PLC(**PLC 自身联锁逻辑拥有最终否决权**)→ publish cmd_ack
 4. 后端:收到 ack 更新状态;15s 无 ack 置 timeout
 5. 全流程落 `audit_logs`。**急停为硬件回路,不在本系统范围内,网页永远不做急停。**
 
 ## 5. 现场切换(mock → 真实)
 
-- 现场只需实现真实采集器(如 `edge/plc_collector.py`)替换 `mock_collector.py`,**本契约不变**,
-  云端、前端、数据库零改动
-- 采集器为**配置驱动**:读 `register-mapping.csv`(信号 → 协议地址),轮询 PLC 后组装为本契约报文;
-  到现场与电气工程师对点位后填正式映射表,不改代码
+- 真实采集器 `edge/plc_collector.py` 与开发用 `mock_collector.py` 输出同一契约。
+- 真实采集器读取 `edge/register-mapping.csv`(信号 → 协议地址),轮询 PLC 后组装报文。
 - 模板见同目录 `register-mapping.template.csv`
 - 现场正式点表在 `edge/register-mapping.csv`(不在本目录),HOLD 区 **17 word(34 字节)**:
   word 0~5 关节 / 6 产线状态 / 7~10 控制写点 / 11~16 产线 IO 只读点。

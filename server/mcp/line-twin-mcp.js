@@ -86,7 +86,7 @@ const server = new McpServer(
     capabilities: { tools: {} },
     instructions:
       '这是产线(line-01)的数据源与控制通道,分两类工具:' +
-      '【查询类(只读)】get_line_snapshot / get_line_history / get_recent_events / get_vision_stats;' +
+      '【查询类(只读)】get_line_snapshot / get_line_history / get_recent_events;' +
       '【控制类】run_operation / execute_action(直控,直接下发不等人工确认)、' +
       'propose_action(只提交建议,等人点确认)。' +
       '★ 选哪条路,取决于你所在的通道:' +
@@ -165,29 +165,6 @@ async function getRecentEvents(lineCode, hours, onlyProblems, limit) {
     [line.id, String(hours), onlyProblems, limit],
   );
   return { lineId: line.code, hours, onlyProblems, count: rows.length, rows };
-}
-
-async function getVisionStats(lineCode, hours) {
-  const line = await resolveLine(lineCode);
-  const { rows } = await pool.query(
-    `SELECT result, count(*)::int AS n
-       FROM vision_images
-      WHERE line_id = $1 AND captured_at > now() - ($2 || ' hours')::interval
-      GROUP BY result`,
-    [line.id, String(hours)],
-  );
-  const stat = { ok: 0, ng: 0 };
-  for (const r of rows) stat[r.result] = r.n;
-  const total = stat.ok + stat.ng;
-  return {
-    lineId: line.code,
-    hours,
-    ok: stat.ok,
-    ng: stat.ng,
-    total,
-    ngRate: total ? Math.round((stat.ng / total) * 10000) / 100 : null,
-    note: total === 0 ? '该时间窗内没有任何视觉检测记录,无法计算不良率(不代表不良率为 0)' : undefined,
-  };
 }
 
 /**
@@ -577,22 +554,6 @@ server.registerTool(
     content: [
       { type: 'text', text: JSON.stringify(await getRecentEvents(lineId, hours ?? 24, onlyProblems ?? true, limit ?? 50)) },
     ],
-  }),
-);
-
-server.registerTool(
-  'get_vision_stats',
-  {
-    title: '视觉检测统计',
-    description: '统计指定时间窗内的视觉检测 OK/NG 数量与 NG 率,用于回答「不良率是多少」。',
-    inputSchema: {
-      lineId: z.string(),
-      hours: z.number().int().min(1).max(168).default(24),
-    },
-    annotations: READ_ONLY,
-  },
-  async ({ lineId, hours }) => ({
-    content: [{ type: 'text', text: JSON.stringify(await getVisionStats(lineId, hours ?? 24)) }],
   }),
 );
 

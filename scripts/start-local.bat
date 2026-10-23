@@ -8,7 +8,7 @@ rem 【用途】
 rem   在**工控机本地**跑一个完整的闭环，不需要 Docker、不需要云服务器、
 rem   不需要 SSH 隧道、不需要联网：
 rem     - 后端   http://localhost:3000   （读本机 Mosquitto/Memurai/PostgreSQL）
-rem     - 采集器 python <plc_collector.py | mock_collector.py>
+rem     - 采集器 Python 3.11+ <plc_collector.py | mock_collector.py>
 rem     - 前端   http://localhost:5173   （Vite dev server，热更新）
 rem
 rem   本地闭环(不联网、不装 Docker)的启动方式。
@@ -61,7 +61,7 @@ rem ---- 等待 3 秒，避免采集器比后端先发数据 ----
 timeout /t 3 /nobreak >nul
 
 rem ---- ② 启动采集器（plc 或 mock）----
-start "lt-edge"   cmd /k "cd /d %ROOT%\edge && python %EDGE_SCRIPT%"
+start "lt-edge"   cmd /k "cd /d %ROOT%\edge && py -3 %EDGE_SCRIPT%"
 
 rem ---- ③ 启动前端 dev server（5173 端口）----
 rem npm run dev 启动 Vite；/api 与 /socket.io 由 vite.config.ts 代理到 3000

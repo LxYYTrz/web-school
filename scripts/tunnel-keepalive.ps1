@@ -11,15 +11,14 @@
         .\scripts\tunnel-keepalive.ps1 -UninstallTask      # 注销计划任务
 
     关键参数(默认值已按线上现状填好):
-        -RemoteBind 172.18.0.1:3300   云端 nginx 能访问到的宿主地址(docker0 网关);
-                                     写成 127.0.0.1:3300 云端容器访问不到,会 502。
+        -RemoteBind 127.0.0.1:3300   云端原生 Nginx 使用的本机隧道入口。
 #>
 [CmdletBinding()]
 param(
     [string]$CloudHost = '119.91.145.27',
     [string]$CloudUser = 'root',
-    [string]$KeyPath = "$env:USERPROFILE\.ssh\id_ed25519",
-    [string]$RemoteBind = '172.18.0.1:3300',
+    [string]$KeyPath = 'C:\ProgramData\line-twin\tunnel_ed25519',
+    [string]$RemoteBind = '127.0.0.1:3300',
     [int]$LocalBackendPort = 3000,
     [int]$IntervalSec = 30,
     [switch]$InstallTask,

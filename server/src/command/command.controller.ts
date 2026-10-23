@@ -8,7 +8,7 @@
  *   方法：POST
  *   路径：/api/lines/{lineId}/commands
  *   完整：POST http://<后端>:3000/api/lines/line-01/commands
- *   Body：{ "deviceId":"plc-01", "type":"reset", "params":{}, "operator":"admin" }
+ *   Body：{ "deviceId":"plc-01", "type":"stop", "params":{} }
  *   返回：{ "ok":true, "cmdId":"uuid" } 或 { "ok":false, "error":"..." }
  *
  * 【控制器 vs 服务的职责划分（NestJS 通用套路）】
@@ -21,9 +21,9 @@
  *
  * 【生产环境下的完整访问路径】
  *   浏览器 → 云服务器 Nginx（location /api/）
- *          → SSH 反向隧道 172.18.0.1:3300
+ *          → SSH 反向隧道 127.0.0.1:3300
  *          → 工控机 NestJS（本控制器）
- *          → 写 PG（经 SSH 正向隧道连云数据库）+ publish MQTT（工控机本机）
+ *          → 写本机 PG + publish MQTT（工控机本机）
  */
 import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { CommandBody, CommandService } from './command.service';
@@ -43,8 +43,6 @@ export class CommandController {
   //   AuthGuard 先保证 session 有 username + level,
   //   CommandGuard 再校验 level >= 2。
   // operator 取自 session(契约 §5 第 2 条),前端不得在 body 传 username。
-  // TODO(安全):当前无鉴权,仅供联调!第 4 步必须接入:JWT 登录态 +
-  // 角色权限(api:command:execute)+ user_line_scope 产线数据权限
   /**
    * POST /api/lines/:lineId/commands —— 下发一条控制指令。
    *

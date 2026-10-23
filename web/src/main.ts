@@ -16,7 +16,7 @@
  *   ⑤ 引入 Element Plus 的「暗色主题」CSS 变量
  *      （index.html 的 <html class="dark"> 配合它整体切换暗色）
  *   ⑥ 引入根组件 App.vue —— 整个应用的外壳（顶栏 + 内容区）
- *   ⑦ 引入路由 —— 让 URL 能切换页面（/twin 孪生页、/status 状态页）
+ *   ⑦ 引入路由 —— 让 URL 能切换页面（/twin 孪生页、/io 信号页）
  *   ⑧ 引入全局样式 styles.css —— 定义深色工业风主题变量
  *
  * 【挂载】

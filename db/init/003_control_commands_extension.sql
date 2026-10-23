@@ -32,11 +32,7 @@
 --   将来现场加了寄存器，不用再动数据库就能直接用。
 --
 -- 【执行方式】
---   1. 全新部署：docker-entrypoint-initdb.d 按字典序执行 001 → 002 → 003
---   2. 已在运行的库：
---        psql -U postgres -d linetwin \
---          -f /docker-entrypoint-initdb.d/003_control_commands_extension.sql
---      或（Windows 原生部署）
+--   全新部署按文件名顺序执行；存量库只执行尚未应用的迁移：
 --        psql -U postgres -d linetwin -f db\init\003_control_commands_extension.sql
 --
 -- 【幂等性与执行注意事项】

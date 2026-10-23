@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 > 产线数字孪生监控平台(`line-twin`)的项目级指引。
-> **新 Claude Code session 第一件事**:读这个文件(它就是全部上下文)。
+> **当前部署入口**:原生服务方案见 `deploy/README.md`。本文件后面的 2026-10-23 事故记录保留为历史,不要照其中旧容器命令部署。
 > 这一份是 2026-10-14 拉通"中转站对齐 + RBAC + 云端部署"后写的,记录关键决策、当前状态、待办,让另一台电脑(产线现场 Windows)上的新 session 能"续接"上下文。
 
 ---
@@ -53,7 +53,7 @@
 ```
 产线设备(机器人 / PLC)
     │ 产线局域网
-工控机(高配 Windows): EMQX + Redis + PostgreSQL/TimescaleDB + NestJS 后端 + edge 采集器
+工控机(高配 Windows): MQTT Broker + Redis 兼容服务 + PostgreSQL/TimescaleDB + NestJS 后端 + edge 采集器
     │ SSH 反向隧道(工控机主动外连;工厂防火墙零配置)
 云服务器(低配 Linux): Nginx 静态前端 + 纯转发
     │ HTTPS
@@ -63,8 +63,7 @@
 **关键**:云服务器**只做**展示 + 纯转发,**全部数据处理和数据存储都在工控机**。
 契约层(见 §3)保证换设备不动云端代码。
 
-> **2026-10-23 决策**:数据库**只走本地**。云端的 PostgreSQL 容器(`lt-cloud-db`)
-> 已删除,云端不再有数据库端口,隧道也只挂一条 `-R 3300` 转发。
+> **当前决策**:数据库只走工控机本地。云端不存数据库,隧道只转发后端 `3000`。
 
 详细架构与部署:本文件 §2 / §4.4 / §4.5
 
@@ -163,11 +162,9 @@
   - `level=3` admin: 看全部用户 + CRUD
   - `level=2` 二级: 看 level=1+自己 + 改 level=1 密码
   - `level=1` 普通: 只看自己 + 改自己密码
-- **前端**:`web/src/stores/auth.ts`(pinia store) + `web/src/services/auth.ts`(fetch 封装 HTTP,401 跳登录) + `web/src/views/LoginView.vue` + `web/src/views/UsersView.vue`。
+- **前端**:`web/src/stores/auth.ts`(Pinia 状态) + `web/src/services/auth.ts`(fetch 封装 HTTP,401 跳登录) + `web/src/views/LoginView.vue` + `web/src/views/UsersView.vue`。
 - **菜单按 level 显隐**:`/users` 路由 meta.requiredLevel=3;
-  `/twin` `/io` 全部可见。**`/status`(产线状态页)已于 2026-10-16 停用** ——
-  路由与菜单项都被注释(`@deprecated` 标记,文件保留不删),恢复步骤写在
-  `web/src/views/StatusView.vue` 顶部;信号观测改由 `/io` 页承担。
+  `/twin` `/io` 全部可见。`/status` 已停用并删除,信号观测由 `/io` 页承担。
 - **首启建 admin**:`server/src/auth/users-bootstrap.service.ts` 在 `app.app_users` 空时自动建 `admin` 用户,初始密码取自 `ADMIN_PASSWORD` 环境变量(`.env.example` 里默认 `admin123`,生产必须改)。
 - **后端 `/api/auth/me`**:`GET /api/auth/me`(AuthGuard 保护),返回当前 session 用户;401 = 未登录。
 
@@ -189,13 +186,10 @@
 
 - 云服务器:`119.91.145.27`(OpenClaw 龙芯,腾讯云轻量云,VM-0-3-ubuntu)
 - 公网入口:`http://119.91.145.27:8081/`(8081 是因为 DSH caddy 占 80)
-- 容器:**只有 `lt-cloud-nginx`**(nginx:1.27-alpine)。
-  ★ 云端数据库容器 `lt-cloud-db` 已于 2026-10-23 删除(数据库只走本地,见 §2)
-- 部署位置:`/opt/line-twin/`(`deploy/` + `dist/`)
+- 云端原生 Nginx 仅托管静态资源与反向代理；部署位置:`/opt/line-twin/deploy/`。
 - **腾讯云安全组**已加 8081 端口规则(自定义 / TCP / 8081 / 0.0.0.0/0 / 允许 / 备注:line-twin nginx)
   ⚠ 腾讯云控制台默认只放行常见端口,**自定义端口必须手动加规则**,忘了就整个站点不通。
-- **2026-10-15 补充**:sshd 已设 `GatewayPorts clientspecified`,
-  nginx upstream 改为 `172.18.0.1:3300`(见 §4.5 为什么不能用 127.0.0.1)
+- Nginx 与 SSH 隧道都在云服务器本机，upstream 使用 `127.0.0.1:3300`。
 
 **更新前端(唯一需要频繁做的部署动作)**:
 
@@ -206,22 +200,20 @@ scp -i <key> -r web/dist root@119.91.145.27:/opt/line-twin/dist_new
 # 云服务器
 mv /opt/line-twin/deploy/dist /opt/line-twin/deploy/dist.bak.$(date +%Y%m%d)
 mv /opt/line-twin/dist_new /opt/line-twin/deploy/dist
-docker compose -f /opt/line-twin/deploy/docker-compose.cloud.yml up -d --force-recreate nginx
+nginx -t && systemctl reload nginx
 ```
 
 **验证清单**:
 
 | 检查 | 命令 / 方式 | 期望 |
 |---|---|---|
-| 容器 | `docker ps --format "{{.Names}}\t{{.Status}}"` | **只有** `lt-cloud-nginx` 一个 Up |
-| 容器内 dist | `docker exec lt-cloud-nginx stat -c "%y" /usr/share/nginx/html/index.html` | 新时间戳 |
+| Nginx 配置 | `nginx -t` | syntax is ok |
+| 静态文件 | `stat -c "%y" /opt/line-twin/deploy/dist/index.html` | 新时间戳 |
 | 公网入口 | `curl http://119.91.145.27:8081/` | HTTP 200,title「产线数字孪生监控平台」 |
 | 公网接口 | `curl -i http://119.91.145.27:8081/api/auth/me` | 401(未登录)= 隧道+后端都通 |
 | 本机库 | `psql -h 127.0.0.1 -U postgres -d linetwin -c "\dt"` | 业务表都在 |
 
-> ⚠️ **别拿仓库版 compose 覆盖线上那份** —— 2026-10-23 踩过:仓库版端口映射写的是
-> `80:80`,而线上那台机器的 80 被 DSH caddy 占着,实际跑的是 `8081:80`。
-> 用仓库版覆盖 → nginx 起不来 → **网站中断**。上传前先 `ssh` 看服务器上那份长什么样。
+> `deploy/nginx/cloud.conf` 监听 8081。变更站点配置后先执行 `nginx -t`。
 
 ### 4.5 SSH 通道(命脉)—— 已建通 ✅
 
@@ -229,7 +221,7 @@ docker compose -f /opt/line-twin/deploy/docker-compose.cloud.yml up -d --force-r
 
 ```bash
 # 只有一条转发:云端 3300 → 工控机 3000(网站流量)
-ssh -N -R 172.18.0.1:3300:127.0.0.1:3000 \
+ssh -N -R 127.0.0.1:3300:127.0.0.1:3000 \
     -i C:\ProgramData\line-twin\tunnel_ed25519 \
     -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
     -o ExitOnForwardFailure=yes \
@@ -237,17 +229,8 @@ ssh -N -R 172.18.0.1:3300:127.0.0.1:3000 \
     root@119.91.145.27
 ```
 
-**⚠️ 为什么绑 `172.18.0.1` 而不是 `127.0.0.1`**(踩过的坑):
-
-nginx 跑在**容器** `lt-cloud-nginx` 里,它看到的 `127.0.0.1` 是**容器自己**的
-回环,够不到宿主机 loopback 上的隧道 → **502 Bad Gateway**。
-必须把远程端口绑到宿主机的 docker 网桥 `172.18.0.1`,容器才够得着。
-
-这样**只绑网桥、不绑 `0.0.0.0`**,3300 不会暴露到公网。配套要求:
-- 云端 sshd 配 `GatewayPorts clientspecified`(否则 sshd 强制回绑 loopback)
-- 云端 nginx upstream 指向 `172.18.0.1:3300`
-
-注意:宿主机上 `curl 127.0.0.1:3300` 会失败(HTTP 000),这是**正常的** —— 只绑了网桥。
+原生 Nginx 直接运行在云服务器上，因此与 SSH 隧道共享 `127.0.0.1`；3300 无需暴露到公网。
+旧版容器部署曾使用 `172.18.0.1`，只用于理解历史事故，不能用于当前原生部署。
 
 **怎么验隧道是通的**(三项都过才算):
 
@@ -264,8 +247,8 @@ curl http://localhost:3000/api/lines/line-01/snapshot
 
 | 现象 | 排查 |
 |---|---|
-| 公网页面能开但 `/api` 全 502 | 隧道断了。云端 `docker logs lt-cloud-nginx --tail 20` 看是不是 `connect() failed (111)`;工控机看 ssh 进程在不在;跑 `scripts\verify-line.ps1` 一眼定位 |
-| 云端 `ss -ltnp` 没有 3300 | 隧道没建起来:ssh 窗口退出没?`-R` 是不是绑成了 `127.0.0.1`(绑错容器访问不到) |
+| 公网页面能开但 `/api` 全 502 | 先在云端查看 Nginx 错误日志及 `ss -ltnp` 的 3300 监听；工控机跑 `scripts\verify-line.ps1`。 |
+| 云端 `ss -ltnp` 没有 3300 | 工控机侧 SSH 隧道没有建立，检查 `tunnel-keepalive.ps1` 的进程和密钥。 |
 | 重启后站点一直 502 | 隧道/中间件/后端没自启。跑 `scripts\ipc-recover.ps1` 恢复,再用 `scripts\tunnel-keepalive.ps1 -InstallTask` 装开机自启 |
 
 - **数据库只走本地(2026-10-23)**:工控机自己的 PostgreSQL 16 + TimescaleDB(:5432),
@@ -313,7 +296,7 @@ curl http://localhost:3000/api/lines/line-01/snapshot
   DB CHECK 约束分别在 `db/init/003_`(v1.1)、`005_`(v1.2)。
 - **`line.state` 10 态**:`db/init/004_line_state_stages.sql` 放宽两个表的 CHECK;
   前端 `web/src/services/lineState.ts` **单点定义** 中文 + 语义色,
-  `StatusView.vue` / `IoPanel.vue` 共用(避免三处各写一份映射)。
+  `App.vue` / `IoPanel.vue` 共用(避免多处各写一份映射)。
 - **PLC 前置条件**(2026-10-16 现场确认;前端 `ControlButtons.vue` 的 `can()` 已按此
   **真正禁用按钮**并在下方给出原因文案,`confirm()` 里再挡一次防状态竞态;
   **PLC 联锁仍是最终否决权**,两边都要有):
@@ -428,6 +411,8 @@ MACHINE_COMMAND_TOKEN=
 ## 5. 已就位 / 待办
 
 ### 5.1 已完成 ✅
+
+以下按当时环境记录事故与验证结果；当前启动命令以 `deploy/README.md` 和 `scripts/README.md` 为准。
 
 **2026-10-23 本轮(飞书通道 + 直控)**
 
@@ -545,7 +530,6 @@ MACHINE_COMMAND_TOKEN=
 | PostgreSQL 16 + TimescaleDB | 必需 | 数据库,**Windows 原生安装**(端口 5432) |
 | EMQX(或原生 Mosquitto) | 必需 | MQTT Broker(端口 1883) |
 | Redis(或原生 Memurai) | 必需 | 快照缓存(端口 6379) |
-| Docker Desktop | 二选一 | 用它跑 EMQX+Redis;不装就装原生版,端口一致即可 |
 
 - Git
 
@@ -562,12 +546,12 @@ cd web-school
 ### 6.3 装依赖
 
 ```bash
-# 后端(产线工控机需要,产线 Windows 不需要)
+# 后端(产线工控机需要)
 cd server && npm install
 
-# 前端 demo build(产线 Windows 上要看页面就 build 这个版本)
+# 前端生产构建
 cd ../web
-VITE_MOCK_ONLY=true npm run build
+npm run build
 # 跑 dev 实时改实时看:
 npm run dev
 # 浏览器开 http://localhost:5173
@@ -600,7 +584,7 @@ psql -U postgres -d linetwin -c "SELECT code FROM production_lines;"
 **一键拉起全栈**(幂等,重复跑安全):
 
 ```powershell
-.\scripts\ipc-recover.ps1      # 中间件 → 隧道 → 后端 → 采集器 → 自动体检
+.\scripts\ipc-recover.ps1      # 检查本机服务 → 隧道 → 后端 → 采集器 → 自动体检
 .\scripts\verify-line.ps1      # 只读体检,不下发任何控制指令
 .\scripts\tunnel-keepalive.ps1 -InstallTask   # 隧道开机自启 + 30s 巡检
 ```
@@ -621,8 +605,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 > 2026-10-15 实况:该密钥已加进云端 authorized_keys 并验证可用。
 > 同机上原有的 `external_access` / `agent_client_access` 两个私钥**已损坏**
 > (`ssh-keygen` 报 invalid format),**不要用**。
-> 云端还要求 `sshd` 设 `GatewayPorts clientspecified`,否则隧道会被强制回绑
-> 127.0.0.1 导致 nginx 502(见 §4.5)。
+> 原生 Nginx 与隧道同在云服务器本机，远程绑定使用 `127.0.0.1:3300`。
 
 ### 6.5 部署后端(工控机,一次)
 
@@ -632,7 +615,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 
 ### 6.6 部署前端(云服务器,一次)
 
-按 §4.4:本地 build → scp dist → ssh 上 mv + docker compose up -d --force-recreate nginx。
+按 §4.4:本地 build → scp dist → ssh 上 mv → `nginx -t && systemctl reload nginx`。
 
 ## 7. 文件指引(按重要性)
 
@@ -642,7 +625,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `.claude/skills/codebase-explainer/` | 通用:解读陌生代码库(报告 + demo + 踩坑) |
 | `.claude/skills/lt-push/` | 借云服务器中转推 GitHub(本机连不上 github.com:443) |
 | `docs/contract/README.md` | **数据契约 v1.3**(边缘/后端/前端唯一约定)—— `docs/` 下只剩这一份 |
-| `scripts/ipc-recover.ps1` | 工控机一键幂等恢复(中间件→隧道→后端→采集器→体检) |
+| `scripts/ipc-recover.ps1` | 检查本机服务并按需启动隧道、后端、采集器,然后体检 |
 | `scripts/tunnel-keepalive.ps1` | 隧道看门狗(-InstallTask 装开机自启 + 巡检) |
 | `scripts/verify-line.ps1` | 全链路只读体检(只查不下发) |
 | `edge/register-mapping.csv` | **17 点位** Modbus 映射(现场实测;电气工程师 xls 为准) |
@@ -657,7 +640,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `server/src/auth/` | 登录/会话/三级权限/首启建 admin |
 | `server/src/users/` | 用户管理 CRUD |
 | `server/src/command/` | 指令路由 + CommandGuard(level>=2)+ service(审计 + 15s 超时 + params 枚举校验 + operator 从 session) |
-| `web/src/services/lineState.ts` | **产线状态单点映射**(中文 + 语义色),StatusView/IoPanel 共用 |
+| `web/src/services/lineState.ts` | **产线状态单点映射**(中文 + 语义色),App/IoPanel 共用 |
 | `web/src/services/ioPoints.ts` | **IO 点位单点映射**(word/字段/文案/语义色),契约 §3.8 |
 | `web/src/views/IoView.vue` | 「IO 信号」标签页(只读,level 1 可见) |
 | `web/src/stores/auth.ts` | RBAC 前端 store(dev fallback) |
@@ -669,8 +652,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `web/src/components/ControlButtons.vue` | 4 个可执行按钮(启动/停止/手动模式/传送带)+ 3 个置灰 + 确认弹窗 + ack 状态机 + 15s UI 超时 |
 | `web/src/composables/useLineData.ts` | 产线数据 composable(mock fallback) |
 | `edge/_test_cmd.py` | **路线 6**:控制命令 dispatch 单元测试(8 用例) |
-| `deploy/docker-compose.cloud.yml` | 云服务器 compose(**只有 nginx**) |
-| `deploy/docker-compose.ipc.yml` | 工控机 compose(EMQX + Redis) |
+| `deploy/nginx/cloud.conf` | 云服务器原生 Nginx 站点配置 |
 
 ## 8. 重要环境信息(**敏感**,不进仓库**)
 

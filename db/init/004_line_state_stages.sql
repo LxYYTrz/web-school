@@ -19,8 +19,9 @@
 --   这条迁移就是修这个问题的。
 --
 -- 【依据】
---   DB3-Modbus-映射表.xls「产线状态」枚举。现场 PLC 的 DB[9](state) 上送的就是
---   这 10 个原始整数，采集器读出来直接透传（plc_collector.py 不做映射）。
+--   这份历史迁移曾按旧口径将 3 标作 unloading。实际 PLC 状态位于 word 6，
+--   采集器通过 STATE_MAP 转换为契约字符串；005_line_state_waiting_robot.sql
+--   已补充正确的 waiting_robot，同时保留 unloading 兼容历史数据。
 --
 -- 【新枚举（PLC 原始整数 → 中文）】
 --        0 = 等待入料         1 = 入料中           2 = 装配中
@@ -33,7 +34,7 @@
 --       把整数映射成 waiting_feed / feeding / …；查不到的整数兜底成 offline。
 --     · 契约字符串 → 中文名与颜色：前端做。web/src/services/lineState.ts
 --       管中文名（等待入料 / 入料中 / …）与语义色，web/src/styles.css 配配色，
---       StatusView.vue 负责展示。
+--       App.vue / IoPanel.vue 负责展示。
 --     · 数据库这一层**只管"收下合法的字符串"**——它不认识 0/1/100 这些数字，
 --       也不负责翻译。翻译逻辑放在数据库会导致换 PLC 就要改表。
 --
@@ -43,8 +44,7 @@
 --   · 契约铁律"只增不改"在这里的体现：枚举只能加，不能删、不能改。
 --
 -- 【执行方式】
---   1. 全新部署：docker-entrypoint-initdb.d 按字典序执行 001 → 002 → 003 → 004
---   2. 已在运行的库：
+--   全新部署按文件名顺序执行；存量库只执行尚未应用的迁移：
 --        psql -U postgres -d linetwin -f db\init\004_line_state_stages.sql
 --
 -- 【幂等性与执行注意事项】
@@ -73,8 +73,8 @@
 --
 -- 【兼容策略】
 --   - 只增不改（契约铁律），保留原 4 态值，新枚举与之并存
---   - 前端 StatusView.vue 增加 10 态中文映射，未知值回退显示原值
---   - plc_collector.py 直接透传 PLC 整数，不做映射
+--   - 前端 lineState.ts 维护中文映射，未知值回退显示原值
+--   - plc_collector.py 通过 STATE_MAP 转换 PLC 整数
 --
 -- 【触发场景】
 --   1. 全新部署：按文件名顺序执行 db/init/*.sql（001 → … → 004）
@@ -103,7 +103,7 @@ ALTER TABLE line_status_history
   CHECK (state IN (
     -- 原 4 态（保留，兼容旧数据与 mock 采集器）
     'running','idle','alarm','offline',
-    -- 新增 10 态（PLC 工序状态；DB[9] 透传）
+    -- 历史 10 态（后续迁移补充 waiting_robot）
     'waiting_feed',   --  0 = 等待入料
     'feeding',        --  1 = 入料中
     'assembling',     --  2 = 装配中

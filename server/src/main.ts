@@ -10,7 +10,7 @@
  * 【它在整体架构中的位置】
  *
  *   上行（设备 → 浏览器）：
- *     PLC/机器人 ──▶ edge 采集器 ──(MQTT)──▶ EMQX Broker
+ *     PLC/机器人 ──▶ edge 采集器 ──(MQTT)──▶ 本机 Broker
  *                                              │ 本进程订阅
  *                                              ▼
  *                              MqttIngestService(ingest/)
@@ -26,7 +26,7 @@
  *     浏览器 ──(HTTPS)──▶ 云端 Nginx ──(SSH 隧道)──▶ 本进程 CommandController
  *                                              │
  *                                              ▼
- *                        CommandService → MQTT publish → EMQX
+ *                        CommandService → MQTT publish → 本机 Broker
  *                                              → 采集器 → 写 PLC
  *
  * 【本文件逐行说明】
@@ -37,7 +37,7 @@
  *      它 imports 的六个业务模块决定了系统里有哪些能力（见 app.module.ts）。
  *   3. enableCors：开发期前端 Vite 在 5173、后端在 3000，属于不同源，浏览器会拦截，
  *      所以必须放行。生产环境由 Nginx 做同源反代（前端与 /api 同域），此��宽松设置
- *      仅为开发方便，生产应收敛为具体前端域名（见 configuration.ts 的 TODO）。
+ *      仅为开发方便，生产应通过 CORS_ORIGIN 收敛为具体前端域名。
  *   4. enableShutdownHooks：注册进程退出钩子。收到 Ctrl+C / SIGTERM 时会依次调用
  *      各服务的 onModuleDestroy()，作用是「优雅关闭」——关闭 MQTT 长连接、停掉批量
  *      落库的定时器、断开 PG/Redis 连接池，避免丢数据或残留半写状态。

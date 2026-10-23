@@ -43,7 +43,7 @@ import { PG_POOL, REDIS } from './tokens';
 @Module({
   providers: [
     // ① PostgreSQL 连接池：只创建一次，整个进程共享。
-    //    connectionString 从配置读取（含云端密码，由 SSH 隧道连到云数据库）
+    //    connectionString 从配置读取，连接工控机本地 PostgreSQL
     { provide: PG_POOL, useFactory: () => new Pool({ connectionString: config.pg.connectionString }) },
     // ② Redis 客户端：同样全局共享一个实例。
     //    ioredis 自带断线重连，连接断开时命令会排队等待重连

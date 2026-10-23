@@ -12,7 +12,7 @@
  *
  *   ① 浏览器（操作员点击"启动/停止/复位"按钮）
  *        │  POST /api/lines/line-01/commands
- *        │  Body: { deviceId:'plc-01', type:'reset', params:{}, operator:'admin' }
+ *        │  Body: { deviceId:'plc-01', type:'stop', params:{} }
  *        ▼
  *   ② CommandController（HTTP 层）→ 转交本服务
  *        ▼
@@ -22,7 +22,7 @@
  *        ├─ INSERT control_commands（status='sent'）→ 生成审计记录
  *        └─ publish 到 MQTT 主题 tl/v1/{line}/cmd/{device}
  *        ▼
- *   ④ EMQX Broker → 采集器订阅的 tl/v1/line-01/cmd/+ 主题
+ *   ④ MQTT Broker → 采集器订阅的 tl/v1/line-01/cmd/+ 主题
  *        ▼
  *   ⑤ 采集器收到指令 → 写 PLC（PLC 自身联锁有最终否决权）→ 0.3~若干秒后
  *        publish cmd_ack { cmdId, status:'acked' }
@@ -32,18 +32,17 @@
  *
  * 【为什么 cmdId 这么重要】
  *   cmdId 就是数据库 control_commands.idempotency_key（UUID）。
- *   它把「云端下发的指令」和「边缘回的回执」绑定在一起，形成闭环审计：
+ *   它把「后端下发的指令」和「边缘回的回执」绑定在一起，形成闭环审计：
  *     - 幂等：重复回执不会重复改状态（ackCommand 里 WHERE status IN ('pending','sent')）
  *     - 可追溯：查这条指令是谁、什么时候、对哪台设备下的、回执是什么
- *     - 可对账：15 秒无回执可以置 timeout（待实现，见 server/README.md 的 TODO）
+ *     - 可对账：15 秒无回执置 timeout
  *
  * 【安全说明（非常重要）】
- *   - 指令类型是**白名单**（start/stop/reset/changeover），
+ *   - 指令类型使用 command-contract.json 中的白名单，
  *     永远不提供"写任意寄存器"的能力 —— 那是极危险的通用远程执行接口。
  *   - 急停（E-Stop）**不在本系统范围内**：急停必须是硬件回路，
  *     网页永远不做急停按钮。软件急停是不可靠的。
- *   - 当前版本**没有鉴权**（TODO 第 4 步接 JWT + RBAC + user_line_scope），
- *     现阶段仅供联调，绝不能直接暴露到公网。
+ *   - HTTP 控制入口由 AuthGuard + CommandGuard 校验会话和操作级别。
  */
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Pool } from 'pg';

@@ -51,7 +51,7 @@ import { Server, Socket } from 'socket.io';
 import { config } from '../config/configuration';
 
 // WebSocket 推送(socket.io)。前端先 emit('subscribe', {lineId}) 加入对应产线房间。
-// TODO(第 4 步):接入 JWT 鉴权 + user_line_scope 校验,防止越权订阅其他产线
+// TODO:接入会话鉴权和产线范围校验,防止未授权订阅其他产线。
 @WebSocketGateway({ cors: { origin: config.http.corsOrigin } })
 export class TelemetryGateway {
   // @WebSocketServer()：由 Nest 注入 socket.io 的 Server 实例（就是那个 http server）
