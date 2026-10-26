@@ -1,42 +1,236 @@
-# server/tools/ws-test.html 逐行说明
+# server/tools/ws-test.html 逐行注释
 
-[打开源码](../../../../server/tools/ws-test.html) · 77 行 · 32 行待说明代码
+[打开源码](../../../../server/tools/ws-test.html) · 77 行 · 33 行代码说明
 
-只列出非空、非纯注释行；原有注释请直接看源码。
+以下每个代码块先列原代码行，下一行紧跟解释。注释只用于阅读，不会写入可执行文件；行号对应当前源码。
 
-行号以当前源码为准。修改源码后应重新核对这份说明。
+**源码第 1 行**
 
-| 源码行 | 原语句 | 作用与关键字 |
-|---:|---|---|
-| 1 | <code>&lt;!doctype html&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 25 | <code>&lt;html lang="zh-CN"&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 26 | <code>&lt;head&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 27 | <code>&lt;meta charset="utf-8"&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 28 | <code>&lt;title&gt;line-twin WebSocket 联调&lt;/title&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 29 | <code>&lt;style&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 31 | <code>body { font-family: monospace; margin: 16px; }</code> | 设置页面文本、样式或脚本语句。 |
-| 34 | <code>&lt;/style&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 35 | <code>&lt;/head&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 36 | <code>&lt;body&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 37 | <code>&lt;h3&gt;实时数据测试(line-01)&lt;/h3&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 38 | <code>&lt;p&gt;连接 http://localhost:3000,订阅 robot_state / line_status / event&lt;/p&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 40 | <code>&lt;div id="log"&gt;&lt;/div&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 43 | <code>&lt;script src="https://unpkg.com/socket.io-client@4.8.1/dist/socket.io.min.js"&gt;&lt;/script&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 44 | <code>&lt;script&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 46 | <code>const logEl = document.getElementById('log');</code> | 设置页面文本、样式或脚本语句。 |
-| 48 | <code>const log = (m) =&gt; { logEl.textContent = m + '\n' + logEl.textContent; };</code> | 设置页面文本、样式或脚本语句。 |
-| 51 | <code>const socket = io('http://localhost:3000');</code> | 设置页面文本、样式或脚本语句。 |
-| 54 | <code>socket.on('connect', () =&gt; {</code> | 设置页面文本、样式或脚本语句。 |
-| 55 | <code>log('connected: ' + socket.id);</code> | 设置页面文本、样式或脚本语句。 |
-| 57 | <code>socket.emit('subscribe', { lineId: 'line-01' }, (ack) =&gt; log('subscribe ack: ' + JSON.stringify(ack)));</code> | 设置页面文本、样式或脚本语句。 |
-| 58 | <code>});</code> | 设置页面文本、样式或脚本语句。 |
-| 61 | <code>let robotCount = 0;</code> | 设置页面文本、样式或脚本语句。 |
-| 62 | <code>socket.on('robot_state', (m) =&gt; {</code> | 设置页面文本、样式或脚本语句。 |
-| 64 | <code>if (++robotCount % 10 === 0) log(`robot_state x${robotCount}  joints=${JSON.stringify(m.joints)}`);</code> | 设置页面文本、样式或脚本语句。 |
-| 65 | <code>});</code> | 设置页面文本、样式或脚本语句。 |
-| 68 | <code>socket.on('line_status', (m) =&gt; log('line_status: ' + JSON.stringify(m)));</code> | 设置页面文本、样式或脚本语句。 |
-| 71 | <code>socket.on('event', (m) =&gt; log('event: ' + JSON.stringify(m)));</code> | 设置页面文本、样式或脚本语句。 |
-| 74 | <code>socket.on('connect_error', (e) =&gt; log('connect_error: ' + e.message));</code> | 设置页面文本、样式或脚本语句。 |
-| 75 | <code>&lt;/script&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 76 | <code>&lt;/body&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 77 | <code>&lt;/html&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
+```text
+<!doctype html>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 25 行**
+
+```text
+<html lang="zh-CN">
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 26 行**
+
+```text
+<head>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 27 行**
+
+```text
+  <meta charset="utf-8">
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 28 行**
+
+```text
+  <title>line-twin WebSocket 联调</title>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 29 行**
+
+```text
+  <style>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 31 行**
+
+```text
+    body { font-family: monospace; margin: 16px; }
+<!-- 注释：设置页面文本、样式或脚本语句。 -->
+```
+
+**源码第 33 行**
+
+```text
+    #log { height: 78vh; overflow: auto; background: #111; color: #0f0; padding: 8px; white-space: pre-wrap; }
+<!-- 注释：定义当前文件中的这一项配置或结构。 -->
+```
+
+**源码第 34 行**
+
+```text
+  </style>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 35 行**
+
+```text
+</head>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 36 行**
+
+```text
+<body>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 37 行**
+
+```text
+  <h3>实时数据测试(line-01)</h3>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 38 行**
+
+```text
+  <p>连接 http://localhost:3000,订阅 robot_state / line_status / event</p>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 40 行**
+
+```text
+  <div id="log"></div>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 43 行**
+
+```text
+  <script src="https://unpkg.com/socket.io-client@4.8.1/dist/socket.io.min.js"></script>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 44 行**
+
+```text
+  <script>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 46 行**
+
+```text
+    const logEl = document.getElementById('log');
+<!-- 注释：设置页面文本、样式或脚本语句。 关键字：const＝声明不可重新绑定的变量。 -->
+```
+
+**源码第 48 行**
+
+```text
+    const log = (m) => { logEl.textContent = m + '\n' + logEl.textContent; };
+<!-- 注释：设置页面文本、样式或脚本语句。 关键字：const＝声明不可重新绑定的变量。 -->
+```
+
+**源码第 51 行**
+
+```text
+    const socket = io('http://localhost:3000');
+<!-- 注释：设置页面文本、样式或脚本语句。 关键字：const＝声明不可重新绑定的变量。 -->
+```
+
+**源码第 54 行**
+
+```text
+    socket.on('connect', () => {
+<!-- 注释：设置页面文本、样式或脚本语句。 -->
+```
+
+**源码第 55 行**
+
+```text
+      log('connected: ' + socket.id);
+<!-- 注释：设置页面文本、样式或脚本语句。 -->
+```
+
+**源码第 57 行**
+
+```text
+      socket.emit('subscribe', { lineId: 'line-01' }, (ack) => log('subscribe ack: ' + JSON.stringify(ack)));
+<!-- 注释：设置页面文本、样式或脚本语句。 -->
+```
+
+**源码第 58 行**
+
+```text
+    });
+<!-- 注释：设置页面文本、样式或脚本语句。 -->
+```
+
+**源码第 61 行**
+
+```text
+    let robotCount = 0;
+<!-- 注释：设置页面文本、样式或脚本语句。 关键字：let＝声明可重新赋值的变量。 -->
+```
+
+**源码第 62 行**
+
+```text
+    socket.on('robot_state', (m) => {
+<!-- 注释：设置页面文本、样式或脚本语句。 -->
+```
+
+**源码第 64 行**
+
+```text
+      if (++robotCount % 10 === 0) log(`robot_state x${robotCount}  joints=${JSON.stringify(m.joints)}`);
+<!-- 注释：设置页面文本、样式或脚本语句。 关键字：if＝条件判断。 -->
+```
+
+**源码第 65 行**
+
+```text
+    });
+<!-- 注释：设置页面文本、样式或脚本语句。 -->
+```
+
+**源码第 68 行**
+
+```text
+    socket.on('line_status', (m) => log('line_status: ' + JSON.stringify(m)));
+<!-- 注释：设置页面文本、样式或脚本语句。 -->
+```
+
+**源码第 71 行**
+
+```text
+    socket.on('event', (m) => log('event: ' + JSON.stringify(m)));
+<!-- 注释：设置页面文本、样式或脚本语句。 -->
+```
+
+**源码第 74 行**
+
+```text
+    socket.on('connect_error', (e) => log('connect_error: ' + e.message));
+<!-- 注释：设置页面文本、样式或脚本语句。 -->
+```
+
+**源码第 75 行**
+
+```text
+  </script>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 76 行**
+
+```text
+</body>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 77 行**
+
+```text
+</html>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```

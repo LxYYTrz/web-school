@@ -1,22 +1,89 @@
-# web/index.html 逐行说明
+# web/index.html 逐行注释
 
-[打开源码](../../../web/index.html) · 39 行 · 12 行待说明代码
+[打开源码](../../../web/index.html) · 39 行 · 12 行代码说明
 
-只列出非空、非纯注释行；原有注释请直接看源码。
+以下每个代码块先列原代码行，下一行紧跟解释。注释只用于阅读，不会写入可执行文件；行号对应当前源码。
 
-行号以当前源码为准。修改源码后应重新核对这份说明。
+**源码第 1 行**
 
-| 源码行 | 原语句 | 作用与关键字 |
-|---:|---|---|
-| 1 | <code>&lt;!doctype html&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 24 | <code>&lt;html lang="zh-CN" class="dark"&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 25 | <code>&lt;head&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 27 | <code>&lt;meta charset="UTF-8" /&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 29 | <code>&lt;meta name="viewport" content="width=device-width, initial-scale=1.0" /&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 31 | <code>&lt;title&gt;产线数字孪生监控平台&lt;/title&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 32 | <code>&lt;/head&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 33 | <code>&lt;body&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 35 | <code>&lt;div id="app"&gt;&lt;/div&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 37 | <code>&lt;script type="module" src="/src/main.ts"&gt;&lt;/script&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 38 | <code>&lt;/body&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
-| 39 | <code>&lt;/html&gt;</code> | 声明或结束一个 HTML 标签及其属性。 |
+```text
+<!doctype html>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 24 行**
+
+```text
+<html lang="zh-CN" class="dark">
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 关键字：class＝定义类。 -->
+```
+
+**源码第 25 行**
+
+```text
+  <head>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 27 行**
+
+```text
+    <meta charset="UTF-8" />
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 29 行**
+
+```text
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 31 行**
+
+```text
+    <title>产线数字孪生监控平台</title>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 32 行**
+
+```text
+  </head>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 33 行**
+
+```text
+  <body>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 35 行**
+
+```text
+    <div id="app"></div>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 37 行**
+
+```text
+    <script type="module" src="/src/main.ts"></script>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 关键字：type＝定义类型别名。 -->
+```
+
+**源码第 38 行**
+
+```text
+  </body>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```
+
+**源码第 39 行**
+
+```text
+</html>
+<!-- 注释：声明或结束一个 HTML 标签及其属性。 -->
+```

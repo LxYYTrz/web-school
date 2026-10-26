@@ -1,11 +1,12 @@
-# web/src/vite-env.d.ts 逐行说明
+# web/src/vite-env.d.ts 逐行注释
 
-[打开源码](../../../../web/src/vite-env.d.ts) · 1 行 · 1 行待说明代码
+[打开源码](../../../../web/src/vite-env.d.ts) · 1 行 · 1 行代码说明
 
-只列出非空、非纯注释行；原有注释请直接看源码。
+以下每个代码块先列原代码行，下一行紧跟解释。注释只用于阅读，不会写入可执行文件；行号对应当前源码。
 
-行号以当前源码为准。修改源码后应重新核对这份说明。
+**源码第 1 行**
 
-| 源码行 | 原语句 | 作用与关键字 |
-|---:|---|---|
-| 1 | <code>/// &lt;reference types="vite/client" /&gt;</code> | 把 Vite 的全局类型声明加入 TypeScript 编译范围。 |
+```text
+/// <reference types="vite/client" />
+// 注释：把 Vite 的全局类型声明加入 TypeScript 编译范围。
+```

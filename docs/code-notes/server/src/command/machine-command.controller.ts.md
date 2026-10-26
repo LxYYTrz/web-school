@@ -1,38 +1,201 @@
-# server/src/command/machine-command.controller.ts 逐行说明
+# server/src/command/machine-command.controller.ts 逐行注释
 
-[打开源码](../../../../../server/src/command/machine-command.controller.ts) · 64 行 · 28 行待说明代码
+[打开源码](../../../../../server/src/command/machine-command.controller.ts) · 64 行 · 28 行代码说明
 
-只列出非空、非纯注释行；原有注释请直接看源码。
+以下每个代码块先列原代码行，下一行紧跟解释。注释只用于阅读，不会写入可执行文件；行号对应当前源码。
 
-行号以当前源码为准。修改源码后应重新核对这份说明。
+**源码第 30 行**
 
-| 源码行 | 原语句 | 作用与关键字 |
-|---:|---|---|
-| 30 | <code>import { Body, Controller, Post, UseGuards } from '@nestjs/common';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 31 | <code>import { CommandBody, CommandService } from './command.service';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 32 | <code>import { MachineTokenGuard } from './machine-token.guard';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 33 | <code>import type { SessionUser } from '../auth/session-user';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`type`＝定义类型别名；`from`＝指定导入来源。 |
-| 35 | <code>export interface MachineCommandBody extends CommandBody {</code> | 声明 `MachineCommandBody` 的结构。 关键字：`export`＝向其他模块开放符号；`interface`＝定义类型接口；`extends`＝继承父类。 |
-| 36 | <code>lineId?: string;</code> | 续写当前表达式、对象、类型或调用。 |
-| 37 | <code>operator?: string;</code> | 续写当前表达式、对象、类型或调用。 |
-| 38 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 41 | <code>function sanitizeOperator(raw: unknown): string {</code> | 定义函数 `sanitizeOperator`。 关键字：`function`＝定义函数；`unknown`＝需检查后才能使用的类型。 |
-| 42 | <code>const s = String(raw ?? '').trim();</code> | 声明变量 `s` 并设置初始值或类型。 关键字：`const`＝声明不可重新绑定的变量。 |
-| 43 | <code>const cleaned = s.replace(/[^A-Za-z0-9_:.-]/g, '').slice(0, 64);</code> | 声明变量 `cleaned` 并设置初始值或类型。 关键字：`const`＝声明不可重新绑定的变量。 |
-| 44 | <code>return cleaned &#124;&#124; 'machine';</code> | 返回当前函数的结果。 关键字：`return`＝返回结果并结束当前函数。 |
-| 45 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 47 | <code>@Controller('api/machine')</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 48 | <code>export class MachineCommandController {</code> | 声明 `MachineCommandController` 的结构。 关键字：`export`＝向其他模块开放符号；`class`＝定义类。 |
-| 49 | <code>constructor(private readonly commands: CommandService) {}</code> | 定义或调用 `constructor`，参数由括号给出。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。 |
-| 51 | <code>@Post('commands')</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 52 | <code>@UseGuards(MachineTokenGuard)</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 53 | <code>send(@Body() body: MachineCommandBody) {</code> | 定义或调用 `send`，参数由括号给出。 |
-| 54 | <code>const lineCode = String(body?.lineId ?? '').trim();</code> | 声明变量 `lineCode` 并设置初始值或类型。 关键字：`const`＝声明不可重新绑定的变量。 |
-| 55 | <code>if (!lineCode) {</code> | 控制分支、循环或异常处理流程。 关键字：`if`＝按条件分支。 |
-| 56 | <code>return { ok: false, error: 'lineId 不能为空' };</code> | 返回当前函数的结果。 关键字：`return`＝返回结果并结束当前函数；`false`＝布尔假值。 |
-| 57 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 58 | <code>const operator = sanitizeOperator(body.operator);</code> | 声明变量 `operator` 并设置初始值或类型。 关键字：`const`＝声明不可重新绑定的变量。 |
-| 61 | <code>const user: SessionUser = { username: operator, level: 3 };</code> | 声明变量 `user` 并设置初始值或类型。 关键字：`const`＝声明不可重新绑定的变量。 |
-| 62 | <code>return this.commands.issue(lineCode, body, user);</code> | 返回当前函数的结果。 关键字：`return`＝返回结果并结束当前函数；`this`＝当前对象实例。 |
-| 63 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 64 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
+```text
+import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+// 注释：从 @nestjs/common 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 31 行**
+
+```text
+import { CommandBody, CommandService } from './command.service';
+// 注释：从 ./command.service 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 32 行**
+
+```text
+import { MachineTokenGuard } from './machine-token.guard';
+// 注释：从 ./machine-token.guard 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 33 行**
+
+```text
+import type { SessionUser } from '../auth/session-user';
+// 注释：从 ../auth/session-user 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 35 行**
+
+```text
+export interface MachineCommandBody extends CommandBody {
+// 注释：声明 `MachineCommandBody` 的结构。 关键字：`export`＝向其他模块开放符号；`interface`＝定义类型接口；`extends`＝继承父类。
+```
+
+**源码第 36 行**
+
+```text
+  lineId?: string;
+// 注释：声明 可选字段 lineId，类型为 string。
+```
+
+**源码第 37 行**
+
+```text
+  operator?: string;
+// 注释：声明 可选字段 operator，类型为 string。
+```
+
+**源码第 38 行**
+
+```text
+}
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 41 行**
+
+```text
+function sanitizeOperator(raw: unknown): string {
+// 注释：定义函数 `sanitizeOperator`。 关键字：`function`＝定义函数；`unknown`＝需检查后才能使用的类型。
+```
+
+**源码第 42 行**
+
+```text
+  const s = String(raw ?? '').trim();
+// 注释：声明 s，初始值由 String(raw ?? '').trim() 计算得到。 关键字：`const`＝声明不可重新绑定的变量。
+```
+
+**源码第 43 行**
+
+```text
+  const cleaned = s.replace(/[^A-Za-z0-9_:.-]/g, '').slice(0, 64);
+// 注释：声明 cleaned，初始值由 s.replace(/[^A-Za-z0-9_:.-]/g, '').slice(0, 64) 计算得到。 关键字：`const`＝声明不可重新绑定的变量。
+```
+
+**源码第 44 行**
+
+```text
+  return cleaned || 'machine';
+// 注释：返回 cleaned || 'machine' 的值，结束当前函数。 关键字：`return`＝返回结果并结束当前函数。
+```
+
+**源码第 45 行**
+
+```text
+}
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 47 行**
+
+```text
+@Controller('api/machine')
+// 注释：装饰器 Controller：声明 HTTP 控制器及路由前缀。
+```
+
+**源码第 48 行**
+
+```text
+export class MachineCommandController {
+// 注释：声明 `MachineCommandController` 的结构。 关键字：`export`＝向其他模块开放符号；`class`＝定义类。
+```
+
+**源码第 49 行**
+
+```text
+  constructor(private readonly commands: CommandService) {}
+// 注释：定义类的构造函数；创建实例时接收参数并初始化依赖。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。
+```
+
+**源码第 51 行**
+
+```text
+  @Post('commands')
+// 注释：装饰器 Post：把方法绑定到 POST 路由。
+```
+
+**源码第 52 行**
+
+```text
+  @UseGuards(MachineTokenGuard)
+// 注释：装饰器 UseGuards：执行路由前先应用权限守卫。
+```
+
+**源码第 53 行**
+
+```text
+  send(@Body() body: MachineCommandBody) {
+// 注释：定义方法 send；括号中声明参数，花括号内实现逻辑。
+```
+
+**源码第 54 行**
+
+```text
+    const lineCode = String(body?.lineId ?? '').trim();
+// 注释：声明 lineCode，初始值由 String(body?.lineId ?? '').trim() 计算得到。 关键字：`const`＝声明不可重新绑定的变量。
+```
+
+**源码第 55 行**
+
+```text
+    if (!lineCode) {
+// 注释：判断 if (!lineCode) { 中的条件，成立时执行对应分支。 关键字：`if`＝按条件分支。
+```
+
+**源码第 56 行**
+
+```text
+      return { ok: false, error: 'lineId 不能为空' };
+// 注释：返回 { ok: false, error: 'lineId 不能为空' } 的值，结束当前函数。 关键字：`return`＝返回结果并结束当前函数；`false`＝布尔假值。
+```
+
+**源码第 57 行**
+
+```text
+    }
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 58 行**
+
+```text
+    const operator = sanitizeOperator(body.operator);
+// 注释：声明 operator，初始值由 sanitizeOperator(body.operator) 计算得到。 关键字：`const`＝声明不可重新绑定的变量。
+```
+
+**源码第 61 行**
+
+```text
+    const user: SessionUser = { username: operator, level: 3 };
+// 注释：声明 user，初始值由 { username: operator, level: 3 } 计算得到。 关键字：`const`＝声明不可重新绑定的变量。
+```
+
+**源码第 62 行**
+
+```text
+    return this.commands.issue(lineCode, body, user);
+// 注释：返回 this.commands.issue(lineCode, body, user) 的值，结束当前函数。 关键字：`return`＝返回结果并结束当前函数；`this`＝当前对象实例。
+```
+
+**源码第 63 行**
+
+```text
+  }
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 64 行**
+
+```text
+}
+// 注释：结束当前对象、函数或条件代码块。
+```

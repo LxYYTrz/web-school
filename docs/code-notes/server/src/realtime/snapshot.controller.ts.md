@@ -1,20 +1,75 @@
-# server/src/realtime/snapshot.controller.ts 逐行说明
+# server/src/realtime/snapshot.controller.ts 逐行注释
 
-[打开源码](../../../../../server/src/realtime/snapshot.controller.ts) · 44 行 · 10 行待说明代码
+[打开源码](../../../../../server/src/realtime/snapshot.controller.ts) · 44 行 · 10 行代码说明
 
-只列出非空、非纯注释行；原有注释请直接看源码。
+以下每个代码块先列原代码行，下一行紧跟解释。注释只用于阅读，不会写入可执行文件；行号对应当前源码。
 
-行号以当前源码为准。修改源码后应重新核对这份说明。
+**源码第 29 行**
 
-| 源码行 | 原语句 | 作用与关键字 |
-|---:|---|---|
-| 29 | <code>import { Controller, Get, Param } from '@nestjs/common';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 30 | <code>import { LineStateService } from '../state/line-state.service';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 36 | <code>@Controller('api/lines')</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 37 | <code>export class SnapshotController {</code> | 声明 `SnapshotController` 的结构。 关键字：`export`＝向其他模块开放符号；`class`＝定义类。 |
-| 38 | <code>constructor(private readonly state: LineStateService) {}</code> | 定义或调用 `constructor`，参数由括号给出。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。 |
-| 40 | <code>@Get(':lineId/snapshot')</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 41 | <code>snapshot(@Param('lineId') lineId: string) {</code> | 定义或调用 `snapshot`，参数由括号给出。 |
-| 42 | <code>return this.state.getLineSnapshot(lineId);</code> | 返回当前函数的结果。 关键字：`return`＝返回结果并结束当前函数；`this`＝当前对象实例。 |
-| 43 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 44 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
+```text
+import { Controller, Get, Param } from '@nestjs/common';
+// 注释：从 @nestjs/common 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 30 行**
+
+```text
+import { LineStateService } from '../state/line-state.service';
+// 注释：从 ../state/line-state.service 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 36 行**
+
+```text
+@Controller('api/lines')
+// 注释：装饰器 Controller：声明 HTTP 控制器及路由前缀。
+```
+
+**源码第 37 行**
+
+```text
+export class SnapshotController {
+// 注释：声明 `SnapshotController` 的结构。 关键字：`export`＝向其他模块开放符号；`class`＝定义类。
+```
+
+**源码第 38 行**
+
+```text
+  constructor(private readonly state: LineStateService) {}
+// 注释：定义类的构造函数；创建实例时接收参数并初始化依赖。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。
+```
+
+**源码第 40 行**
+
+```text
+  @Get(':lineId/snapshot')
+// 注释：装饰器 Get：把方法绑定到 GET 路由。
+```
+
+**源码第 41 行**
+
+```text
+  snapshot(@Param('lineId') lineId: string) {
+// 注释：定义方法 snapshot；括号中声明参数，花括号内实现逻辑。
+```
+
+**源码第 42 行**
+
+```text
+    return this.state.getLineSnapshot(lineId);
+// 注释：返回 this.state.getLineSnapshot(lineId) 的值，结束当前函数。 关键字：`return`＝返回结果并结束当前函数；`this`＝当前对象实例。
+```
+
+**源码第 43 行**
+
+```text
+  }
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 44 行**
+
+```text
+}
+// 注释：结束当前对象、函数或条件代码块。
+```

@@ -1,88 +1,551 @@
-# server/src/ai/ai.controller.ts 逐行说明
+# server/src/ai/ai.controller.ts 逐行注释
 
-[打开源码](../../../../../server/src/ai/ai.controller.ts) · 111 行 · 78 行待说明代码
+[打开源码](../../../../../server/src/ai/ai.controller.ts) · 111 行 · 78 行代码说明
 
-只列出非空、非纯注释行；原有注释请直接看源码。
+以下每个代码块先列原代码行，下一行紧跟解释。注释只用于阅读，不会写入可执行文件；行号对应当前源码。
 
-行号以当前源码为准。修改源码后应重新核对这份说明。
+**源码第 1 行**
 
-| 源码行 | 原语句 | 作用与关键字 |
-|---:|---|---|
-| 1 | <code>import {</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号。 |
-| 2 | <code>BadRequestException, Body, Controller, Get, Inject, Logger, Param, Post, Sse, UseGuards,</code> | 续写当前表达式、对象、类型或调用。 |
-| 3 | <code>} from '@nestjs/common';</code> | 续写当前表达式、对象、类型或调用。 关键字：`from`＝指定导入来源。 |
-| 4 | <code>import { MessageEvent } from '@nestjs/common';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 5 | <code>import { Observable } from 'rxjs';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 6 | <code>import { Pool } from 'pg';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 7 | <code>import { AuthGuard } from '../auth/auth.guard';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 8 | <code>import { CurrentUser } from '../auth/current-user.decorator';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 9 | <code>import type { SessionUser } from '../auth/session-user';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`type`＝定义类型别名；`from`＝指定导入来源。 |
-| 10 | <code>import { CommandGuard } from '../command/command.guard';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 11 | <code>import { CommandService } from '../command/command.service';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 12 | <code>import { PG_POOL } from '../infra/tokens';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 13 | <code>import { config } from '../config/configuration';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 14 | <code>import { AiService, ChatBody } from './ai.service';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 15 | <code>import { ProposalService } from './proposal.service';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 25 | <code>@Controller('api/ai')</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 26 | <code>export class AiController {</code> | 声明 `AiController` 的结构。 关键字：`export`＝向其他模块开放符号；`class`＝定义类。 |
-| 27 | <code>private readonly logger = new Logger(AiController.name);</code> | 续写当前表达式、对象、类型或调用。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值；`new`＝创建对象实例。 |
-| 29 | <code>constructor(</code> | 调用函数、设置值或更新状态。 |
-| 30 | <code>private readonly ai: AiService,</code> | 续写当前表达式、对象、类型或调用。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。 |
-| 31 | <code>private readonly proposals: ProposalService,</code> | 续写当前表达式、对象、类型或调用。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。 |
-| 32 | <code>private readonly commands: CommandService,</code> | 续写当前表达式、对象、类型或调用。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。 |
-| 33 | <code>@Inject(PG_POOL) private readonly pool: Pool,</code> | 使用装饰器声明框架元数据或参数注入。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。 |
-| 34 | <code>) {}</code> | 续写当前表达式、对象、类型或调用。 |
-| 37 | <code>@Get('status')</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 38 | <code>@UseGuards(AuthGuard)</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 39 | <code>status() {</code> | 定义或调用 `status`，参数由括号给出。 |
-| 40 | <code>return {</code> | 返回当前函数的结果。 关键字：`return`＝返回结果并结束当前函数。 |
-| 41 | <code>enabled: Boolean(config.ai.apiKey),</code> | 设置字段 `enabled`。 |
-| 42 | <code>model: config.ai.model,</code> | 设置字段 `model`。 |
-| 43 | <code>};</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 44 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 48 | <code>@Post('chat')</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 49 | <code>@Sse('chat')</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 50 | <code>@UseGuards(AuthGuard)</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 51 | <code>chat(@Body() body: ChatBody, @CurrentUser() user: SessionUser): Observable&lt;MessageEvent&gt; {</code> | 定义或调用 `chat`，参数由括号给出。 |
-| 52 | <code>this.ai.assertConfigured();</code> | 调用函数、设置值或更新状态。 关键字：`this`＝当前对象实例。 |
-| 53 | <code>if (!body?.message?.trim()) {</code> | 控制分支、循环或异常处理流程。 关键字：`if`＝按条件分支。 |
-| 54 | <code>throw new BadRequestException({ code: 400, msg: 'message 不能为空' });</code> | 抛出异常供调用方处理。 关键字：`throw`＝抛出错误；`new`＝创建对象实例。 |
-| 55 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 56 | <code>return this.ai.stream(body, user);</code> | 返回当前函数的结果。 关键字：`return`＝返回结果并结束当前函数；`this`＝当前对象实例。 |
-| 57 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 69 | <code>@Post('proposals/:id/confirm')</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 70 | <code>@UseGuards(AuthGuard, CommandGuard)</code> | 使用装饰器声明框架元数据或参数注入。 |
-| 71 | <code>async confirm(@Param('id') id: string, @CurrentUser() user: SessionUser) {</code> | 定义或调用 `confirm`，参数由括号给出。 关键字：`async`＝声明异步函数。 |
-| 72 | <code>const p = await this.proposals.claim(id);</code> | 声明变量 `p` 并设置初始值或类型。 关键字：`const`＝声明不可重新绑定的变量；`await`＝等待异步操作完成；`this`＝当前对象实例。 |
-| 73 | <code>if (!p) return { ok: false, error: '建议不存在、已确认过或已过期' };</code> | 控制分支、循环或异常处理流程。 关键字：`if`＝按条件分支；`return`＝返回结果并结束当前函数；`false`＝布尔假值。 |
-| 76 | <code>const bad = this.proposals.revalidate(p);</code> | 声明变量 `bad` 并设置初始值或类型。 关键字：`const`＝声明不可重新绑定的变量；`this`＝当前对象实例。 |
-| 77 | <code>if (bad) return { ok: false, error: `建议未通过下发前校验:${bad}` };</code> | 控制分支、循环或异常处理流程。 关键字：`if`＝按条件分支；`return`＝返回结果并结束当前函数；`false`＝布尔假值。 |
-| 79 | <code>const r = await this.commands.issue(p.lineId, {</code> | 声明变量 `r` 并设置初始值或类型。 关键字：`const`＝声明不可重新绑定的变量；`await`＝等待异步操作完成；`this`＝当前对象实例。 |
-| 80 | <code>deviceId: p.deviceId,</code> | 设置字段 `deviceId`。 |
-| 81 | <code>type: p.type,</code> | 设置字段 `type`。 |
-| 82 | <code>params: p.params,</code> | 设置字段 `params`。 |
-| 83 | <code>}, user);</code> | 续写当前表达式、对象、类型或调用。 |
-| 85 | <code>if (!r.ok) {</code> | 控制分支、循环或异常处理流程。 关键字：`if`＝按条件分支。 |
-| 87 | <code>await this.proposals.restore(p);</code> | 调用函数、设置值或更新状态。 关键字：`await`＝等待异步操作完成；`this`＝当前对象实例。 |
-| 88 | <code>return r;</code> | 返回当前函数的结果。 关键字：`return`＝返回结果并结束当前函数。 |
-| 89 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 91 | <code>this.pool</code> | 续写当前表达式、对象、类型或调用。 关键字：`this`＝当前对象实例。 |
-| 92 | <code>.query(</code> | 调用函数、设置值或更新状态。 |
-| 93 | <code>`INSERT INTO audit_logs (user_id, action, target, detail)</code> | 写入数据。 关键字：`INSERT`＝写入新行；`INTO`＝指定写入目标。 |
-| 94 | <code>SELECT id, 'command:execute:ai-confirmed', $2, $3::jsonb</code> | 读取数据。 关键字：`SELECT`＝读取指定列。 |
-| 95 | <code>FROM users WHERE username = $1`,</code> | 指定读取来源表。 关键字：`FROM`＝指定查询来源表；`WHERE`＝限定目标行。 |
-| 96 | <code>[</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 97 | <code>user.username,</code> | 续写当前表达式、对象、类型或调用。 |
-| 98 | <code>`${p.type} @ ${p.lineId}/${p.deviceId}`,</code> | 续写当前表达式、对象、类型或调用。 |
-| 99 | <code>JSON.stringify({</code> | 调用函数、设置值或更新状态。 |
-| 100 | <code>cmdId: r.cmdId,</code> | 设置字段 `cmdId`。 |
-| 101 | <code>proposalId: p.id,</code> | 设置字段 `proposalId`。 |
-| 102 | <code>aiReason: p.reason,</code> | 设置字段 `aiReason`。 |
-| 103 | <code>params: p.params,</code> | 设置字段 `params`。 |
-| 104 | <code>}),</code> | 续写当前表达式、对象、类型或调用。 |
-| 105 | <code>],</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 106 | <code>)</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 107 | <code>.catch((e) =&gt; this.logger.error(`写 AI 确认审计失败: ${e.message}`));</code> | 调用函数、设置值或更新状态。 关键字：`catch`＝捕获异常；`this`＝当前对象实例。 |
-| 109 | <code>return { ok: true, cmdId: r.cmdId, proposalId: p.id };</code> | 返回当前函数的结果。 关键字：`return`＝返回结果并结束当前函数；`true`＝布尔真值。 |
-| 110 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
-| 111 | <code>}</code> | 结束或开始当前代码块、对象、数组或调用。 |
+```text
+import {
+// 注释：导入或导出模块符号。 关键字：`import`＝导入模块或符号。
+```
+
+**源码第 2 行**
+
+```text
+  BadRequestException, Body, Controller, Get, Inject, Logger, Param, Post, Sse, UseGuards,
+// 注释：继续当前表达式；这一行的值由外层代码块或调用使用。
+```
+
+**源码第 3 行**
+
+```text
+} from '@nestjs/common';
+// 注释：继续当前表达式；这一行的值由外层代码块或调用使用。 关键字：`from`＝指定导入来源。
+```
+
+**源码第 4 行**
+
+```text
+import { MessageEvent } from '@nestjs/common';
+// 注释：从 @nestjs/common 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 5 行**
+
+```text
+import { Observable } from 'rxjs';
+// 注释：从 rxjs 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 6 行**
+
+```text
+import { Pool } from 'pg';
+// 注释：从 pg 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 7 行**
+
+```text
+import { AuthGuard } from '../auth/auth.guard';
+// 注释：从 ../auth/auth.guard 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 8 行**
+
+```text
+import { CurrentUser } from '../auth/current-user.decorator';
+// 注释：从 ../auth/current-user.decorator 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 9 行**
+
+```text
+import type { SessionUser } from '../auth/session-user';
+// 注释：从 ../auth/session-user 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 10 行**
+
+```text
+import { CommandGuard } from '../command/command.guard';
+// 注释：从 ../command/command.guard 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 11 行**
+
+```text
+import { CommandService } from '../command/command.service';
+// 注释：从 ../command/command.service 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 12 行**
+
+```text
+import { PG_POOL } from '../infra/tokens';
+// 注释：从 ../infra/tokens 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 13 行**
+
+```text
+import { config } from '../config/configuration';
+// 注释：从 ../config/configuration 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 14 行**
+
+```text
+import { AiService, ChatBody } from './ai.service';
+// 注释：从 ./ai.service 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 15 行**
+
+```text
+import { ProposalService } from './proposal.service';
+// 注释：从 ./proposal.service 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 25 行**
+
+```text
+@Controller('api/ai')
+// 注释：装饰器 Controller：声明 HTTP 控制器及路由前缀。
+```
+
+**源码第 26 行**
+
+```text
+export class AiController {
+// 注释：声明 `AiController` 的结构。 关键字：`export`＝向其他模块开放符号；`class`＝定义类。
+```
+
+**源码第 27 行**
+
+```text
+  private readonly logger = new Logger(AiController.name);
+// 注释：调用 Logger；括号中的表达式是传入的参数。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值；`new`＝创建对象实例。
+```
+
+**源码第 29 行**
+
+```text
+  constructor(
+// 注释：调用 constructor，把括号中的值作为参数传入。
+```
+
+**源码第 30 行**
+
+```text
+    private readonly ai: AiService,
+// 注释：声明类属性或构造参数 ai，类型为 AiService。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。
+```
+
+**源码第 31 行**
+
+```text
+    private readonly proposals: ProposalService,
+// 注释：声明类属性或构造参数 proposals，类型为 ProposalService。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。
+```
+
+**源码第 32 行**
+
+```text
+    private readonly commands: CommandService,
+// 注释：声明类属性或构造参数 commands，类型为 CommandService。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。
+```
+
+**源码第 33 行**
+
+```text
+    @Inject(PG_POOL) private readonly pool: Pool,
+// 注释：装饰器 Inject：按令牌注入指定依赖。 关键字：`private`＝限定类内部访问；`readonly`＝禁止重新赋值。
+```
+
+**源码第 34 行**
+
+```text
+  ) {}
+// 注释：结束构造函数参数列表；空函数体表示仅使用参数属性注入依赖。
+```
+
+**源码第 37 行**
+
+```text
+  @Get('status')
+// 注释：装饰器 Get：把方法绑定到 GET 路由。
+```
+
+**源码第 38 行**
+
+```text
+  @UseGuards(AuthGuard)
+// 注释：装饰器 UseGuards：执行路由前先应用权限守卫。
+```
+
+**源码第 39 行**
+
+```text
+  status() {
+// 注释：定义方法 status；括号中声明参数，花括号内实现逻辑。
+```
+
+**源码第 40 行**
+
+```text
+    return {
+// 注释：返回 { 的值，结束当前函数。 关键字：`return`＝返回结果并结束当前函数。
+```
+
+**源码第 41 行**
+
+```text
+      enabled: Boolean(config.ai.apiKey),
+// 注释：设置字段 `enabled`。
+```
+
+**源码第 42 行**
+
+```text
+      model: config.ai.model,
+// 注释：设置字段 `model`。
+```
+
+**源码第 43 行**
+
+```text
+    };
+// 注释：结束当前对象或代码块，并完成这条语句。
+```
+
+**源码第 44 行**
+
+```text
+  }
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 48 行**
+
+```text
+  @Post('chat')
+// 注释：装饰器 Post：把方法绑定到 POST 路由。
+```
+
+**源码第 49 行**
+
+```text
+  @Sse('chat')
+// 注释：装饰器 Sse：给后面的类、方法或参数附加元数据。
+```
+
+**源码第 50 行**
+
+```text
+  @UseGuards(AuthGuard)
+// 注释：装饰器 UseGuards：执行路由前先应用权限守卫。
+```
+
+**源码第 51 行**
+
+```text
+  chat(@Body() body: ChatBody, @CurrentUser() user: SessionUser): Observable<MessageEvent> {
+// 注释：定义方法 chat；括号中声明参数，花括号内实现逻辑。
+```
+
+**源码第 52 行**
+
+```text
+    this.ai.assertConfigured();
+// 注释：调用 this.ai.assertConfigured，把括号中的值作为参数传入。 关键字：`this`＝当前对象实例。
+```
+
+**源码第 53 行**
+
+```text
+    if (!body?.message?.trim()) {
+// 注释：判断 if (!body?.message?.trim()) { 中的条件，成立时执行对应分支。 关键字：`if`＝按条件分支。
+```
+
+**源码第 54 行**
+
+```text
+      throw new BadRequestException({ code: 400, msg: 'message 不能为空' });
+// 注释：抛出异常供调用方处理。 关键字：`throw`＝抛出错误；`new`＝创建对象实例。
+```
+
+**源码第 55 行**
+
+```text
+    }
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 56 行**
+
+```text
+    return this.ai.stream(body, user);
+// 注释：返回 this.ai.stream(body, user) 的值，结束当前函数。 关键字：`return`＝返回结果并结束当前函数；`this`＝当前对象实例。
+```
+
+**源码第 57 行**
+
+```text
+  }
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 69 行**
+
+```text
+  @Post('proposals/:id/confirm')
+// 注释：装饰器 Post：把方法绑定到 POST 路由。
+```
+
+**源码第 70 行**
+
+```text
+  @UseGuards(AuthGuard, CommandGuard)
+// 注释：装饰器 UseGuards：执行路由前先应用权限守卫。
+```
+
+**源码第 71 行**
+
+```text
+  async confirm(@Param('id') id: string, @CurrentUser() user: SessionUser) {
+// 注释：定义方法 confirm；括号中声明参数，花括号内实现逻辑。 关键字：`async`＝声明异步函数。
+```
+
+**源码第 72 行**
+
+```text
+    const p = await this.proposals.claim(id);
+// 注释：声明 p，初始值由 await this.proposals.claim(id) 计算得到。 关键字：`const`＝声明不可重新绑定的变量；`await`＝等待异步操作完成；`this`＝当前对象实例。
+```
+
+**源码第 73 行**
+
+```text
+    if (!p) return { ok: false, error: '建议不存在、已确认过或已过期' };
+// 注释：判断 if (!p) return { ok: false, error: '建议不存在、已确认过或已过期' }; 中的条件，成立时执行对应分支。 关键字：`if`＝按条件分支；`return`＝返回结果并结束当前函数；`false`＝布尔假值。
+```
+
+**源码第 76 行**
+
+```text
+    const bad = this.proposals.revalidate(p);
+// 注释：声明 bad，初始值由 this.proposals.revalidate(p) 计算得到。 关键字：`const`＝声明不可重新绑定的变量；`this`＝当前对象实例。
+```
+
+**源码第 77 行**
+
+```text
+    if (bad) return { ok: false, error: `建议未通过下发前校验:${bad}` };
+// 注释：判断 if (bad) return { ok: false, error: `建议未通过下发前校验:${bad}` }; 中的条件，成立时执行对应分支。 关键字：`if`＝按条件分支；`return`＝返回结果并结束当前函数；`false`＝布尔假值。
+```
+
+**源码第 79 行**
+
+```text
+    const r = await this.commands.issue(p.lineId, {
+// 注释：声明 r，初始值由 await this.commands.issue(p.lineId, { 计算得到。 关键字：`const`＝声明不可重新绑定的变量；`await`＝等待异步操作完成；`this`＝当前对象实例。
+```
+
+**源码第 80 行**
+
+```text
+      deviceId: p.deviceId,
+// 注释：设置字段 `deviceId`。
+```
+
+**源码第 81 行**
+
+```text
+      type: p.type,
+// 注释：设置字段 `type`。 关键字：type＝定义类型别名。
+```
+
+**源码第 82 行**
+
+```text
+      params: p.params,
+// 注释：设置字段 `params`。
+```
+
+**源码第 83 行**
+
+```text
+    }, user);
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 85 行**
+
+```text
+    if (!r.ok) {
+// 注释：判断 if (!r.ok) { 中的条件，成立时执行对应分支。 关键字：`if`＝按条件分支。
+```
+
+**源码第 87 行**
+
+```text
+      await this.proposals.restore(p);
+// 注释：调用 this.proposals.restore，把括号中的值作为参数传入。 关键字：`await`＝等待异步操作完成；`this`＝当前对象实例。
+```
+
+**源码第 88 行**
+
+```text
+      return r;
+// 注释：返回 r 的值，结束当前函数。 关键字：`return`＝返回结果并结束当前函数。
+```
+
+**源码第 89 行**
+
+```text
+    }
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 91 行**
+
+```text
+    this.pool
+// 注释：读取 this.pool，作为下一行链式方法调用的接收对象。 关键字：`this`＝当前对象实例。
+```
+
+**源码第 92 行**
+
+```text
+      .query(
+// 注释：调用 .query，把括号中的值作为参数传入。
+```
+
+**源码第 93 行**
+
+```text
+        `INSERT INTO audit_logs (user_id, action, target, detail)
+// 注释：写入数据。 关键字：`INSERT`＝写入新行；`INTO`＝指定写入目标。
+```
+
+**源码第 94 行**
+
+```text
+         SELECT id, 'command:execute:ai-confirmed', $2, $3::jsonb
+// 注释：读取数据。 关键字：`SELECT`＝读取指定列。
+```
+
+**源码第 95 行**
+
+```text
+           FROM users WHERE username = $1`,
+// 注释：指定读取来源表。 关键字：`FROM`＝指定查询来源表；`WHERE`＝限定目标行。
+```
+
+**源码第 96 行**
+
+```text
+        [
+// 注释：开始当前表达式的分组或数组内容。
+```
+
+**源码第 97 行**
+
+```text
+          user.username,
+// 注释：继续当前表达式；这一行的值由外层代码块或调用使用。
+```
+
+**源码第 98 行**
+
+```text
+          `${p.type} @ ${p.lineId}/${p.deviceId}`,
+// 注释：构造模板字符串，把 ${...} 中的值插入目标路径或文本。 关键字：type＝定义类型别名。
+```
+
+**源码第 99 行**
+
+```text
+          JSON.stringify({
+// 注释：调用 JSON.stringify，把括号中的值作为参数传入。
+```
+
+**源码第 100 行**
+
+```text
+            cmdId: r.cmdId,
+// 注释：设置字段 `cmdId`。
+```
+
+**源码第 101 行**
+
+```text
+            proposalId: p.id,
+// 注释：设置字段 `proposalId`。
+```
+
+**源码第 102 行**
+
+```text
+            aiReason: p.reason,
+// 注释：设置字段 `aiReason`。
+```
+
+**源码第 103 行**
+
+```text
+            params: p.params,
+// 注释：设置字段 `params`。
+```
+
+**源码第 104 行**
+
+```text
+          }),
+// 注释：结束当前回调或对象，并完成外层函数调用。
+```
+
+**源码第 105 行**
+
+```text
+        ],
+// 注释：结束当前数组，继续外层表达式。
+```
+
+**源码第 106 行**
+
+```text
+      )
+// 注释：结束当前集合、分组或调用参数。
+```
+
+**源码第 107 行**
+
+```text
+      .catch((e) => this.logger.error(`写 AI 确认审计失败: ${e.message}`));
+// 注释：调用 .catch，把括号中的值作为参数传入。 关键字：`catch`＝捕获异常；`this`＝当前对象实例。
+```
+
+**源码第 109 行**
+
+```text
+    return { ok: true, cmdId: r.cmdId, proposalId: p.id };
+// 注释：返回 { ok: true, cmdId: r.cmdId, proposalId: p.id } 的值，结束当前函数。 关键字：`return`＝返回结果并结束当前函数；`true`＝布尔真值。
+```
+
+**源码第 110 行**
+
+```text
+  }
+// 注释：结束当前对象、函数或条件代码块。
+```
+
+**源码第 111 行**
+
+```text
+}
+// 注释：结束当前对象、函数或条件代码块。
+```

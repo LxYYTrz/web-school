@@ -1,24 +1,103 @@
-# web/src/main.ts 逐行说明
+# web/src/main.ts 逐行注释
 
-[打开源码](../../../../web/src/main.ts) · 52 行 · 14 行待说明代码
+[打开源码](../../../../web/src/main.ts) · 52 行 · 14 行代码说明
 
-只列出非空、非纯注释行；原有注释请直接看源码。
+以下每个代码块先列原代码行，下一行紧跟解释。注释只用于阅读，不会写入可执行文件；行号对应当前源码。
 
-行号以当前源码为准。修改源码后应重新核对这份说明。
+**源码第 34 行**
 
-| 源码行 | 原语句 | 作用与关键字 |
-|---:|---|---|
-| 34 | <code>import { createApp } from 'vue';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 35 | <code>import { createPinia } from 'pinia';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 36 | <code>import ElementPlus from 'element-plus';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 37 | <code>import zhCn from 'element-plus/es/locale/lang/zh-cn';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 38 | <code>import 'element-plus/dist/index.css';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号。 |
-| 39 | <code>import 'element-plus/theme-chalk/dark/css-vars.css';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号。 |
-| 40 | <code>import App from './App.vue';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 41 | <code>import { router } from './router';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。 |
-| 42 | <code>import './styles.css';</code> | 导入或导出模块符号。 关键字：`import`＝导入模块或符号。 |
-| 45 | <code>const app = createApp(App);</code> | 声明变量 `app` 并设置初始值或类型。 关键字：`const`＝声明不可重新绑定的变量。 |
-| 46 | <code>app.use(createPinia());</code> | 调用函数、设置值或更新状态。 |
-| 48 | <code>app.use(router);</code> | 调用函数、设置值或更新状态。 |
-| 50 | <code>app.use(ElementPlus, { locale: zhCn });</code> | 调用函数、设置值或更新状态。 |
-| 52 | <code>app.mount('#app');</code> | 调用函数、设置值或更新状态。 |
+```text
+import { createApp } from 'vue';
+// 注释：从 vue 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 35 行**
+
+```text
+import { createPinia } from 'pinia';
+// 注释：从 pinia 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 36 行**
+
+```text
+import ElementPlus from 'element-plus';
+// 注释：从 element-plus 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 37 行**
+
+```text
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
+// 注释：从 element-plus/es/locale/lang/zh-cn 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 38 行**
+
+```text
+import 'element-plus/dist/index.css';
+// 注释：导入或导出模块符号。 关键字：`import`＝导入模块或符号。
+```
+
+**源码第 39 行**
+
+```text
+import 'element-plus/theme-chalk/dark/css-vars.css';
+// 注释：导入或导出模块符号。 关键字：`import`＝导入模块或符号。
+```
+
+**源码第 40 行**
+
+```text
+import App from './App.vue';
+// 注释：从 ./App.vue 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 41 行**
+
+```text
+import { router } from './router';
+// 注释：从 ./router 导入这一行列出的符号，供本文件调用。 关键字：`import`＝导入模块或符号；`from`＝指定导入来源。
+```
+
+**源码第 42 行**
+
+```text
+import './styles.css';
+// 注释：导入或导出模块符号。 关键字：`import`＝导入模块或符号。
+```
+
+**源码第 45 行**
+
+```text
+const app = createApp(App);
+// 注释：声明 app，初始值由 createApp(App) 计算得到。 关键字：`const`＝声明不可重新绑定的变量。
+```
+
+**源码第 46 行**
+
+```text
+app.use(createPinia());
+// 注释：调用 app.use，把括号中的值作为参数传入。
+```
+
+**源码第 48 行**
+
+```text
+app.use(router);
+// 注释：调用 app.use，把括号中的值作为参数传入。
+```
+
+**源码第 50 行**
+
+```text
+app.use(ElementPlus, { locale: zhCn });
+// 注释：调用 app.use，把括号中的值作为参数传入。
+```
+
+**源码第 52 行**
+
+```text
+app.mount('#app');
+// 注释：调用 app.mount，把括号中的值作为参数传入。
+```

@@ -1,13 +1,26 @@
-# scripts/start-ipc.bat 逐行说明
+# scripts/start-ipc.bat 逐行注释
 
-[打开源码](../../../scripts/start-ipc.bat) · 5 行 · 3 行待说明代码
+[打开源码](../../../scripts/start-ipc.bat) · 5 行 · 3 行代码说明
 
-只列出非空、非纯注释行；原有注释请直接看源码。
+以下每个代码块先列原代码行，下一行紧跟解释。注释只用于阅读，不会写入可执行文件；行号对应当前源码。
 
-行号以当前源码为准。修改源码后应重新核对这份说明。
+**源码第 1 行**
 
-| 源码行 | 原语句 | 作用与关键字 |
-|---:|---|---|
-| 1 | <code>@echo off</code> | 执行脚本命令、设置变量或控制执行流程。 |
-| 4 | <code>powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0ipc-recover.ps1" %*</code> | 执行脚本命令、设置变量或控制执行流程。 |
-| 5 | <code>exit /b %ERRORLEVEL%</code> | 执行脚本命令、设置变量或控制执行流程。 |
+```text
+@echo off
+# 注释：执行脚本命令、设置变量或控制执行流程。
+```
+
+**源码第 4 行**
+
+```text
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0ipc-recover.ps1" %*
+# 注释：执行脚本命令、设置变量或控制执行流程。
+```
+
+**源码第 5 行**
+
+```text
+exit /b %ERRORLEVEL%
+# 注释：执行脚本命令、设置变量或控制执行流程。
+```
