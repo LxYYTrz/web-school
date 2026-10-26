@@ -1,4 +1,5 @@
 /**
+ // 这一段负责配置和实现 web/src/main.ts 对应的项目模块，为后续代码提供当前文件的处理入口。
  * ============================================================================
  * 文件作用：前端应用入口（挂载 Vue 应用）
  * 所属模块：web/src/
@@ -32,35 +33,50 @@
  *   所以前端刷新页面不会丢数据 —— 状态在后端的 Redis 里。
  */
 import { createApp } from 'vue';
-// 从 vue 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 vue 导入这一行列出的符号，供本文件调用。
+// createApp：Vue 创建应用实例的函数
 import { createPinia } from 'pinia';
-// 从 pinia 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 pinia 导入这一行列出的符号，供本文件调用。
+// createPinia：Pinia 创建全局状态管理实例的函数
 import ElementPlus from 'element-plus';
-// 从 element-plus 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 element-plus 导入这一行列出的符号，供本文件调用。
+// ElementPlus：从 element-plus 导入的对象，用于本文件的Element Plus 界面组件与提示 API
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
-// 从 element-plus/es/locale/lang/zh-cn 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 element-plus/es/locale/lang/zh-cn 导入这一行列出的符号，供本文件调用。
+// zhCn：从 element-plus/es/locale/lang/zh-cn 导入的对象，用于本文件的调用或类型约束
 import 'element-plus/dist/index.css';
-// 导入或导出模块符号。 关键字：import＝导入模块或符号。
+// 从 element-plus/dist/index.css 加载本文件需要的对象，供后续处理使用。
+// element-plus/dist/index.css 在导入时执行自身初始化；本行只需要其全局样式、元数据或配置副作用
 import 'element-plus/theme-chalk/dark/css-vars.css';
-// 导入或导出模块符号。 关键字：import＝导入模块或符号。
+// 从 element-plus/theme-chalk/dark/css-vars.css 加载本文件需要的对象，供后续处理使用。
+// element-plus/theme-chalk/dark/css-vars.css 在导入时执行自身初始化；本行只需要其全局样式、元数据或配置副作用
 import App from './App.vue';
-// 从 ./App.vue 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 ./App.vue 导入这一行列出的符号，供本文件调用。
+// App：从 ./App.vue 导入的对象，用于本文件的调用或类型约束
 import { router } from './router';
-// 从 ./router 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 ./router 导入这一行列出的符号，供本文件调用。
+// router：从 ./router 导入的对象，用于本文件的调用或类型约束
 import './styles.css';
-// 导入或导出模块符号。 关键字：import＝导入模块或符号。
+// 从 ./styles.css 加载本文件需要的对象，供后续处理使用。
+// ./styles.css 在导入时执行自身初始化；本行只需要其全局样式、元数据或配置副作用
 
 // 创建 Vue 应用实例
 const app = createApp(App);
-// 声明 app，初始值由 createApp(App) 计算得到。 关键字：const＝声明不可重新绑定的变量。
+// 创建或使用Vue 创建应用实例的函数，将结果保存或写入 app。
+// app：本处保存 createApp(App) 的结果；createApp：Vue 创建应用实例的函数；App：从 ./App.vue 导入的对象，用于本文件的调用或类型约束
 app.use(createPinia());
-// 调用 app.use，把括号中的值作为参数传入。
+// 向应用实例注册状态管理、路由或界面组件插件。
+// app：本处保存 createApp(App) 的结果；use：本处声明的字段或类型，类型为 this；createPinia：Pinia 创建全局状态管理实例的函数
 // 装上路由插件（让 <router-view> 和 <router-link> 可用）
 app.use(router);
-// 调用 app.use，把括号中的值作为参数传入。
+// 向应用实例注册状态管理、路由或界面组件插件。
+// app：本处保存 createApp(App) 的结果；use：本处声明的字段或类型，类型为 this；router：从 ./router 导入的对象，用于本文件的调用或类型约束
 // 装上 Element Plus，并指定中文语言包
 app.use(ElementPlus, { locale: zhCn });
-// 调用 app.use，把括号中的值作为参数传入。
+// 向应用实例注册状态管理、路由或界面组件插件。
+// app：本处保存 createApp(App) 的结果；use：本处声明的字段或类型，类型为 this；ElementPlus：从 element-plus 导入的对象，用于本文件的Element Plus 界面组件与提示 API；zhCn：从 element-plus/es/locale/lang/zh-cn 导入的对象，用于本文件的调用或类型约束
 // 挂载到 index.html 中的 #app 容器
 app.mount('#app');
-// 调用 app.mount，把括号中的值作为参数传入。
+// 将 Vue 应用挂载到指定页面容器。
+// app：本处保存 createApp(App) 的结果；mount：本处声明的字段或类型，类型为 ComponentPublicInstance
+// 这一段提供了配置和实现 web/src/main.ts 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。

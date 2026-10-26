@@ -1,4 +1,5 @@
 /**
+ // 这一段负责配置和实现 web/vite.config.ts 对应的项目模块，为后续代码提供当前文件的处理入口。
  * ============================================================================
  * 文件作用：Vite 构建/开发服务器配置
  * 所属模块：web/
@@ -30,39 +31,52 @@
  *   changeOrigin: true → 把请求的 Host 头改成目标主机（后端不校验，但更规范）
  */
 import { defineConfig } from 'vite';
-// 从 vite 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 vite 导入这一行列出的符号，供本文件调用。
+// defineConfig：从 vite 导入的对象，用于本文件的调用或类型约束
 // ★ 注意导入方式：@vitejs/plugin-vue v5 起改为 **默认导出**（export default vuePlugin），
 //   不再有 v2/v3 时代的具名导出 `vue`。写成 `import { vue } from ...` 会导致
 //   `vite build` 报 "does not provide an export named 'vue'"。
 import vue from '@vitejs/plugin-vue';
-// 从 @vitejs/plugin-vue 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 @vitejs/plugin-vue 导入这一行列出的符号，供本文件调用。
+// vue：从 @vitejs/plugin-vue 导入的对象，用于本文件的调用或类型约束
 
 /**
  * Vite 配置对象。
  */
 export default defineConfig({
-// 把后面的配置或实现作为当前模块的默认导出，供其他文件直接导入。 关键字：export＝向其他模块开放符号；default＝指定默认导出或默认分支。
+// 把后面的配置或实现作为当前模块的默认导出，供其他文件直接导入。
+// defineConfig：从 vite 导入的对象，用于本文件的调用或类型约束
   // 插件列表：Vue 插件负责解析 .vue 文件的 <template>/<script>/<style>
   plugins: [vue()],
-  // 设置字段 plugins。
+  // 执行 vue 对应的本地处理，使用本行提供的数据。
+  // vue：从 @vitejs/plugin-vue 导入的对象，用于本文件的调用或类型约束
   // 开发服务器配置
   server: {
-  // 设置字段 server。
+  // 声明或设置 server，用于当前对象或接口的对应数据。
+  // server 是此处声明的字段，类型或取值约束为 {
     // 开发服务器端口（Vite 默认 5173，这里显式声明）
     port: 5173,
-    // 设置字段 port。
+    // 声明或设置 port，用于网络连接的目标端口。
+    // port：网络连接的目标端口
     // 代理规则：把前端请求转发到后端
     proxy: {
-    // 设置字段 proxy。
+    // 声明或设置 proxy，用于当前对象或接口的对应数据。
+    // proxy 是此处声明的字段，类型或取值约束为 {
       // 开发期把 /api 与 /socket.io 代理到本地 NestJS,生产构建后用 Nginx 同源反代
       '/api': { target: 'http://localhost:3000', changeOrigin: true },
-      // 设置字段 /api，值为 { target: 'http://localhost:3000', changeOrigin: true }。 关键字：true＝布尔真值。
+      // 声明或设置 '/api'，用于当前对象或接口的对应数据。
+      // 这一行提供给外层调用的字符串参数或模板文本，其含义由所在函数及相邻参数确定
       // ws: true —— 启用 WebSocket 代理（socket.io 依赖它）
       '/socket.io': { target: 'http://localhost:3000', ws: true },
-      // 设置字段 /socket.io，值为 { target: 'http://localhost:3000', ws: true }。 关键字：true＝布尔真值。
+      // 声明或设置 '/socket.io'，用于当前对象或接口的对应数据。
+      // 这一行提供给外层调用的字符串参数或模板文本，其含义由所在函数及相邻参数确定
     },
-    // 结束当前对象或代码块，并完成这条语句。
+    // 结束当前函数、分支或对象配置，返回上一层处理流程。
+    // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
   },
-  // 结束当前对象或代码块，并完成这条语句。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
 });
-// 结束当前回调或对象，并完成外层函数调用。
+// 结束当前回调或对象，并完成外层函数调用，供当前处理流程继续使用。
+// 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+// 这一段提供了配置和实现 web/vite.config.ts 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。

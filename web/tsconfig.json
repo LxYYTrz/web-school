@@ -1,5 +1,7 @@
+// 这一段负责配置和实现 web/tsconfig.json 对应的项目模块，为后续代码提供当前文件的处理入口。
 {
 // 开始一个对象或数组；对象按键保存配置，数组按顺序保存条目。
+// 本行使用当前模块、函数和数据契约中已经定义的对象与字段
   // ============================================================================
   // 文件作用：前端 TypeScript 编译配置
   // 所属模块：web/
@@ -8,49 +10,67 @@
   // ============================================================================
   "compilerOptions": {
   // compilerOptions：TypeScript 编译器选项；当前值为 {。
+  // compilerOptions 是当前配置中的TypeScript 编译器选项，冒号后给出该选项的取值
     // 编译目标：ES2020（现代浏览器都支持）
     "target": "ES2020",
     // target：编译后允许使用的 JavaScript 语言版本；当前值为 "ES2020"。
+    // target 是当前配置中的编译后允许使用的 JavaScript 语言版本，冒号后给出该选项的取值
     // 模块格式：ESNext（交给 Vite 打包时再转译）
     "module": "ESNext",
     // module：编译产物的模块格式；当前值为 "ESNext"。
+    // module 是当前配置中的编译产物的模块格式，冒号后给出该选项的取值
     // 模块解析方式：bundler —— 按打包器（如 Vite）的规则解析模块
     "moduleResolution": "bundler",
     // moduleResolution：导入模块的查找规则；当前值为 "bundler"。
+    // moduleResolution 是当前配置中的导入模块的查找规则，冒号后给出该选项的取值
     // 可用的标准库：ES2020 + DOM + DOM.Iterable
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     // lib：类型检查时可用的标准库；当前值为 ["ES2020", "DOM", "DOM.Iterable"]。
+    // lib 是当前配置中的类型检查时可用的标准库，冒号后给出该选项的取值
     // 严格模式：开启全部严格检查（代码质量的关键）
     "strict": true,
-    // strict：启用严格类型检查；当前值为 true。 关键字：true＝布尔真值。
+    // strict：启用严格类型检查；当前值为 true。
+    // strict 是当前配置中的启用严格类型检查，冒号后给出该选项的取值
     // 跳过第三方类型声明的检查（省时间，第三方库类型偶尔有问题）
     "skipLibCheck": true,
-    // skipLibCheck：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
+    // skipLibCheck：指定该项的值；当前值为 true。
+    // skipLibCheck 是当前配置中的指定该项的值，冒号后给出该选项的取值
     // 允许 default import 从 CommonJS 模块导入（Vite 生态里很常见）
     "esModuleInterop": true,
-    // esModuleInterop：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
+    // esModuleInterop：指定该项的值；当前值为 true。
+    // esModuleInterop 是当前配置中的指定该项的值，冒号后给出该选项的取值
     // 允许使用 default import（与 esModuleInterop 配套）
     "allowSyntheticDefaultImports": true,
-    // allowSyntheticDefaultImports：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
+    // allowSyntheticDefaultImports：指定该项的值；当前值为 true。
+    // allowSyntheticDefaultImports 是当前配置中的指定该项的值，冒号后给出该选项的取值
     // 允许 import JSON 文件
     "resolveJsonModule": true,
-    // resolveJsonModule：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
+    // resolveJsonModule：指定该项的值；当前值为 true。
+    // resolveJsonModule 是当前配置中的指定该项的值，冒号后给出该选项的取值
     // 强制每个文件是独立模块（Vite 依赖这个约束）
     "isolatedModules": true,
-    // isolatedModules：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
+    // isolatedModules：指定该项的值；当前值为 true。
+    // isolatedModules 是当前配置中的指定该项的值，冒号后给出该选项的取值
     // 使用标准的 class 字段语义（与 ES2022 一致）
     "useDefineForClassFields": true,
-    // useDefineForClassFields：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
+    // useDefineForClassFields：指定该项的值；当前值为 true。
+    // useDefineForClassFields 是当前配置中的指定该项的值，冒号后给出该选项的取值
     // 不产出 JS 文件（类型检查用；真正的打包由 Vite 做）
     "noEmit": true,
-    // noEmit：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
+    // noEmit：指定该项的值；当前值为 true。
+    // noEmit 是当前配置中的指定该项的值，冒号后给出该选项的取值
     // 全局类型包：vite/client 提供 import.meta.env 的类型
     "types": ["vite/client"]
     // types：指定该项的值；当前值为 ["vite/client"]。
+    // types 是当前配置中的指定该项的值，冒号后给出该选项的取值
   },
-  // 结束当前对象或数组；末尾逗号表示后面还有同级条目。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 本行使用当前模块、函数和数据契约中已经定义的对象与字段
   // 需要类型检查的文件范围：所有 .ts 和 .vue
   "include": ["src/**/*.ts", "src/**/*.vue"]
-  // include：参与编译的文件范围；当前值为 ["src/**/*.ts", "src/**/*.vue"]。
+  // include：参与编译的文件范围；当前值为 ["src/** /*.ts", "src/** /*.vue"]。
+  // include 是当前配置中的参与编译的文件范围，冒号后给出该选项的取值
 }
-// 结束当前对象或数组；末尾逗号表示后面还有同级条目。
+// 结束当前函数、分支或对象配置，返回上一层处理流程。
+// 本行使用当前模块、函数和数据契约中已经定义的对象与字段
+// 这一段提供了配置和实现 web/tsconfig.json 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。

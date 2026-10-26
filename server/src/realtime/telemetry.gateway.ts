@@ -1,4 +1,5 @@
 /**
+ // 这一段负责后端 Socket.IO 网关，向对应产线房间广播实时数据，为后续代码提供当前文件的处理入口。
  * ============================================================================
  * 文件作用：WebSocket 网关（socket.io）—— 把实时数据推给浏览器
  * 所属模块：server/src/realtime/
@@ -45,116 +46,178 @@
  *   subscribe / unsubscribe│ subscribe          │ 客户端 → 服务端的控制指令
  */
 import {
-// 导入或导出模块符号。 关键字：import＝导入模块或符号。
+// 开始列出本文件从其他模块导入的类型或运行时对象。
+// 大括号内逐项列出从后续模块路径导入的类型或运行时对象
   ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway, WebSocketServer,
-  // 继续当前表达式；这一行的值由外层代码块或调用使用。
+  // 继续当前表达式；这一行的值由外层代码块或调用使用，供当前处理流程继续使用。
+  // ConnectedSocket：NestJS 注入当前 Socket.IO 连接的装饰器；MessageBody：NestJS 提取 Socket.IO 消息正文的装饰器；SubscribeMessage：NestJS 声明 Socket.IO 消息处理方法的装饰器；WebSocketGateway：NestJS 声明 Socket.IO 网关及连接配置的装饰器；WebSocketServer：NestJS 注入 Socket.IO 服务端实例的装饰器
 } from '@nestjs/websockets';
-// 继续当前表达式；这一行的值由外层代码块或调用使用。 关键字：from＝指定导入来源。
+// 继续当前表达式；这一行的值由外层代码块或调用使用，供当前处理流程继续使用。
+// 本行完成上面一层已说明的函数、分支或对象配置
 import { Server, Socket } from 'socket.io';
-// 从 socket.io 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 socket.io 导入这一行列出的符号，供本文件调用。
+// Server：从 socket.io 导入的对象，用于本文件的服务端 Socket.IO 实时消息 API；Socket：从 socket.io 导入的对象，用于本文件的服务端 Socket.IO 实时消息 API
 import { config } from '../config/configuration';
-// 从 ../config/configuration 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 ../config/configuration 导入这一行列出的符号，供本文件调用。
+// config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值
 
 // WebSocket 推送(socket.io)。前端先 emit('subscribe', {lineId}) 加入对应产线房间。
 // TODO:接入会话鉴权和产线范围校验,防止未授权订阅其他产线。
+// 这一段声明 TelemetryGateway，用于后端 Socket.IO 网关，向对应产线房间广播实时数据。
 @WebSocketGateway({ cors: { origin: config.http.corsOrigin } })
 // 装饰器 WebSocketGateway：声明 WebSocket 网关。
+// WebSocketGateway：NestJS 声明 Socket.IO 网关及连接配置的装饰器；config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；http：发送携带登录 Cookie 的 JSON 请求并统一处理 HTTP 错误；corsOrigin：config.http 对象上的字段或操作
 export class TelemetryGateway {
-// 声明 TelemetryGateway 的结构。 关键字：export＝向其他模块开放符号；class＝定义类。
+// 定义 TelemetryGateway，约束或实现本模块涉及的数据和行为。
+// TelemetryGateway：后端 Socket.IO 网关，向对应产线房间广播实时数据
   // @WebSocketServer()：由 Nest 注入 socket.io 的 Server 实例（就是那个 http server）
   @WebSocketServer() server: Server;
   // 装饰器 WebSocketServer：给后面的类、方法或参数附加元数据。
+  // WebSocketServer：NestJS 注入 Socket.IO 服务端实例的装饰器；server：本处声明的字段或类型，类型为 Server；Server：从 socket.io 导入的对象，用于本文件的服务端 Socket.IO 实时消息 API
 
   /**
    * 客户端订阅某条产线。
    * 前端 emit('subscribe', { lineId: 'line-01' })
    */
+  // 这一段定义 handleSubscribe，用于校验订阅请求并把客户端加入目标产线的消息房间。
   @SubscribeMessage('subscribe')
   // 装饰器 SubscribeMessage：订阅指定 WebSocket 消息。
+  // SubscribeMessage：NestJS 声明 Socket.IO 消息处理方法的装饰器
   handleSubscribe(@ConnectedSocket() client: Socket, @MessageBody() body: { lineId?: string }) {
   // 定义方法 handleSubscribe；括号中声明参数，花括号内实现逻辑。
+  // handleSubscribe：校验订阅请求并把客户端加入目标产线的消息房间；ConnectedSocket：NestJS 注入当前 Socket.IO 连接的装饰器；client：当前方法接收的参数，类型为 Socket；Socket：从 socket.io 导入的对象，用于本文件的服务端 Socket.IO 实时消息 API；MessageBody：NestJS 提取 Socket.IO 消息正文的装饰器；body：当前 HTTP 请求或消息的正文；lineId：产线标识，接口通常使用 line-01 等编码
     // 参数校验：没有 lineId 直接拒绝（返回对象会作为 ack 回给客户端）
     if (!body?.lineId) return { ok: false, error: 'lineId required' };
-    // 判断 if (!body?.lineId) return { ok: false, error: 'lineId required' }; 中的条件，成立时执行对应分支。 关键字：if＝按条件分支；return＝返回结果并结束当前函数；false＝布尔假值。
+    // 检查(!body?.lineId) return { ok: false, error: 'lineId required' };，按判断结果进入对应的处理分支。
+    // body：当前 HTTP 请求或消息的正文；lineId：产线标识，接口通常使用 line-01 等编码；ok：操作是否成功的布尔结果；error：失败原因或错误对象
     // 把这个 socket 加入产线房间。之后该产线的所有广播都会推给它。
     // void 前缀：join 返回 Promise（Redis 适配器场景下是异步的），这里不关心结果
     void client.join(`line:${body.lineId}`);
-    // 调用 client.join；括号中的表达式是传入的参数。 关键字：void＝表示没有返回值。
+    // 把 Socket.IO 客户端加入产线房间，或按分隔符连接数组，以接收对象为准。
+    // client：当前方法接收的参数，类型为 Socket；join：把 Socket.IO 客户端加入产线房间，或按分隔符连接数组，以接收对象为准；body：当前 HTTP 请求或消息的正文；lineId：产线标识，接口通常使用 line-01 等编码
     // 返回确认信息（socket.io 的 emit 带回调函数时会收到这个对象）
     return { ok: true, lineId: body.lineId };
-    // 返回 { ok: true, lineId: body.lineId } 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数；true＝布尔真值。
+    // 把{ ok: true, lineId: body.lineId }作为当前函数的结果返回。
+    // ok：操作是否成功的布尔结果；lineId：产线标识，接口通常使用 line-01 等编码；body：当前 HTTP 请求或消息的正文
   }
-  // 结束当前对象、函数或条件代码块。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+  // 这一段提供了校验订阅请求并把客户端加入目标产线的消息房间的实现；实际结果由运行时输入和执行分支决定。
 
   /**
    * 客户端取消订阅（切换产线时用）。
    */
+  // 这一段定义 handleUnsubscribe，用于让客户端退出目标产线的消息房间。
   @SubscribeMessage('unsubscribe')
   // 装饰器 SubscribeMessage：订阅指定 WebSocket 消息。
+  // SubscribeMessage：NestJS 声明 Socket.IO 消息处理方法的装饰器
   handleUnsubscribe(@ConnectedSocket() client: Socket, @MessageBody() body: { lineId?: string }) {
   // 定义方法 handleUnsubscribe；括号中声明参数，花括号内实现逻辑。
+  // handleUnsubscribe：让客户端退出目标产线的消息房间；ConnectedSocket：NestJS 注入当前 Socket.IO 连接的装饰器；client：当前方法接收的参数，类型为 Socket；Socket：从 socket.io 导入的对象，用于本文件的服务端 Socket.IO 实时消息 API；MessageBody：NestJS 提取 Socket.IO 消息正文的装饰器；body：当前 HTTP 请求或消息的正文；lineId：产线标识，接口通常使用 line-01 等编码
     if (body?.lineId) void client.leave(`line:${body.lineId}`);
-    // 判断 if (body?.lineId) void client.leave(line:${body.lineId}); 中的条件，成立时执行对应分支。 关键字：if＝按条件分支；void＝表示没有返回值。
+    // 检查(body?.lineId) void client.leave(`line:${body.lineId}`);，按判断结果进入对应的处理分支。
+    // body：当前 HTTP 请求或消息的正文；lineId：产线标识，接口通常使用 line-01 等编码；client：当前方法接收的参数，类型为 Socket；leave：让 Socket.IO 客户端离开指定产线房间
     return { ok: true };
-    // 返回 { ok: true } 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数；true＝布尔真值。
+    // 把{ ok: true }作为当前函数的结果返回。
+    // ok：操作是否成功的布尔结果
   }
-  // 结束当前对象、函数或条件代码块。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+  // 这一段提供了让客户端退出目标产线的消息房间的实现；实际结果由运行时输入和执行分支决定。
 
+  // 这一段定义 broadcastRobot，用于向产线房间广播机器人最新遥测。
   broadcastRobot(lineId: string, msg: unknown) {
-  // 定义方法 broadcastRobot；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
+  // 定义方法 broadcastRobot；括号中声明参数，花括号内实现逻辑。
+  // broadcastRobot：向产线房间广播机器人最新遥测；lineId：产线标识，接口通常使用 line-01 等编码；msg：当前收到的消息或提示文字
     this.server?.to(`line:${lineId}`).emit('robot_state', msg);
-    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
+    // 选择要广播消息的 Socket.IO 房间。
+    // server：本处声明的字段或类型，类型为 Server；to：选择要广播消息的 Socket.IO 房间；lineId：产线标识，接口通常使用 line-01 等编码；emit：向 Socket.IO 连接或房间发送事件；msg：当前收到的消息或提示文字
   }
-  // 结束当前对象、函数或条件代码块。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+  // 这一段提供了向产线房间广播机器人最新遥测的实现；实际结果由运行时输入和执行分支决定。
 
+  // 这一段定义 broadcastLineStatus，用于向产线房间广播最新生产状态。
   broadcastLineStatus(lineId: string, msg: unknown) {
-  // 定义方法 broadcastLineStatus；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
+  // 定义方法 broadcastLineStatus；括号中声明参数，花括号内实现逻辑。
+  // broadcastLineStatus：向产线房间广播最新生产状态；lineId：产线标识，接口通常使用 line-01 等编码；msg：当前收到的消息或提示文字
     this.server?.to(`line:${lineId}`).emit('line_status', msg);
-    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
+    // 选择要广播消息的 Socket.IO 房间。
+    // server：本处声明的字段或类型，类型为 Server；to：选择要广播消息的 Socket.IO 房间；lineId：产线标识，接口通常使用 line-01 等编码；emit：向 Socket.IO 连接或房间发送事件；msg：当前收到的消息或提示文字
   }
-  // 结束当前对象、函数或条件代码块。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+  // 这一段提供了向产线房间广播最新生产状态的实现；实际结果由运行时输入和执行分支决定。
 
   // 产线 IO(DB3 word 11~16,契约 §3.8)
+  // 这一段定义 broadcastIo，用于向产线房间广播 IO 信号帧。
   broadcastIo(lineId: string, msg: unknown) {
-  // 定义方法 broadcastIo；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
+  // 定义方法 broadcastIo；括号中声明参数，花括号内实现逻辑。
+  // broadcastIo：向产线房间广播 IO 信号帧；lineId：产线标识，接口通常使用 line-01 等编码；msg：当前收到的消息或提示文字
     this.server?.to(`line:${lineId}`).emit('io_state', msg);
-    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
+    // 选择要广播消息的 Socket.IO 房间。
+    // server：本处声明的字段或类型，类型为 Server；to：选择要广播消息的 Socket.IO 房间；lineId：产线标识，接口通常使用 line-01 等编码；emit：向 Socket.IO 连接或房间发送事件；msg：当前收到的消息或提示文字
   }
-  // 结束当前对象、函数或条件代码块。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+  // 这一段提供了向产线房间广播 IO 信号帧的实现；实际结果由运行时输入和执行分支决定。
 
   /**
    * 广播生产事件 / 报警。
    */
+  // 这一段定义 broadcastEvent，用于向产线房间广播生产事件。
   broadcastEvent(lineId: string, msg: unknown) {
-  // 定义方法 broadcastEvent；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
+  // 定义方法 broadcastEvent；括号中声明参数，花括号内实现逻辑。
+  // broadcastEvent：向产线房间广播生产事件；lineId：产线标识，接口通常使用 line-01 等编码；msg：当前收到的消息或提示文字
     this.server?.to(`line:${lineId}`).emit('event', msg);
-    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
+    // 选择要广播消息的 Socket.IO 房间。
+    // server：本处声明的字段或类型，类型为 Server；to：选择要广播消息的 Socket.IO 房间；lineId：产线标识，接口通常使用 line-01 等编码；emit：向 Socket.IO 连接或房间发送事件；msg：当前收到的消息或提示文字
   }
-  // 结束当前对象、函数或条件代码块。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+  // 这一段提供了向产线房间广播生产事件的实现；实际结果由运行时输入和执行分支决定。
 
+  // 这一段定义 broadcastEdge，用于向产线房间广播边缘采集器在线状态。
   broadcastEdge(lineId: string, msg: unknown) {
-  // 定义方法 broadcastEdge；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
+  // 定义方法 broadcastEdge；括号中声明参数，花括号内实现逻辑。
+  // broadcastEdge：向产线房间广播边缘采集器在线状态；lineId：产线标识，接口通常使用 line-01 等编码；msg：当前收到的消息或提示文字
     this.server?.to(`line:${lineId}`).emit('edge_status', msg);
-    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
+    // 选择要广播消息的 Socket.IO 房间。
+    // server：本处声明的字段或类型，类型为 Server；to：选择要广播消息的 Socket.IO 房间；lineId：产线标识，接口通常使用 line-01 等编码；emit：向 Socket.IO 连接或房间发送事件；msg：当前收到的消息或提示文字
   }
-  // 结束当前对象、函数或条件代码块。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+  // 这一段提供了向产线房间广播边缘采集器在线状态的实现；实际结果由运行时输入和执行分支决定。
 
   // 控制指令回执推前端(cmd_ack → command_ack)
+  // 这一段定义 broadcastCommandAck，用于向产线房间广播控制指令回执。
   broadcastCommandAck(lineId: string, msg: unknown) {
-  // 定义方法 broadcastCommandAck；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
+  // 定义方法 broadcastCommandAck；括号中声明参数，花括号内实现逻辑。
+  // broadcastCommandAck：向产线房间广播控制指令回执；lineId：产线标识，接口通常使用 line-01 等编码；msg：当前收到的消息或提示文字
     this.server?.to(`line:${lineId}`).emit('command_ack', msg);
-    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
+    // 选择要广播消息的 Socket.IO 房间。
+    // server：本处声明的字段或类型，类型为 Server；to：选择要广播消息的 Socket.IO 房间；lineId：产线标识，接口通常使用 line-01 等编码；emit：向 Socket.IO 连接或房间发送事件；msg：当前收到的消息或提示文字
   }
-  // 结束当前对象、函数或条件代码块。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+  // 这一段提供了向产线房间广播控制指令回执的实现；实际结果由运行时输入和执行分支决定。
 
   // AI 建议推前端(propose_action MCP 工具 → 抽屉里的建议卡片)。
   // 推给整条产线房间而非个人:房间成员都能看到这条建议,
   // 谁点确认由各自的权限决定 —— 建议本身不构成授权。
+  // 这一段定义 broadcastAiProposal，用于向产线房间广播 AI 待确认建议。
   broadcastAiProposal(lineId: string, msg: unknown) {
-  // 定义方法 broadcastAiProposal；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
+  // 定义方法 broadcastAiProposal；括号中声明参数，花括号内实现逻辑。
+  // broadcastAiProposal：向产线房间广播 AI 待确认建议；lineId：产线标识，接口通常使用 line-01 等编码；msg：当前收到的消息或提示文字
     this.server?.to(`line:${lineId}`).emit('ai_proposal', msg);
-    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
+    // 选择要广播消息的 Socket.IO 房间。
+    // server：本处声明的字段或类型，类型为 Server；to：选择要广播消息的 Socket.IO 房间；lineId：产线标识，接口通常使用 line-01 等编码；emit：向 Socket.IO 连接或房间发送事件；msg：当前收到的消息或提示文字
   }
-  // 结束当前对象、函数或条件代码块。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+  // 这一段提供了向产线房间广播 AI 待确认建议的实现；实际结果由运行时输入和执行分支决定。
 }
-// 结束当前对象、函数或条件代码块。
+// 结束当前函数、分支或对象配置，返回上一层处理流程。
+// 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+// 这一段提供了后端 Socket.IO 网关，向对应产线房间广播实时数据所需的定义和处理逻辑，结果交由调用方或运行环境使用。
+// 这一段定义了 TelemetryGateway 的字段或服务能力，供项目其他模块使用。

@@ -101,8 +101,10 @@
 -- DROP TABLE = 删表（数据一起没了，不可逆）
 -- IF EXISTS = 表不存在就跳过，不报错（幂等的关键）
 -- 表名写全（不带 schema）时按 search_path 找，这里就是 public。
+-- 这一段负责配置和实现 db/init/006_drop_vision.sql 对应的项目模块，为后续代码提供当前文件的处理入口。
 DROP TABLE IF EXISTS vision_images;
--- 删除数据库表 vision_images。 关键字：DROP＝删除数据库对象；TABLE＝数据库表；IF＝按条件执行 SQL；EXISTS＝检查对象或查询结果存在。
+-- 删除数据库表 vision_images。
+-- vision_images 是保存已移除的旧视觉图片记录的数据表
 
 -- ---------------------------------------------------------------------------
 -- 2) 视觉相关权限：先解绑角色，再删权限点
@@ -115,40 +117,53 @@ DROP TABLE IF EXISTS vision_images;
 -- DO $$ ... $$ = 一次性匿名 PL/pgSQL 代码块（当场执行完就丢，不留在库里）
 -- BEGIN / END = 代码块边界
 DO $$
--- 开始匿名 SQL 代码块。 关键字：DO＝执行匿名 SQL 代码块。
+-- 执行下面的匿名 PL/pgSQL 迁移代码块。
+-- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 BEGIN
--- 开始事务或函数体。 关键字：BEGIN＝开始事务或代码块。
+-- BEGIN / END = 代码块边界。
+-- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   -- to_regclass('public.permissions') = 把表名转成 regclass；
   --   表不存在时返回 NULL（而不是报错）—— 这是"判断在不在"的标准写法。
   -- IS NULL = 判断是不是空值（NULL 表示"没有"）
   -- RETURN = 提前结束这个代码块，后面什么都不做
   IF to_regclass('public.permissions') IS NULL THEN
-  -- 按条件执行后续语句。 关键字：IF＝按条件执行 SQL；IS＝检查空值或布尔值；NULL＝数据库空值；THEN＝满足条件时的结果。
+  -- 执行 to_regclass 对应的本地处理，使用本行提供的数据。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
     RETURN;
-    -- 结束函数或代码块并返回。 关键字：RETURN＝结束函数并返回。
+    -- RETURN = 提前结束这个代码块，后面什么都不做。
+    -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   END IF;
-  -- 结束 SQL 块。 关键字：END＝结束代码块；IF＝按条件执行 SQL。
+  -- 结束 SQL 块，供当前处理流程继续使用。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   -- 先解绑：把引用这两条权限的角色绑定清掉
   --   IS NOT NULL = 判断不是空值（表存在）
   --   DELETE FROM = 删除行；WHERE = 过滤条件
   --   IN (SELECT ...) = 用子查询给出的 id 集合做过滤
   IF to_regclass('public.role_permissions') IS NOT NULL THEN
-  -- 按条件执行后续语句。 关键字：IF＝按条件执行 SQL；IS＝检查空值或布尔值；NOT＝逻辑否定；NULL＝数据库空值；THEN＝满足条件时的结果。
+  -- 执行 to_regclass 对应的本地处理，使用本行提供的数据。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
     DELETE FROM role_permissions
-    -- 删除数据。 关键字：DELETE＝删除匹配行；FROM＝指定查询来源表。
+    -- delete from 角色与权限关联相关的数据结构或记录。
+    -- role_permissions 是保存角色与权限关联的数据表，FROM 指定本次读取的数据来源；role_permissions 是保存角色与权限关联的数据表
       WHERE permission_id IN (
-      -- 限定处理范围。 关键字：WHERE＝限定目标行；IN＝检查是否属于集合。
+      -- 执行 IN 对应的本地处理，使用本行提供的数据。
+      -- WHERE 只处理满足本行或后续条件的记录
         SELECT id FROM permissions WHERE code IN ('menu:vision', 'data:vision:all')
-        -- 读取数据。 关键字：SELECT＝读取指定列；FROM＝指定查询来源表；WHERE＝限定目标行；IN＝检查是否属于集合。
+        -- 执行 IN 对应的本地处理，使用本行提供的数据。
+        -- permissions 是保存操作权限的数据表，FROM 指定本次读取的数据来源；WHERE 只处理满足本行或后续条件的记录
       );
-      -- 结束当前 SQL 表或函数定义。
+      -- 结束当前函数、分支或对象配置，返回上一层处理流程。
+      -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   END IF;
-  -- 结束 SQL 块。 关键字：END＝结束代码块；IF＝按条件执行 SQL。
+  -- 结束 SQL 块，供当前处理流程继续使用。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   -- 再删权限点本身：menu:vision（视觉菜单）、data:vision:all（视觉数据权限）
   DELETE FROM permissions WHERE code IN ('menu:vision', 'data:vision:all');
-  -- 删除数据。 关键字：DELETE＝删除匹配行；FROM＝指定查询来源表；WHERE＝限定目标行；IN＝检查是否属于集合。
+  -- delete from 操作权限相关的数据结构或记录。
+  -- permissions 是保存操作权限的数据表，FROM 指定本次读取的数据来源；permissions 是保存操作权限的数据表；WHERE 只处理满足本行或后续条件的记录
 END $$;
--- 结束 SQL 块。 关键字：END＝结束代码块。
+-- 结束本次匿名数据库迁移代码块。
+-- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- ---------------------------------------------------------------------------
 -- 3) 视觉设备 + 4) 收紧 devices.type 约束
@@ -157,20 +172,26 @@ END $$;
 --   它们都作用在 devices 这一张表上，放一起逻辑完整：
 --   先删掉不该存在的设备行，再把"允许哪些设备类型"这个规则收紧。
 DO $$
--- 开始匿名 SQL 代码块。 关键字：DO＝执行匿名 SQL 代码块。
+-- 执行下面的匿名 PL/pgSQL 迁移代码块。
+-- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 BEGIN
--- 开始事务或函数体。 关键字：BEGIN＝开始事务或代码块。
+-- 先删掉不该存在的设备行，再把"允许哪些设备类型"这个规则收紧。
+-- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   -- devices 表不存在（全新库上 001 建的是干净的表，但保险起见判一下）
   IF to_regclass('public.devices') IS NULL THEN
-  -- 按条件执行后续语句。 关键字：IF＝按条件执行 SQL；IS＝检查空值或布尔值；NULL＝数据库空值；THEN＝满足条件时的结果。
+  -- 执行 to_regclass 对应的本地处理，使用本行提供的数据。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
     RETURN;
-    -- 结束函数或代码块并返回。 关键字：RETURN＝结束函数并返回。
+    -- devices 表不存在（全新库上 001 建的是干净的表，但保险起见判一下）。
+    -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   END IF;
-  -- 结束 SQL 块。 关键字：END＝结束代码块；IF＝按条件执行 SQL。
+  -- 结束 SQL 块，供当前处理流程继续使用。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   -- 删掉相机、视觉工控机两类设备记录
   --   DELETE FROM = 删除行；WHERE type IN (...) = 按设备类型过滤
   DELETE FROM devices WHERE type IN ('camera', 'ipc');
-  -- 删除数据。 关键字：DELETE＝删除匹配行；FROM＝指定查询来源表；WHERE＝限定目标行；IN＝检查是否属于集合。
+  -- delete from 设备目录相关的数据结构或记录。
+  -- devices 是保存设备目录的数据表，FROM 指定本次读取的数据来源；devices 是保存设备目录的数据表；WHERE 只处理满足本行或后续条件的记录
 
   -- 把设备类型取值范围收紧回 plc | robot。
   --   EXISTS (SELECT 1 FROM ...) = 判断有没有符合条件的行（只取真假，不取值）
@@ -180,20 +201,29 @@ BEGIN
   -- 约束名 devices_type_check 是 PostgreSQL 给内联 CHECK 自动起的名字。
   -- 先查 pg_constraint 确认它还在，避免重复执行时报"约束不存在"。
   IF EXISTS (
-  -- 按条件执行后续语句。 关键字：IF＝按条件执行 SQL；EXISTS＝检查对象或查询结果存在。
+  -- 执行 EXISTS 对应的本地处理，使用本行提供的数据。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
     SELECT 1 FROM pg_constraint
-    -- 读取数据。 关键字：SELECT＝读取指定列；FROM＝指定查询来源表。
+    -- 先查 pg_constraint 确认它还在，避免重复执行时报"约束不存在"。
+    -- pg_constraint 是保存该类业务数据的数据表，FROM 指定本次读取的数据来源
     WHERE conname = 'devices_type_check' AND conrelid = 'devices'::regclass
-    -- 限定处理范围。 关键字：WHERE＝限定目标行；AND＝逻辑与。
+    -- 限定处理范围，供当前处理流程继续使用。
+    -- WHERE 只处理满足本行或后续条件的记录
   ) THEN
-  -- 继续当前 SQL 语句的字段、约束、参数或查询子句。 关键字：THEN＝满足条件时的结果。
+  -- 继续当前 SQL 语句的字段、约束、参数或查询子句，供当前处理流程继续使用。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
     -- ALTER TABLE = 改表结构；DROP CONSTRAINT = 删约束；ADD CONSTRAINT = 加约束
     -- CHECK (type IN ('plc','robot')) = 设备类型只允许这两种
     ALTER TABLE devices DROP CONSTRAINT devices_type_check;
-    -- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表；DROP＝删除数据库对象；CONSTRAINT＝命名约束。
+    -- alter table 设备目录相关的数据结构或记录。
+    -- devices 是保存设备目录的数据表
     ALTER TABLE devices ADD CONSTRAINT devices_type_check CHECK (type IN ('plc', 'robot'));
-    -- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表；CONSTRAINT＝命名约束；CHECK＝校验数据约束；IN＝检查是否属于集合。
+    -- alter table 设备目录相关的数据结构或记录。
+    -- devices 是保存设备目录的数据表
   END IF;
-  -- 结束 SQL 块。 关键字：END＝结束代码块；IF＝按条件执行 SQL。
+  -- 结束 SQL 块，供当前处理流程继续使用。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 END $$;
--- 结束 SQL 块。 关键字：END＝结束代码块。
+-- 结束本次匿名数据库迁移代码块。
+-- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
+-- 这一段提供了配置和实现 db/init/006_drop_vision.sql 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。

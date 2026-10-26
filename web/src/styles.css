@@ -1,204 +1,306 @@
 /* 全局样式:深色工业风 */
+/* 这一段负责定义前端页面共享的色彩、布局和组件外观，为后续代码提供当前文件的处理入口。 */
+/* 这一段为 :root 对应的界面元素定义尺寸、布局或视觉样式。 */
 :root {
 /* 对选择器 :root 匹配的元素应用后续声明。 */
+/* root 是页面根节点，此处定义全局可复用的 CSS 变量 */
   /* 页面背景色 */
   --bg: #0b0f14;
   /* --bg=#0b0f14：设置该样式属性。 */
+  /* --bg 控制当前元素的样式取值，这里取 #0b0f14 */
   /* 面板背景（半透明，叠加在 3D 画布上时能看见后面的画面） */
   --panel: rgba(18, 24, 32, 0.82);
   /* --panel=rgba(18, 24, 32, 0.82)：设置该样式属性。 */
+  /* --panel 控制当前元素的样式取值，这里取 rgba(18, 24, 32, 0.82) */
   /* 面板边框（很淡的蓝白描边） */
   --panel-border: rgba(120, 160, 200, 0.18);
   /* --panel-border=rgba(120, 160, 200, 0.18)：设置该样式属性。 */
+  /* --panel-border 控制当前元素的样式取值，这里取 rgba(120, 160, 200, 0.18) */
   /* 主文字 / 次要文字 */
   --text: #d7e1ea;
   /* --text=#d7e1ea：设置该样式属性。 */
+  /* --text 控制当前元素的样式取值，这里取 #d7e1ea */
   --text-dim: #7f8c99;
   /* --text-dim=#7f8c99：设置该样式属性。 */
+  /* --text-dim 控制当前元素的样式取值，这里取 #7f8c99 */
   /* 强调色（橙） */
   --accent: #ff8c42;
   /* --accent=#ff8c42：设置该样式属性。 */
+  /* --accent 控制当前元素的样式取值，这里取 #ff8c42 */
   /* 正常 / 异常 / 警告 */
   --ok: #2ecc71;
   /* --ok=#2ecc71：设置该样式属性。 */
+  /* --ok 控制当前元素的样式取值，这里取 #2ecc71 */
   --ng: #ff5c5c;
   /* --ng=#ff5c5c：设置该样式属性。 */
+  /* --ng 控制当前元素的样式取值，这里取 #ff5c5c */
   --warn: #f5b041;
   /* --warn=#f5b041：设置该样式属性。 */
+  /* --warn 控制当前元素的样式取值，这里取 #f5b041 */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
+/* 这一段完成 :root 的样式设置，浏览器渲染匹配元素时应用这些规则。 */
 
 /* 所有元素盒模型统一为 border-box：padding/border 不会撑大元素 */
 * { box-sizing: border-box; }
 
 /* html/body/#app 撑满视口高度 —— 3D 画布需要确定的高度才能计算尺寸 */
+/* 这一段为 html, body, #app 对应的界面元素定义尺寸、布局或视觉样式。 */
 html, body, #app {
 /* 对选择器 html, body, #app 匹配的元素应用后续声明。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
   height: 100%;
   /* height=100%：设置高度。 */
+  /* height 控制高度，这里取 100% */
   margin: 0;
   /* margin=0：设置外边距。 */
+  /* margin 控制外边距，这里取 0 */
   background: var(--bg);
   /* background=var(--bg)：设置背景。 */
+  /* background 控制背景，这里取 var(--bg) */
   color: var(--text);
   /* color=var(--text)：设置文字颜色。 */
+  /* color 控制文字颜色，这里取 var(--text) */
   font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
   /* font-family='PingFang SC', 'Microsoft YaHei', system-ui, sans-serif：设置该样式属性。 */
+  /* font-family 控制当前元素的样式取值，这里取 'PingFang SC', 'Microsoft YaHei', system-ui, … */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
+/* 这一段完成 html, body, #app 的样式设置，浏览器渲染匹配元素时应用这些规则。 */
 
 /* 根布局容器：撑满高度 */
 .layout { height: 100%; }
 /* height=100%：设置高度。 */
+/* height 控制高度，这里取 100% */
 
 /* ---------------- 顶栏 ---------------- */
+/* 这一段为 .topbar 对应的界面元素定义尺寸、布局或视觉样式。 */
 .topbar {
 /* 对选择器 .topbar 匹配的元素应用后续声明。 */
+/* .topbar 是这一组样式匹配的元素选择器 */
   display: flex;
   /* display=flex：决定元素如何布局或显示。 */
+  /* display 控制元素布局方式，这里取 flex */
   align-items: center;
   /* align-items=center：控制交叉轴上的对齐方式。 */
+  /* align-items 控制交叉轴对齐方式，这里取 center */
   gap: 24px;
   /* gap=24px：设置子元素间距。 */
+  /* gap 控制子元素间距，这里取 24px */
   border-bottom: 1px solid var(--panel-border);
   /* border-bottom=1px solid var(--panel-border)：设置该样式属性。 */
+  /* border-bottom 控制当前元素的样式取值，这里取 1px solid var(--panel-border) */
   background: rgba(10, 14, 19, 0.95);
   /* background=rgba(10, 14, 19, 0.95)：设置背景。 */
+  /* background 控制背景，这里取 rgba(10, 14, 19, 0.95) */
   padding: 0 20px;
   /* padding=0 20px：设置内边距。 */
+  /* padding 控制内边距，这里取 0 20px */
   height: 52px;
   /* height=52px：设置高度。 */
+  /* height 控制高度，这里取 52px */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
+/* 这一段完成 .topbar 的样式设置，浏览器渲染匹配元素时应用这些规则。 */
 
 /* 品牌区 */
 .brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 /* display=flex：决定元素如何布局或显示；align-items=center：控制交叉轴上的对齐方式；gap=10px：设置子元素间距；white-space=nowrap：设置该样式属性。 */
+/* display 控制元素布局方式，这里取 flex；align-items 控制交叉轴对齐方式，这里取 center；gap 控制子元素间距，这里取 10px；white-space 控制空格与换行的保留方式，这里取 nowrap */
 /* 品牌小圆点（发光） */
+/* 这一段为 .brand-dot 对应的界面元素定义尺寸、布局或视觉样式。 */
 .brand-dot {
 /* 对选择器 .brand-dot 匹配的元素应用后续声明。 */
+/* .brand-dot 是这一组样式匹配的元素选择器 */
   width: 10px; height: 10px; border-radius: 50%;
   /* width=10px：设置宽度；height=10px：设置高度；border-radius=50%：设置圆角。 */
+  /* width 控制宽度，这里取 10px；height 控制高度，这里取 10px；border-radius 控制圆角半径，这里取 50% */
   background: var(--accent);
   /* background=var(--accent)：设置背景。 */
+  /* background 控制背景，这里取 var(--accent) */
   box-shadow: 0 0 10px var(--accent);
   /* box-shadow=0 0 10px var(--accent)：设置阴影。 */
+  /* box-shadow 控制阴影，这里取 0 0 10px var(--accent) */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
+/* 这一段完成 .brand-dot 的样式设置，浏览器渲染匹配元素时应用这些规则。 */
 .brand-name { font-weight: 600; letter-spacing: 1px; }
 /* font-weight=600：设置字重；letter-spacing=1px：设置该样式属性。 */
+/* font-weight 控制字体粗细，这里取 600；letter-spacing 控制当前元素的样式取值，这里取 1px */
 
 /* 菜单：占据中间剩余空间 */
 .nav { flex: 1; background: transparent; border-bottom: none; }
 /* flex=1：设置弹性项的伸缩比例；background=transparent：设置背景；border-bottom=none：设置该样式属性。 */
+/* flex 控制弹性项伸缩方式，这里取 1；background 控制背景，这里取 transparent；border-bottom 控制当前元素的样式取值，这里取 none */
 .nav .el-menu-item { color: var(--text-dim); }
 /* color=var(--text-dim)：设置文字颜色。 */
+/* color 控制文字颜色，这里取 var(--text-dim) */
 .nav .el-menu-item.is-active { color: var(--accent); }
 /* color=var(--accent)：设置文字颜色。 */
+/* color 控制文字颜色，这里取 var(--accent) */
 
 /* ---------------- 右上角状态徽标 ---------------- */
 .badges { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
 /* display=flex：决定元素如何布局或显示；align-items=center：控制交叉轴上的对齐方式；gap=14px：设置子元素间距；white-space=nowrap：设置该样式属性。 */
+/* display 控制元素布局方式，这里取 flex；align-items 控制交叉轴对齐方式，这里取 center；gap 控制子元素间距，这里取 14px；white-space 控制空格与换行的保留方式，这里取 nowrap */
+/* 这一段为 .badge 对应的界面元素定义尺寸、布局或视觉样式。 */
 .badge {
 /* 对选择器 .badge 匹配的元素应用后续声明。 */
+/* .badge 是这一组样式匹配的元素选择器 */
   display: inline-flex; align-items: center; gap: 6px;
   /* display=inline-flex：决定元素如何布局或显示；align-items=center：控制交叉轴上的对齐方式；gap=6px：设置子元素间距。 */
+  /* display 控制元素布局方式，这里取 inline-flex；align-items 控制交叉轴对齐方式，这里取 center；gap 控制子元素间距，这里取 6px */
   font-size: 12px; color: var(--text-dim);
   /* font-size=12px：设置字号；color=var(--text-dim)：设置文字颜色。 */
+  /* font-size 控制字体大小，这里取 12px；color 控制文字颜色，这里取 var(--text-dim) */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
+/* 这一段完成 .badge 的样式设置，浏览器渲染匹配元素时应用这些规则。 */
 /* 状态小圆点 */
+/* 这一段为 .dot 对应的界面元素定义尺寸、布局或视觉样式。 */
 .dot {
 /* 对选择器 .dot 匹配的元素应用后续声明。 */
+/* .dot 是这一组样式匹配的元素选择器 */
   width: 8px; height: 8px; border-radius: 50%; display: inline-block;
   /* width=8px：设置宽度；height=8px：设置高度；border-radius=50%：设置圆角；display=inline-block：决定元素如何布局或显示。 */
+  /* width 控制宽度，这里取 8px；height 控制高度，这里取 8px；border-radius 控制圆角半径，这里取 50%；display 控制元素布局方式，这里取 inline-block */
   background: #555;
   /* background=#555：设置背景。 */
+  /* background 控制背景，这里取 #555 */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
+/* 这一段完成 .dot 的样式设置，浏览器渲染匹配元素时应用这些规则。 */
 .dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 /* background=var(--ok)：设置背景；box-shadow=0 0 8px var(--ok)：设置阴影。 */
+/* background 控制背景，这里取 var(--ok)；box-shadow 控制阴影，这里取 0 0 8px var(--ok) */
 .dot.off { background: var(--ng); box-shadow: 0 0 8px var(--ng); }
 /* background=var(--ng)：设置背景；box-shadow=0 0 8px var(--ng)：设置阴影。 */
+/* background 控制背景，这里取 var(--ng)；box-shadow 控制阴影，这里取 0 0 8px var(--ng) */
 .alarm { color: var(--ng); }
 /* color=var(--ng)：设置文字颜色。 */
+/* color 控制文字颜色，这里取 var(--ng) */
 /* 报警圆点闪烁 */
 .alarm-dot { background: var(--ng); box-shadow: 0 0 8px var(--ng); animation: blink 1s infinite; }
 /* background=var(--ng)：设置背景；box-shadow=0 0 8px var(--ng)：设置阴影；animation=blink 1s infinite：设置该样式属性。 */
+/* background 控制背景，这里取 var(--ng)；box-shadow 控制阴影，这里取 0 0 8px var(--ng)；animation 控制当前元素的样式取值，这里取 blink 1s infinite */
 @keyframes blink { 50% { opacity: 0.3; } }
 /* opacity=0.3：设置透明度。 */
+/* opacity 控制不透明程度，这里取 0.3 */
 
 /* 产线状态语义色(契约 v1.1 的 10 态工序状态 + 原 4 态)
    见 edge/plc_collector.py STATE_MAP / db/init/004+005_line_state_stages.sql */
 .st-running, .st-feeding, .st-assembling, .st-waiting_robot, .st-unload_done,
-/* 结束样式块或续写样式声明。 */
+/* 产线状态语义色(契约 v1.1 的 10 态工序状态 + 原 4 态)。 */
+/* .st-running, .st-feeding, .st-assembling, .st-waiting_robot, .st-unload_done, 是这一组样式匹配的元素选择器 */
 .st-unloading {
 /* 对选择器 .st-unloading 匹配的元素应用后续声明。 */
+/* .st-unloading 是这一组样式匹配的元素选择器 */
   color: var(--ok);           /* 产线在动 */
   /* color=var(--ok)：设置文字颜色。 */
+  /* color 控制文字颜色，这里取 var(--ok) */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
 .st-waiting_feed, .st-waiting_next, .st-idle {
 /* 对选择器 .st-waiting_feed, .st-waiting_next, .st-idle 匹配的元素应用后续声明。 */
+/* .st-waiting_feed, .st-waiting_next, .st-idle 是这一组样式匹配的元素选择器 */
   color: var(--accent);       /* 等待下一动作 */
   /* color=var(--accent)：设置文字颜色。 */
+  /* color 控制文字颜色，这里取 var(--accent) */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
 .st-stopped, .st-manual_mode {
 /* 对选择器 .st-stopped, .st-manual_mode 匹配的元素应用后续声明。 */
+/* .st-stopped, .st-manual_mode 是这一组样式匹配的元素选择器 */
   color: var(--text-dim);     /* 停止 / 手动接管 */
   /* color=var(--text-dim)：设置文字颜色。 */
+  /* color 控制文字颜色，这里取 var(--text-dim) */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
 .st-init_error, .st-alarm {
 /* 对选择器 .st-init_error, .st-alarm 匹配的元素应用后续声明。 */
+/* .st-init_error, .st-alarm 是这一组样式匹配的元素选择器 */
   color: var(--ng);           /* 异常 */
   /* color=var(--ng)：设置文字颜色。 */
+  /* color 控制文字颜色，这里取 var(--ng) */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
 .st-offline {
 /* 对选择器 .st-offline 匹配的元素应用后续声明。 */
+/* .st-offline 是这一组样式匹配的元素选择器 */
   color: var(--text-dim);
   /* color=var(--text-dim)：设置文字颜色。 */
+  /* color 控制文字颜色，这里取 var(--text-dim) */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
 
 /* ---------------- 内容区 ---------------- */
 /* 高度 = 视口高度 - 顶栏高度（52px），超出可滚动 */
 .body { padding: 14px; height: calc(100% - 52px); overflow: auto; }
 /* padding=14px：设置内边距；height=calc(100% - 52px)：设置高度；overflow=auto：决定溢出内容如何处理。 */
+/* padding 控制内边距，这里取 14px；height 控制高度，这里取 calc(100% - 52px)；overflow 控制溢出内容的处理方式，这里取 auto */
 
 /* 通用面板 */
+/* 这一段为 .panel 对应的界面元素定义尺寸、布局或视觉样式。 */
 .panel {
 /* 对选择器 .panel 匹配的元素应用后续声明。 */
+/* .panel 是这一组样式匹配的元素选择器 */
   background: var(--panel);
   /* background=var(--panel)：设置背景。 */
+  /* background 控制背景，这里取 var(--panel) */
   border: 1px solid var(--panel-border);
   /* border=1px solid var(--panel-border)：设置边框。 */
+  /* border 控制边框，这里取 1px solid var(--panel-border) */
   border-radius: 10px;
   /* border-radius=10px：设置圆角。 */
+  /* border-radius 控制圆角半径，这里取 10px */
   padding: 12px 14px;
   /* padding=12px 14px：设置内边距。 */
+  /* padding 控制内边距，这里取 12px 14px */
   backdrop-filter: blur(6px);
   /* backdrop-filter=blur(6px)：设置该样式属性。 */
+  /* backdrop-filter 控制当前元素的样式取值，这里取 blur(6px) */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
+/* 这一段完成 .panel 的样式设置，浏览器渲染匹配元素时应用这些规则。 */
 /* 面板标题栏 */
+/* 这一段为 .panel-title 对应的界面元素定义尺寸、布局或视觉样式。 */
 .panel-title {
 /* 对选择器 .panel-title 匹配的元素应用后续声明。 */
+/* .panel-title 是这一组样式匹配的元素选择器 */
   font-size: 12px; color: var(--text-dim);
   /* font-size=12px：设置字号；color=var(--text-dim)：设置文字颜色。 */
+  /* font-size 控制字体大小，这里取 12px；color 控制文字颜色，这里取 var(--text-dim) */
   letter-spacing: 2px; margin-bottom: 10px;
   /* letter-spacing=2px：设置该样式属性；margin-bottom=10px：设置该样式属性。 */
+  /* letter-spacing 控制当前元素的样式取值，这里取 2px；margin-bottom 控制当前元素的样式取值，这里取 10px */
   display: flex; align-items: center; justify-content: space-between;
   /* display=flex：决定元素如何布局或显示；align-items=center：控制交叉轴上的对齐方式；justify-content=space-between：控制主轴上的分布方式。 */
+  /* display 控制元素布局方式，这里取 flex；align-items 控制交叉轴对齐方式，这里取 center；justify-content 控制主轴内容排列方式，这里取 space-between */
 }
-/* 结束样式块或续写样式声明。 */
+/* 结束当前函数、分支或对象配置，返回上一层处理流程。 */
+/* 当前样式块作用于最近一个选择器匹配到的页面元素 */
+/* 这一段完成 .panel-title 的样式设置，浏览器渲染匹配元素时应用这些规则。 */
 
 /* 滚动条 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 /* width=8px：设置宽度；height=8px：设置高度。 */
+/* width 控制宽度，这里取 8px；height 控制高度，这里取 8px */
 ::-webkit-scrollbar-thumb { background: #2a3442; border-radius: 4px; }
 /* background=#2a3442：设置背景；border-radius=4px：设置圆角。 */
+/* background 控制背景，这里取 #2a3442；border-radius 控制圆角半径，这里取 4px */
 ::-webkit-scrollbar-track { background: transparent; }
 /* background=transparent：设置背景。 */
+/* background 控制背景，这里取 transparent */
+/* 这一段提供了定义前端页面共享的色彩、布局和组件外观所需的定义和处理逻辑，结果交由调用方或运行环境使用。 */

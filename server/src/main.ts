@@ -1,4 +1,5 @@
 /**
+ // 这一段负责配置和实现 server/src/main.ts 对应的项目模块，为后续代码提供当前文件的处理入口。
  * ============================================================================
  * 文件作用：后端进程入口（启动引导 / bootstrap）
  * 所属模块：server/（NestJS 后端，最终部署在"工控机"上）
@@ -47,74 +48,103 @@
  */
 // 1) 引入 reflect-metadata polyfill：让 TypeScript 装饰器能携带类型元数据（见上方说明）
 import 'reflect-metadata';
-// 运行反射元数据补丁，让 NestJS 装饰器可以读取参数类型；import 表示加载模块。
+// 从 reflect-metadata 加载本文件需要的对象，供后续处理使用。
+// reflect-metadata 在导入时执行自身初始化；本行只需要其全局样式、元数据或配置副作用
 // 2) NestJS 核心工厂：创建/启动 HTTP + WebSocket 应用
 import { NestFactory } from '@nestjs/core';
-// 从 @nestjs/core 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 @nestjs/core 导入这一行列出的符号，供本文件调用。
+// NestFactory：从 @nestjs/core 导入的对象，用于本文件的NestJS 应用创建与请求上下文支持
 import { NestExpressApplication } from '@nestjs/platform-express';
-// 从 @nestjs/platform-express 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 @nestjs/platform-express 导入这一行列出的符号，供本文件调用。
+// NestExpressApplication：从 @nestjs/platform-express 导入的对象，用于本文件的NestJS 对 Express HTTP 服务的类型支持
 import cookieSession from 'cookie-session';
-// 从 cookie-session 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 cookie-session 导入这一行列出的符号，供本文件调用。
+// cookieSession：从 cookie-session 导入的对象，用于本文件的基于签名 Cookie 的登录会话中间件
 // 3) 根模块：汇总所有业务模块（infra/state/history/realtime/ingest/command）
 import { AppModule } from './app.module';
-// 从 ./app.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 ./app.module 导入这一行列出的符号，供本文件调用。
+// AppModule：从 ./app.module 导入的对象，用于本文件的调用或类型约束
 // 4) 统一配置对象：端口、数据库、MQTT 地址等，全部来自环境变量
 import { config } from './config/configuration';
-// 从 ./config/configuration 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
+// 从 ./config/configuration 导入这一行列出的符号，供本文件调用。
+// config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值
 
 /**
  * 引导函数（bootstrap）：后端的异步启动流程。
  * 之所以要 async：NestFactory.create 会完成模块依赖解析、生命周期钩子
  * （onModuleInit）等异步工作，必须 await 之后才算「就绪」。
  */
+// 这一段定义 bootstrap，用于创建 NestJS 应用、配置会话和跨域并监听服务端口。
 async function bootstrap() {
-// 定义函数 bootstrap。 关键字：async＝声明异步函数；function＝定义函数。
+// 定义函数 bootstrap。
+// bootstrap：创建 NestJS 应用、配置会话和跨域并监听服务端口
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  // 声明 app，初始值由 await NestFactory.create<NestExpressApplication>(AppModule) 计算得到。 关键字：const＝声明不可重新绑定的变量；await＝等待异步操作完成。
+  // 根据 await NestFactory.create<NestExpressApplication>(AppModule) 设置 app，供当前流程后续使用。
+  // app：本处保存 await NestFactory.create<NestExpressApplication>(AppModule) 的结果；NestFactory：从 @nestjs/core 导入的对象，用于本文件的NestJS 应用创建与请求上下文支持；create：提供 create 的本地处理逻辑；NestExpressApplication：从 @nestjs/platform-express 导入的对象，用于本文件的NestJS 对 Express HTTP 服务的类型支持；AppModule：从 ./app.module 导入的对象，用于本文件的调用或类型约束
 
   // 登录会话:HttpOnly + SameSite=Lax;prod 上 HTTPS 后把 secure 改 true
   app.use(
-  // 调用 app.use，把括号中的值作为参数传入。
+  // 向应用实例注册状态管理、路由或界面组件插件。
+  // app：本处保存 await NestFactory.create<NestExpressApplication>(AppModule) 的结果；use：本处声明的字段或类型，类型为 this
     cookieSession({
-    // 调用 cookieSession，把括号中的值作为参数传入。
+    // 执行 cookieSession 对应的本地处理，使用本行提供的数据。
+    // cookieSession：从 cookie-session 导入的对象，用于本文件的基于签名 Cookie 的登录会话中间件
       name: 'lt_sess',
-      // 设置字段 name。
+      // 声明或设置 name，用于当前对象的名称字段。
+      // name：当前对象的名称字段
       keys: [config.http.sessionSecret],
-      // 设置字段 keys。
+      // 声明或设置 keys，用于当前对象或接口的对应数据。
+      // config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；http：发送携带登录 Cookie 的 JSON 请求并统一处理 HTTP 错误；sessionSecret：登录 Cookie 签名密钥
       httpOnly: true,
-      // 设置字段 httpOnly。 关键字：true＝布尔真值。
+      // 声明或设置 httpOnly，用于当前对象或接口的对应数据。
+      // httpOnly 是此处声明的字段，类型或取值约束为 true
       sameSite: 'lax',
-      // 设置字段 sameSite。
+      // 声明或设置 sameSite，用于当前对象或接口的对应数据。
+      // sameSite 是当前映射表的查找键；「lax」是使用该键时得到的文字或分类值
       secure: false,
-      // 设置字段 secure。 关键字：false＝布尔假值。
+      // 声明或设置 secure，用于当前对象或接口的对应数据。
+      // secure 是此处声明的字段，类型或取值约束为 false
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天
-      // 设置字段 maxAge。
+      // 声明或设置 maxAge，用于当前对象或接口的对应数据。
+      // maxAge 是此处声明的字段，类型或取值约束为 7 * 24 * 60 * 60 * 1000
     }),
-    // 结束当前回调或对象，并完成外层函数调用。
+    // 结束当前回调或对象，并完成外层函数调用，供当前处理流程继续使用。
+    // 本行完成上面一层已说明的函数、分支或对象配置
   );
-  // 结束当前函数的参数列表并完成调用。
+  // 结束当前函数、分支或对象配置，返回上一层处理流程。
+  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
 
   // CORS:多个 origin 用逗号分隔;cross-origin cookie 必须 credentials=true
   const raw = config.http.corsOrigin;
-  // 声明 raw，初始值由 config.http.corsOrigin 计算得到。 关键字：const＝声明不可重新绑定的变量。
+  // 根据 config.http.corsOrigin 设置 raw，供当前流程后续使用。
+  // raw：本处保存 config.http.corsOrigin 的结果；config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；http：发送携带登录 Cookie 的 JSON 请求并统一处理 HTTP 错误；corsOrigin：config.http 对象上的字段或操作
   const origins = raw === '*' ? true : raw.split(',').map((s) => s.trim());
-  // 声明 origins，初始值由 raw === '*' ? true : raw.split(',').map((s) => s.trim()) 计算得到。 关键字：const＝声明不可重新绑定的变量；true＝布尔真值。
+  // 按分隔符拆分字符串，将结果保存或写入 origins。
+  // origins：本处保存 raw === '*' ? true : raw.split(',').map((s) => s.trim()) 的结果；raw：本处保存 config.http.corsOrigin 的结果；split：按分隔符拆分字符串；map：将集合中的每个元素转换为新值，返回新的数组或迭代结果；s：当前方法接收的参数；trim：移除字符串两端空白
   app.enableCors({ origin: origins, credentials: true });
-  // 调用 app.enableCors，把括号中的值作为参数传入。 关键字：true＝布尔真值。
+  // 执行 enableCors 对应的本地处理，使用本行提供的数据。
+  // app：本处保存 await NestFactory.create<NestExpressApplication>(AppModule) 的结果；enableCors：本处声明的字段或类型，类型为 void；origins：本处保存 raw === '*' ? true : raw.split(',').map((s) => s.trim()) 的结果；credentials：浏览器请求是否携带登录 Cookie 的配置
 
   // 7) 优雅关闭钩子：进程退出时调用各模块的 onModuleDestroy
   app.enableShutdownHooks();
-  // 调用 app.enableShutdownHooks，把括号中的值作为参数传入。
+  // 执行 enableShutdownHooks 对应的本地处理，使用本行提供的数据。
+  // app：本处保存 await NestFactory.create<NestExpressApplication>(AppModule) 的结果；enableShutdownHooks：本处声明的字段或类型，类型为 this
   // 8) 监听端口：HTTP REST 与 WebSocket(socket.io) 共用这一个端口
   await app.listen(config.http.port);
-  // 调用 app.listen，把括号中的值作为参数传入。 关键字：await＝等待异步操作完成。
+  // 让后端 HTTP 服务在配置的端口开始接收请求。
+  // app：本处保存 await NestFactory.create<NestExpressApplication>(AppModule) 的结果；listen：本处声明的字段或类型，类型为 Promise<TServer>；config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；http：发送携带登录 Cookie 的 JSON 请求并统一处理 HTTP 错误；port：网络连接的目标端口
   // 9) 启动成功日志：部署人员看到这行即代表后端已就绪（对应 CLAUDE.md §6 验收标准）
   console.log(`[server] HTTP/WebSocket listening on :${config.http.port}`);
-  // 调用 console.log，把括号中的值作为参数传入。
+  // 输出调试或运行日志。
+  // console：浏览器或 Node.js 的日志输出对象；log：输出调试或运行日志；config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；http：发送携带登录 Cookie 的 JSON 请求并统一处理 HTTP 错误；port：网络连接的目标端口
 }
-// 结束当前对象、函数或条件代码块。
+// 结束当前函数、分支或对象配置，返回上一层处理流程。
+// 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+// 这一段提供了创建 NestJS 应用、配置会话和跨域并监听服务端口的实现；实际结果由运行时输入和执行分支决定。
 
 // 10) 调用引导函数。用 `void` 显式忽略返回的 Promise：Node 进程会因 HTTP 监听
 //     而保持存活，不需要 await；同时避免 lint 报 "floating promise"。
 void bootstrap();
-// 调用 bootstrap；括号中的表达式是传入的参数。 关键字：void＝表示没有返回值。
+// 创建 NestJS 应用、配置会话和跨域并监听服务端口。
+// bootstrap：创建 NestJS 应用、配置会话和跨域并监听服务端口
+// 这一段提供了配置和实现 server/src/main.ts 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。

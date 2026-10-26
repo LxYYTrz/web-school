@@ -25,8 +25,12 @@
 # ============================================================================
 
 # MQTT 客户端（mock_collector.py / plc_collector.py 共用）
+# 这一段负责配置和实现 edge/requirements.txt 对应的项目模块，为后续代码提供当前文件的处理入口。
 paho-mqtt>=2.0,<3.0
 # 安装 Python 包 paho-mqtt；允许版本范围为大于等于 2.0 且小于 3.0。
+# paho-mqtt 是当前配置格式中的指令或字段名称
 # Modbus TCP 客户端（plc_collector.py 读 PLC 用；mock 不需要但现场切换时免装）
 pymodbus>=3.10,<4.0
 # 安装 Python 包 pymodbus；允许版本范围为大于等于 3.10 且小于 4.0。
+# pymodbus 是当前配置格式中的指令或字段名称
+# 这一段提供了配置和实现 edge/requirements.txt 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。

@@ -90,28 +90,37 @@
 --    ALTER TABLE = 改表结构；DROP CONSTRAINT = 删掉一条约束。
 --    003 加的这条约束名同样是 PostgreSQL 自动生成的 control_commands_type_check。
 --    IF EXISTS = 不存在也不报错，重复执行安全。
+-- 这一段负责配置和实现 db/init/005_control_commands_conveyor.sql 对应的项目模块，为后续代码提供当前文件的处理入口。
 ALTER TABLE control_commands
--- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表。
+-- alter table 控制指令审计记录相关的数据结构或记录。
+-- control_commands 是保存控制指令审计记录的数据表
   DROP CONSTRAINT IF EXISTS control_commands_type_check;
-  -- 删除数据库对象。 关键字：DROP＝删除数据库对象；CONSTRAINT＝命名约束；IF＝按条件执行 SQL；EXISTS＝检查对象或查询结果存在。
+  -- IF EXISTS = 不存在也不报错，重复执行安全。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- ② 加回新约束（7 项白名单）。
 --    ADD CONSTRAINT = 加一条约束；CHECK = 行级校验条件。
 --    ★ 仍然是"只增不改"：v1.0/v1.1 的 6 项一个没删，conveyor 追加在最后。
 ALTER TABLE control_commands
--- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表。
+-- alter table 控制指令审计记录相关的数据结构或记录。
+-- control_commands 是保存控制指令审计记录的数据表
   ADD CONSTRAINT control_commands_type_check
-  -- 继续当前 SQL 语句的字段、约束、参数或查询子句。 关键字：CONSTRAINT＝命名约束。
+  -- ★ 仍然是"只增不改"：v1.0/v1.1 的 6 项一个没删，conveyor 追加在最后。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   CHECK (type IN (
-  -- 检查字段取值。 关键字：CHECK＝校验数据约束；IN＝检查是否属于集合。
+  -- 执行 CHECK 对应的本地处理，使用本行提供的数据。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
     -- v1.0/v1.1
     'start', 'stop', 'reset', 'changeover', 'mode_set', 'alarm_clear',
     -- 把这一段文字作为当前调用、数组或对象的值。
+    -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
     -- v1.2(现场 11 word 表新增传送带控制点)
     'conveyor'
     -- 把这一段文字作为当前调用、数组或对象的值。
+    -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   ));
-  -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
+  -- v1.2(现场 11 word 表新增传送带控制点)。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- ---------------------------------------------------------------------------
 -- 3) 把"清单上有的"和"现场真能执行的"分开写进数据库
@@ -123,12 +132,18 @@ ALTER TABLE control_commands
 -- COMMENT ON COLUMN = 给指定的列写一段数据库注释
 -- 相邻字面量拼接（'...' '...'）= PostgreSQL 里相邻字符串会拼成一段
 COMMENT ON COLUMN control_commands.type IS
--- 继续当前 SQL 语句的字段、约束、参数或查询子句。 关键字：ON＝指定连接或冲突条件；IS＝检查空值或布尔值。
+-- COMMENT ON COLUMN = 给指定的列写一段数据库注释。
+-- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   '指令白名单。现场 PLC 11 word 表(dataDB-Modbus-映射表.xls)实际可执行: '
   -- 把这一段文字作为当前调用、数组或对象的值。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   'start(word9 脉冲) / stop(word7 脉冲) / mode_set(word8 脉冲,action=acquire|release) / '
   -- 把这一段文字作为当前调用、数组或对象的值。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   'conveyor(word10 电平,action=forward|stop)。'
   -- 把这一段文字作为当前调用、数组或对象的值。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   'reset / changeover / alarm_clear 保留在白名单但现场无对应寄存器,edge 回 rejected。';
-  -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
+  -- 继续当前 SQL 语句的字段、约束、参数或查询子句，供当前处理流程继续使用。
+  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
+  -- 这一段提供了配置和实现 db/init/005_control_commands_conveyor.sql 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。

@@ -2,6 +2,7 @@
 
 > 产线数字孪生监控平台(`line-twin`)的项目级指引。
 > **当前部署入口**:原生服务方案见 `deploy/README.md`。本文件后面的 2026-10-23 事故记录保留为历史,不要照其中旧容器命令部署。
+> **源码注释约定**：维护源码注释时使用 `.claude/skills/source-comment-style/SKILL.md`；用户调整注释格式时，先更新该 skill，再同步源码。
 > 这一份是 2026-10-14 拉通"中转站对齐 + RBAC + 云端部署"后写的,记录关键决策、当前状态、待办,让另一台电脑(产线现场 Windows)上的新 session 能"续接"上下文。
 
 ---
@@ -18,6 +19,7 @@
 | **给 AI 的项目上下文**(决策 / 踩坑 / 现状 / 待办 / 运维速查) | **本文件** |
 | 边缘 / 后端 / 前端 三方的唯一约定 | `docs/contract/README.md` |
 | 查看手写源码的逐行注释和语法关键字 | 对应源码文件；`docs/keywords.md` |
+| 编写或调整源码的行下注释、功能段说明 | `.claude/skills/source-comment-style/SKILL.md` |
 | 各目录是干什么的(逐目录贴代码) | `db/ deploy/ edge/ scripts/ server/ web/README.md` |
 | 投屏 / 讲给别人听 | **飞书**(链接见 §8),仓库里不留 |
 | **写讲解稿的规范**(两栏对照表、记忆锚点、防串台) | `.claude/skills/code-walkthrough-script/SKILL.md` |
