@@ -75,11 +75,17 @@
  *   不是重复，而是三条路的语义确实不同。
  */
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+// 从 @nestjs/common 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { connect, MqttClient } from 'mqtt';
+// 从 mqtt 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { config } from '../config/configuration';
+// 从 ../config/configuration 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { LineStateService } from '../state/line-state.service';
+// 从 ../state/line-state.service 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { HistoryWriterService } from '../history/history-writer.service';
+// 从 ../history/history-writer.service 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { TelemetryGateway } from '../realtime/telemetry.gateway';
+// 从 ../realtime/telemetry.gateway 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 
 // MQTT 消费入口:订阅契约主题 → 解析 → 三路分发
 // (Redis 实时快照 / TimescaleDB 历史 / WebSocket 推送)
@@ -87,10 +93,14 @@ import { TelemetryGateway } from '../realtime/telemetry.gateway';
  * MQTT 消费入口服务。
  */
 @Injectable()
+// 装饰器 Injectable：标记为可由 NestJS 依赖注入的服务。
 export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
+// 声明 MqttIngestService 的结构。 关键字：export＝向其他模块开放符号；class＝定义类；implements＝实现接口。
   private readonly logger = new Logger(MqttIngestService.name);
+  // 调用 Logger；括号中的表达式是传入的参数。 关键字：private＝限定类内部访问；readonly＝禁止重新赋值；new＝创建对象实例。
   // MQTT 客户端实例。onModuleInit 里创建
   private client: MqttClient;
+  // 声明类属性或构造参数 client，类型为 MqttClient。 关键字：private＝限定类内部访问。
 
   /**
    * 构造函数：注入三个下游消费者。
@@ -98,50 +108,82 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
    * 而下游**不依赖**本服务 —— 所以不存在循环依赖，模块依赖图是单向的。
    */
   constructor(
+  // 调用 constructor，把括号中的值作为参数传入。
     private readonly state: LineStateService,
+    // 声明类属性或构造参数 state，类型为 LineStateService。 关键字：private＝限定类内部访问；readonly＝禁止重新赋值。
     private readonly history: HistoryWriterService,
+    // 声明类属性或构造参数 history，类型为 HistoryWriterService。 关键字：private＝限定类内部访问；readonly＝禁止重新赋值。
     private readonly gateway: TelemetryGateway,
+    // 声明类属性或构造参数 gateway，类型为 TelemetryGateway。 关键字：private＝限定类内部访问；readonly＝禁止重新赋值。
   ) {}
+  // 结束构造函数参数列表；空函数体表示仅使用参数属性注入依赖。
 
   onModuleInit() {
+  // 定义方法 onModuleInit；括号中声明参数，花括号内实现逻辑。
     // ① 取主题前缀（默认 tl/v1）
     const p = config.topicPrefix;
+    // 声明 p，初始值由 config.topicPrefix 计算得到。 关键字：const＝声明不可重新绑定的变量。
     // ② 建立连接。connect() 是同步返回客户端对象的，不会阻塞；
     //    真正的连接建立是异步的，靠下面的事件回调感知
     this.client = connect(config.mqtt.url, {
+    // 把右侧表达式的结果写入 this.client。 关键字：this＝当前对象实例。
       clientId: config.mqtt.clientId,
+      // 设置字段 clientId。
       username: config.mqtt.username,
+      // 设置字段 username。
       password: config.mqtt.password,
+      // 设置字段 password。
       keepalive: 30,
+      // 设置字段 keepalive。
       reconnectPeriod: 2000,
+      // 设置字段 reconnectPeriod。
     });
+    // 结束当前回调或对象，并完成外层函数调用。
     // ③ 连接成功事件：此时才能订阅主题
     this.client.on('connect', () => {
+    // 调用 this.client.on，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
       this.logger.log(`MQTT 已连接: ${config.mqtt.url}`);
+      // 调用 this.logger.log，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
       // 订阅 5 类主题。数组形式一次性订阅，效率更高。
       // 通配符说明：
       //   +  = 单层通配，匹配恰好一个层级
       //   #  = 多层通配（本系统未使用，避免订阅范围过宽）
       this.client.subscribe(
+      // 调用 this.client.subscribe，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
         [
+        // 开始当前表达式的分组或数组内容。
           `${p}/+/telemetry/robot/+`,
+          // 构造模板字符串；${...} 插入变量，路径中的 + 在 MQTT 主题里匹配单个层级。
           `${p}/+/telemetry/io`,
+          // 构造模板字符串；${...} 插入变量，路径中的 + 在 MQTT 主题里匹配单个层级。
           `${p}/+/telemetry/status`,
+          // 构造模板字符串；${...} 插入变量，路径中的 + 在 MQTT 主题里匹配单个层级。
           `${p}/+/event`,
+          // 构造模板字符串；${...} 插入变量，路径中的 + 在 MQTT 主题里匹配单个层级。
           `${p}/+/edge/status`,
+          // 构造模板字符串；${...} 插入变量，路径中的 + 在 MQTT 主题里匹配单个层级。
           `${p}/+/cmd_ack`,
+          // 构造模板字符串；${...} 插入变量，路径中的 + 在 MQTT 主题里匹配单个层级。
         ],
+        // 结束当前数组，继续外层表达式。
         { qos: 1 },
+        // 开始对象字面量，并在这一行设置其中列出的字段。
       );
+      // 结束当前函数的参数列表并完成调用。
     });
+    // 结束当前回调或对象，并完成外层函数调用。
     // ④ 重连中：打 warn 日志，便于运维发现网络抖动
     this.client.on('reconnect', () => this.logger.warn('MQTT 重连中...'));
+    // 调用 this.client.on，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
     // ⑤ 错误事件：记录错误信息（不抛出，避免进程崩溃）
     this.client.on('error', (e) => this.logger.error(`MQTT 错误: ${e.message}`));
+    // 调用 this.client.on，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
     // ⑥ 消息事件：每收到一条报文就调用 dispatch 分发。
     //    这是整个上行链路唯一的"数据入口函数"
     this.client.on('message', (topic, payload) => this.dispatch(topic, payload));
+    // 调用 this.client.on，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 
   /**
    * 模块销毁钩子：进程退出时优雅关闭 MQTT 连接。
@@ -149,8 +191,11 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
    * （异常掉线会触发 LWT，把产线标成 offline）
    */
   onModuleDestroy() {
+  // 定义方法 onModuleDestroy；括号中声明参数，花括号内实现逻辑。
     this.client?.end();
+    // 调用 .end，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 
   // 控制指令下发(供 CommandService 调用)
   /**
@@ -168,83 +213,137 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
    * @param cmd      指令报文，结构见契约 3.5 节
    */
   publishCommand(lineId: string, deviceId: string, cmd: Record<string, unknown>) {
+  // 定义方法 publishCommand；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
     this.client.publish(
+    // 调用 this.client.publish，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
       `${config.topicPrefix}/${lineId}/cmd/${deviceId}`,
+      // 构造模板字符串，把 ${...} 中的值插入目标路径或文本。
       JSON.stringify(cmd),
+      // 调用 JSON.stringify，把括号中的值作为参数传入。
       { qos: 1 },
+      // 开始对象字面量，并在这一行设置其中列出的字段。
     );
+    // 结束当前函数的参数列表并完成调用。
   }
+  // 结束当前对象、函数或条件代码块。
 
   private dispatch(topic: string, payload: Buffer) {
+  // 定义方法 dispatch；括号中声明参数，花括号内实现逻辑。 关键字：private＝限定类内部访问。
     // 主题结构见数据契约: tl/v1/{lineId}/...
     // ---------- 第 1 步：解析主题 ----------
     // 按 '/' 切分：'tl/v1/line-01/telemetry/robot/robot-01'
     //   → ['tl','v1','line-01','telemetry','robot','robot-01']
     const seg = topic.split('/');
+    // 声明 seg，初始值由 topic.split('/') 计算得到。 关键字：const＝声明不可重新绑定的变量。
     // seg[2] 是产线编码（因为前缀固定是 tl/v1，占了 0 和 1 两段）
     const lineId = seg[2];
+    // 声明 lineId，初始值由 seg[2] 计算得到。 关键字：const＝声明不可重新绑定的变量。
     // kind 是主题剩余部分拼接，用来判断消息类型
     const kind = seg.slice(3).join('/');
+    // 声明 kind，初始值由 seg.slice(3).join('/') 计算得到。 关键字：const＝声明不可重新绑定的变量。
 
     // ---------- 第 2 步：解析 JSON 载荷 ----------
     let msg: any;
+    // 声明变量 msg，类型为 any；其值稍后赋入。 关键字：let＝声明可重新赋值的变量；any＝跳过静态类型检查。
     // ---------- 第 3 步：按类型三路分发 ----------
     try {
+    // 开始可能抛出异常的操作区域。 关键字：try＝进入异常处理块。
       // Buffer → utf8 字符串 → JSON 对象
       msg = JSON.parse(payload.toString('utf8'));
+      // 把右侧表达式的结果写入 msg。
     } catch {
+    // 开始异常处理分支，接收前面代码抛出的错误。 关键字：catch＝捕获异常。
       // 不是合法 JSON：记 warn 并丢弃这一条（不能影响其他消息）
       this.logger.warn(`非 JSON 报文已忽略: ${topic}`);
+      // 调用 this.logger.warn，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
       return;
+      // 立即结束当前函数，不返回具体值。 关键字：return＝返回结果并结束当前函数。
     }
+    // 结束当前对象、函数或条件代码块。
 
     try {
+    // 开始可能抛出异常的操作区域。 关键字：try＝进入异常处理块。
       // 场景 A：机器人六轴帧（10Hz，最高频）
       if (kind.startsWith('telemetry/robot/')) {
+      // 判断 if (kind.startsWith('telemetry/robot/')) { 中的条件，成立时执行对应分支。 关键字：if＝按条件分支。
         // 设备编码取 seg[5]：telemetry(3) / robot(4) / {deviceId}(5)
         const deviceId = seg[5];
+        // 声明 deviceId，初始值由 seg[5] 计算得到。 关键字：const＝声明不可重新绑定的变量。
         // 【契约校验】joints 必须是长度 6 的数组。
         // 这是契约里唯一的必填字段，不合法直接丢 —— 脏数据进库会污染时序表
         if (!Array.isArray(msg.joints) || msg.joints.length !== 6) {
+        // 判断 if (!Array.isArray(msg.joints) || msg.joints.length !== 6) { 中的条件，成立时执行对应分支。 关键字：if＝按条件分支。
           this.logger.warn(`robot_state 缺少合法 joints[6],已忽略: ${topic}`);
+          // 调用 this.logger.warn，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
           return;
+          // 立即结束当前函数，不返回具体值。 关键字：return＝返回结果并结束当前函数。
         }
+        // 结束当前对象、函数或条件代码块。
         // 第 1 路：写 Redis 实时快照（覆盖写，带 60s TTL）
         this.state.setRobotFrame(lineId, deviceId, msg);
+        // 调用 this.state.setRobotFrame，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
         // 第 2 路：放进历史缓冲队列（每秒批量写 TimescaleDB）
         this.history.bufferRobotFrame(deviceId, msg);
+        // 调用 this.history.bufferRobotFrame，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
         // 第 3 路：WebSocket 推送给订阅了该产线房间的浏览器
         this.gateway.broadcastRobot(lineId, msg);
+        // 调用 this.gateway.broadcastRobot，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
       } else if (kind === 'telemetry/io') {
+      // 开始前一条件不满足时的分支。 关键字：else＝进入另一条件分支；if＝按条件分支。
         // 产线 IO(契约 §3.8):高频瞬时量,只走 Redis 快照 + WebSocket,不落 TimescaleDB。
         // 单个点位读失败时值为 null(edge 保证"没读到"不冒充 0),这里整包照收。
         if (!msg.io || typeof msg.io !== 'object' || Array.isArray(msg.io)) {
+        // 判断 if (!msg.io || typeof msg.io !== 'object' || Array.isArray(msg.io)) { 中的条件，成立时执行对应分支。 关键字：if＝按条件分支；typeof＝读取值的运行时类型。
           this.logger.warn(`io_state 缺少合法 io 对象,已忽略: ${topic}`);
+          // 调用 this.logger.warn，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
           return;
+          // 立即结束当前函数，不返回具体值。 关键字：return＝返回结果并结束当前函数。
         }
+        // 结束当前对象、函数或条件代码块。
         this.state.setIoFrame(lineId, msg);
+        // 调用 this.state.setIoFrame，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
         this.gateway.broadcastIo(lineId, msg);
+        // 调用 this.gateway.broadcastIo，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
       // 场景 B：产线状态快照（1Hz，retained）
       } else if (kind === 'telemetry/status') {
+      // 开始前一条件不满足时的分支。 关键字：else＝进入另一条件分支；if＝按条件分支。
         this.state.setLineStatus(lineId, msg);
+        // 调用 this.state.setLineStatus，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
         this.history.insertLineStatus(lineId, msg);
+        // 调用 this.history.insertLineStatus，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
         this.gateway.broadcastLineStatus(lineId, msg);
+        // 调用 this.gateway.broadcastLineStatus，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
       // 场景 C：生产事件 / 报警（事件触发，低频）
       } else if (kind === 'event') {
+      // 开始前一条件不满足时的分支。 关键字：else＝进入另一条件分支；if＝按条件分支。
         this.history.insertEvent(lineId, msg);
+        // 调用 this.history.insertEvent，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
         this.gateway.broadcastEvent(lineId, msg);
+        // 调用 this.gateway.broadcastEvent，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
       // 场景 D：边缘采集器在线状态（retained + LWT，极低频）
       } else if (kind === 'edge/status') {
+      // 开始前一条件不满足时的分支。 关键字：else＝进入另一条件分支；if＝按条件分支。
         this.state.setEdgeStatus(lineId, msg);
+        // 调用 this.state.setEdgeStatus，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
         this.gateway.broadcastEdge(lineId, msg);
+        // 调用 this.gateway.broadcastEdge，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
       // 场景 E：控制指令回执（每条指令一次）
       } else if (kind === 'cmd_ack') {
+      // 开始前一条件不满足时的分支。 关键字：else＝进入另一条件分支；if＝按条件分支。
         this.history.ackCommand(msg);
+        // 调用 this.history.ackCommand，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
         this.gateway.broadcastCommandAck(lineId, msg);
+        // 调用 this.gateway.broadcastCommandAck，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
       }
+      // 结束当前对象、函数或条件代码块。
     } catch (e) {
+    // 开始异常处理分支，接收前面代码抛出的错误。 关键字：catch＝捕获异常。
       // 兜底 try/catch：任何一处理路抛错都不应让 MQTT 客户端崩溃
       this.logger.error(`报文处理失败 ${topic}: ${(e as Error).message}`);
+      // 调用 this.logger.error，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
     }
+    // 结束当前对象、函数或条件代码块。
   }
+  // 结束当前对象、函数或条件代码块。
 }
+// 结束当前对象、函数或条件代码块。

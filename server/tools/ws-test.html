@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- 声明或结束一个 HTML 标签及其属性。 -->
 <!--
   ============================================================================
   文件作用：WebSocket 联调测试页（独立于前端项目的最小测试工具）
@@ -23,55 +24,87 @@
   ============================================================================
 -->
 <html lang="zh-CN">
+<!-- 声明或结束一个 HTML 标签及其属性。 -->
 <head>
+<!-- 声明或结束一个 HTML 标签及其属性。 -->
   <meta charset="utf-8">
+  <!-- 声明或结束一个 HTML 标签及其属性。 -->
   <title>line-twin WebSocket 联调</title>
+  <!-- 声明或结束一个 HTML 标签及其属性。 -->
   <style>
+  /* 声明或结束一个 HTML 标签及其属性。 */
     /* 整体排版：等宽字体，像终端 */
     body { font-family: monospace; margin: 16px; }
+    /* 设置页面文本、样式或脚本语句。 */
     /* 日志区：占 78% 屏幕高度，超出可滚动；黑底绿字 */
     #log { height: 78vh; overflow: auto; background: #111; color: #0f0; padding: 8px; white-space: pre-wrap; }
+    /* 定义当前文件中的这一项配置或结构。 */
   </style>
+  <!-- 声明或结束一个 HTML 标签及其属性。 -->
 </head>
+<!-- 声明或结束一个 HTML 标签及其属性。 -->
 <body>
+<!-- 声明或结束一个 HTML 标签及其属性。 -->
   <h3>实时数据测试(line-01)</h3>
+  <!-- 声明或结束一个 HTML 标签及其属性。 -->
   <p>连接 http://localhost:3000,订阅 robot_state / line_status / event</p>
+  <!-- 声明或结束一个 HTML 标签及其属性。 -->
   <!-- 日志输出区 -->
   <div id="log"></div>
+  <!-- 声明或结束一个 HTML 标签及其属性。 -->
 
   <!-- 需联网加载;若离线,把 socket.io.min.js 下载到本地改引用 -->
   <script src="https://unpkg.com/socket.io-client@4.8.1/dist/socket.io.min.js"></script>
+  <!-- 声明或结束一个 HTML 标签及其属性。 -->
   <script>
+  // 声明或结束一个 HTML 标签及其属性。
     // 日志容器元素
     const logEl = document.getElementById('log');
+    // 设置页面文本、样式或脚本语句。 关键字：const＝声明不可重新绑定的变量。
     // 往日志区顶部插入一行（新的在上，和终端习惯一致）
     const log = (m) => { logEl.textContent = m + '\n' + logEl.textContent; };
+    // 设置页面文本、样式或脚本语句。 关键字：const＝声明不可重新绑定的变量。
 
     // 建立 socket.io 连接（开发期直连后端 3000）
     const socket = io('http://localhost:3000');
+    // 设置页面文本、样式或脚本语句。 关键字：const＝声明不可重新绑定的变量。
 
     // 连接成功
     socket.on('connect', () => {
+    // 设置页面文本、样式或脚本语句。
       log('connected: ' + socket.id);
+      // 设置页面文本、样式或脚本语句。
       // 订阅产线：第三个参数是 ack 回调，后端会返回 { ok:true, lineId }
       socket.emit('subscribe', { lineId: 'line-01' }, (ack) => log('subscribe ack: ' + JSON.stringify(ack)));
+      // 设置页面文本、样式或脚本语句。
     });
+    // 设置页面文本、样式或脚本语句。
 
     // 机器人帧计数（用于观察 10Hz 的到达频率）
     let robotCount = 0;
+    // 设置页面文本、样式或脚本语句。 关键字：let＝声明可重新赋值的变量。
     socket.on('robot_state', (m) => {
+    // 设置页面文本、样式或脚本语句。
       // 每 10 帧打一次，避免刷屏（10Hz 全打会闪瞎眼）
       if (++robotCount % 10 === 0) log(`robot_state x${robotCount}  joints=${JSON.stringify(m.joints)}`);
+      // 设置页面文本、样式或脚本语句。 关键字：if＝条件判断。
     });
+    // 设置页面文本、样式或脚本语句。
 
     // 产线状态（1Hz，每条都打）
     socket.on('line_status', (m) => log('line_status: ' + JSON.stringify(m)));
+    // 设置页面文本、样式或脚本语句。
 
     // 生产事件
     socket.on('event', (m) => log('event: ' + JSON.stringify(m)));
+    // 设置页面文本、样式或脚本语句。
 
     // 连接错误（后端没起、端口不对、代理问题都会走到这里）
     socket.on('connect_error', (e) => log('connect_error: ' + e.message));
+    // 设置页面文本、样式或脚本语句。
   </script>
+  <!-- 声明或结束一个 HTML 标签及其属性。 -->
 </body>
+<!-- 声明或结束一个 HTML 标签及其属性。 -->
 </html>
+<!-- 声明或结束一个 HTML 标签及其属性。 -->

@@ -32,21 +32,35 @@
  *   所以前端刷新页面不会丢数据 —— 状态在后端的 Redis 里。
  */
 import { createApp } from 'vue';
+// 从 vue 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { createPinia } from 'pinia';
+// 从 pinia 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import ElementPlus from 'element-plus';
+// 从 element-plus 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
+// 从 element-plus/es/locale/lang/zh-cn 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import 'element-plus/dist/index.css';
+// 导入或导出模块符号。 关键字：import＝导入模块或符号。
 import 'element-plus/theme-chalk/dark/css-vars.css';
+// 导入或导出模块符号。 关键字：import＝导入模块或符号。
 import App from './App.vue';
+// 从 ./App.vue 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { router } from './router';
+// 从 ./router 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import './styles.css';
+// 导入或导出模块符号。 关键字：import＝导入模块或符号。
 
 // 创建 Vue 应用实例
 const app = createApp(App);
+// 声明 app，初始值由 createApp(App) 计算得到。 关键字：const＝声明不可重新绑定的变量。
 app.use(createPinia());
+// 调用 app.use，把括号中的值作为参数传入。
 // 装上路由插件（让 <router-view> 和 <router-link> 可用）
 app.use(router);
+// 调用 app.use，把括号中的值作为参数传入。
 // 装上 Element Plus，并指定中文语言包
 app.use(ElementPlus, { locale: zhCn });
+// 调用 app.use，把括号中的值作为参数传入。
 // 挂载到 index.html 中的 #app 容器
 app.mount('#app');
+// 调用 app.mount，把括号中的值作为参数传入。

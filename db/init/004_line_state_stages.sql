@@ -94,26 +94,42 @@
 -- ALTER TABLE = 改表结构
 -- DROP CONSTRAINT IF EXISTS = 删约束；带 IF EXISTS 就不存在也不报错（幂等）
 ALTER TABLE line_status_history
+-- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表。
   DROP CONSTRAINT IF EXISTS line_status_history_state_check;
+  -- 删除数据库对象。 关键字：DROP＝删除数据库对象；CONSTRAINT＝命名约束；IF＝按条件执行 SQL；EXISTS＝检查对象或查询结果存在。
 
 -- ADD CONSTRAINT = 加一条约束
 -- CHECK (state IN (...)) = 行级校验：state 必须是括号里列出的 14 个字符串之一
 ALTER TABLE line_status_history
+-- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表。
   ADD CONSTRAINT line_status_history_state_check
+  -- 继续当前 SQL 语句的字段、约束、参数或查询子句。 关键字：CONSTRAINT＝命名约束。
   CHECK (state IN (
+  -- 检查字段取值。 关键字：CHECK＝校验数据约束；IN＝检查是否属于集合。
     -- 原 4 态（保留，兼容旧数据与 mock 采集器）
     'running','idle','alarm','offline',
+    -- 把这一段文字作为当前调用、数组或对象的值。
     -- 历史 10 态（后续迁移补充 waiting_robot）
     'waiting_feed',   --  0 = 等待入料
+    -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
     'feeding',        --  1 = 入料中
+    -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
     'assembling',     --  2 = 装配中
+    -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
     'unloading',      --  3 = 下料中
+    -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
     'unload_done',    --  4 = 下料完成
+    -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
     'waiting_next',   --  5 = 等待后站入料
+    -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
     'init_error',     -- 100 = 初始化错误状态
+    -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
     'stopped',        -- 101 = 停止状态
+    -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
     'manual_mode'     -- 102 = 手动控制模式
+    -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
   ));
+  -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
 
 -- ---------------------------------------------------------------------------
 -- 2) 同样的约束也放宽 line_current_status（在线快照表，每产线一行）
@@ -124,15 +140,24 @@ ALTER TABLE line_status_history
 --   当前状态里写不进去"，两边对不上，分析页交叉校验时直接打架。
 --   所以这里把两张表的约束一次对齐。
 ALTER TABLE line_current_status
+-- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表。
   DROP CONSTRAINT IF EXISTS line_current_status_state_check;
+  -- 删除数据库对象。 关键字：DROP＝删除数据库对象；CONSTRAINT＝命名约束；IF＝按条件执行 SQL；EXISTS＝检查对象或查询结果存在。
 
 ALTER TABLE line_current_status
+-- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表。
   ADD CONSTRAINT line_current_status_state_check
+  -- 继续当前 SQL 语句的字段、约束、参数或查询子句。 关键字：CONSTRAINT＝命名约束。
   CHECK (state IN (
+  -- 检查字段取值。 关键字：CHECK＝校验数据约束；IN＝检查是否属于集合。
     'running','idle','alarm','offline',
+    -- 把这一段文字作为当前调用、数组或对象的值。
     'waiting_feed','feeding','assembling','unloading','unload_done',
+    -- 把这一段文字作为当前调用、数组或对象的值。
     'waiting_next','init_error','stopped','manual_mode'
+    -- 把这一段文字作为当前调用、数组或对象的值。
   ));
+  -- 继续当前 SQL 语句的字段、约束、参数或查询子句。
 
 -- ---------------------------------------------------------------------------
 -- 3) 把 PLC 原始整数对照直接写进数据库
@@ -145,7 +170,12 @@ ALTER TABLE line_current_status
 --   也会出现在 pg_dump 出来的建表脚本里，导出的数据库同样带着这段说明。
 --   字符串相邻书写（'...' '...'）= PostgreSQL 里相邻字面量会拼成一段
 COMMENT ON TABLE line_status_history IS
+-- 继续当前 SQL 语句的字段、约束、参数或查询子句。 关键字：ON＝指定连接或冲突条件；TABLE＝数据库表；IS＝检查空值或布尔值。
   'line_status.state 允许值见 constraint line_status_history_state_check。'
+  -- 把这一段文字作为当前调用、数组或对象的值。
   'PLC 原始整数对照: 0=waiting_feed 1=feeding 2=assembling 3=unloading '
+  -- 把这一段文字作为当前调用、数组或对象的值。
   '4=unload_done 5=waiting_next 100=init_error 101=stopped 102=manual_mode。'
+  -- 把这一段文字作为当前调用、数组或对象的值。
   'edge 采集器负责 PLC 整数 → 契约字符串的映射(plc_collector.py STATE_MAP)。';
+  -- 调用 契约字符串的映射；括号中的表达式是传入的参数。

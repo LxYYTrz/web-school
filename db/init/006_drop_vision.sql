@@ -102,6 +102,7 @@
 -- IF EXISTS = 表不存在就跳过，不报错（幂等的关键）
 -- 表名写全（不带 schema）时按 search_path 找，这里就是 public。
 DROP TABLE IF EXISTS vision_images;
+-- 删除数据库表 vision_images。 关键字：DROP＝删除数据库对象；TABLE＝数据库表；IF＝按条件执行 SQL；EXISTS＝检查对象或查询结果存在。
 
 -- ---------------------------------------------------------------------------
 -- 2) 视觉相关权限：先解绑角色，再删权限点
@@ -114,27 +115,40 @@ DROP TABLE IF EXISTS vision_images;
 -- DO $$ ... $$ = 一次性匿名 PL/pgSQL 代码块（当场执行完就丢，不留在库里）
 -- BEGIN / END = 代码块边界
 DO $$
+-- 开始匿名 SQL 代码块。 关键字：DO＝执行匿名 SQL 代码块。
 BEGIN
+-- 开始事务或函数体。 关键字：BEGIN＝开始事务或代码块。
   -- to_regclass('public.permissions') = 把表名转成 regclass；
   --   表不存在时返回 NULL（而不是报错）—— 这是"判断在不在"的标准写法。
   -- IS NULL = 判断是不是空值（NULL 表示"没有"）
   -- RETURN = 提前结束这个代码块，后面什么都不做
   IF to_regclass('public.permissions') IS NULL THEN
+  -- 按条件执行后续语句。 关键字：IF＝按条件执行 SQL；IS＝检查空值或布尔值；NULL＝数据库空值；THEN＝满足条件时的结果。
     RETURN;
+    -- 结束函数或代码块并返回。 关键字：RETURN＝结束函数并返回。
   END IF;
+  -- 结束 SQL 块。 关键字：END＝结束代码块；IF＝按条件执行 SQL。
   -- 先解绑：把引用这两条权限的角色绑定清掉
   --   IS NOT NULL = 判断不是空值（表存在）
   --   DELETE FROM = 删除行；WHERE = 过滤条件
   --   IN (SELECT ...) = 用子查询给出的 id 集合做过滤
   IF to_regclass('public.role_permissions') IS NOT NULL THEN
+  -- 按条件执行后续语句。 关键字：IF＝按条件执行 SQL；IS＝检查空值或布尔值；NOT＝逻辑否定；NULL＝数据库空值；THEN＝满足条件时的结果。
     DELETE FROM role_permissions
+    -- 删除数据。 关键字：DELETE＝删除匹配行；FROM＝指定查询来源表。
       WHERE permission_id IN (
+      -- 限定处理范围。 关键字：WHERE＝限定目标行；IN＝检查是否属于集合。
         SELECT id FROM permissions WHERE code IN ('menu:vision', 'data:vision:all')
+        -- 读取数据。 关键字：SELECT＝读取指定列；FROM＝指定查询来源表；WHERE＝限定目标行；IN＝检查是否属于集合。
       );
+      -- 结束当前 SQL 表或函数定义。
   END IF;
+  -- 结束 SQL 块。 关键字：END＝结束代码块；IF＝按条件执行 SQL。
   -- 再删权限点本身：menu:vision（视觉菜单）、data:vision:all（视觉数据权限）
   DELETE FROM permissions WHERE code IN ('menu:vision', 'data:vision:all');
+  -- 删除数据。 关键字：DELETE＝删除匹配行；FROM＝指定查询来源表；WHERE＝限定目标行；IN＝检查是否属于集合。
 END $$;
+-- 结束 SQL 块。 关键字：END＝结束代码块。
 
 -- ---------------------------------------------------------------------------
 -- 3) 视觉设备 + 4) 收紧 devices.type 约束
@@ -143,14 +157,20 @@ END $$;
 --   它们都作用在 devices 这一张表上，放一起逻辑完整：
 --   先删掉不该存在的设备行，再把"允许哪些设备类型"这个规则收紧。
 DO $$
+-- 开始匿名 SQL 代码块。 关键字：DO＝执行匿名 SQL 代码块。
 BEGIN
+-- 开始事务或函数体。 关键字：BEGIN＝开始事务或代码块。
   -- devices 表不存在（全新库上 001 建的是干净的表，但保险起见判一下）
   IF to_regclass('public.devices') IS NULL THEN
+  -- 按条件执行后续语句。 关键字：IF＝按条件执行 SQL；IS＝检查空值或布尔值；NULL＝数据库空值；THEN＝满足条件时的结果。
     RETURN;
+    -- 结束函数或代码块并返回。 关键字：RETURN＝结束函数并返回。
   END IF;
+  -- 结束 SQL 块。 关键字：END＝结束代码块；IF＝按条件执行 SQL。
   -- 删掉相机、视觉工控机两类设备记录
   --   DELETE FROM = 删除行；WHERE type IN (...) = 按设备类型过滤
   DELETE FROM devices WHERE type IN ('camera', 'ipc');
+  -- 删除数据。 关键字：DELETE＝删除匹配行；FROM＝指定查询来源表；WHERE＝限定目标行；IN＝检查是否属于集合。
 
   -- 把设备类型取值范围收紧回 plc | robot。
   --   EXISTS (SELECT 1 FROM ...) = 判断有没有符合条件的行（只取真假，不取值）
@@ -160,12 +180,20 @@ BEGIN
   -- 约束名 devices_type_check 是 PostgreSQL 给内联 CHECK 自动起的名字。
   -- 先查 pg_constraint 确认它还在，避免重复执行时报"约束不存在"。
   IF EXISTS (
+  -- 按条件执行后续语句。 关键字：IF＝按条件执行 SQL；EXISTS＝检查对象或查询结果存在。
     SELECT 1 FROM pg_constraint
+    -- 读取数据。 关键字：SELECT＝读取指定列；FROM＝指定查询来源表。
     WHERE conname = 'devices_type_check' AND conrelid = 'devices'::regclass
+    -- 限定处理范围。 关键字：WHERE＝限定目标行；AND＝逻辑与。
   ) THEN
+  -- 继续当前 SQL 语句的字段、约束、参数或查询子句。 关键字：THEN＝满足条件时的结果。
     -- ALTER TABLE = 改表结构；DROP CONSTRAINT = 删约束；ADD CONSTRAINT = 加约束
     -- CHECK (type IN ('plc','robot')) = 设备类型只允许这两种
     ALTER TABLE devices DROP CONSTRAINT devices_type_check;
+    -- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表；DROP＝删除数据库对象；CONSTRAINT＝命名约束。
     ALTER TABLE devices ADD CONSTRAINT devices_type_check CHECK (type IN ('plc', 'robot'));
+    -- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表；CONSTRAINT＝命名约束；CHECK＝校验数据约束；IN＝检查是否属于集合。
   END IF;
+  -- 结束 SQL 块。 关键字：END＝结束代码块；IF＝按条件执行 SQL。
 END $$;
+-- 结束 SQL 块。 关键字：END＝结束代码块。

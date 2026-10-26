@@ -18,7 +18,11 @@
  *   - realtime/realtime.module.ts    ：imports 本模块以获得注入能力
  */
 import { Module } from '@nestjs/common';
+// 从 @nestjs/common 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { LineStateService } from './line-state.service';
+// 从 ./line-state.service 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 
 @Module({ providers: [LineStateService], exports: [LineStateService] })
+// 装饰器 Module：声明 NestJS 模块的依赖和导出。
 export class StateModule {}
+// 声明 StateModule 的结构。 关键字：export＝向其他模块开放符号；class＝定义类。

@@ -1,4 +1,5 @@
 {
+// 开始一个对象或数组；对象按键保存配置，数组按顺序保存条目。
   // ============================================================================
   // 文件作用：后端 TypeScript 编译配置
   // 所属模块：server/
@@ -6,36 +7,54 @@
   // 说明：tsconfig.json 支持注释（TypeScript 用 JSONC 解析）。
   // ============================================================================
   "compilerOptions": {
+  // compilerOptions：TypeScript 编译器选项；当前值为 {。
     // 模块格式：CommonJS —— Node.js 原生最稳的格式（NestJS 默认）
     "module": "commonjs",
+    // module：编译产物的模块格式；当前值为 "commonjs"。
     // 编译目标：ES2021
     "target": "ES2021",
+    // target：编译后允许使用的 JavaScript 语言版本；当前值为 "ES2021"。
     // 可用的标准库
     "lib": ["ES2021"],
+    // lib：类型检查时可用的标准库；当前值为 ["ES2021"]。
     // 模块解析方式：Node 的传统解析（node_modules 逐级向上找）
     "moduleResolution": "node",
+    // moduleResolution：导入模块的查找规则；当前值为 "node"。
     // ★ 开启装饰器元数据 —— NestJS 的依赖注入靠它识别构造函数参数类型。
     //   关闭它，@Injectable() 类的依赖就注入不进来
     "emitDecoratorMetadata": true,
+    // emitDecoratorMetadata：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
     // ★ 开启装饰器语法（实验性，但 NestJS 生态的事实标准）
     "experimentalDecorators": true,
+    // experimentalDecorators：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
     // 允许 default import CJS 模块（express、pg 等）
     "esModuleInterop": true,
+    // esModuleInterop：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
     // 跳过第三方类型声明检查（省时间）
     "skipLibCheck": true,
+    // skipLibCheck：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
     // ★ 严格模式：所有严格检查都开
     "strict": true,
+    // strict：启用严格类型检查；当前值为 true。 关键字：true＝布尔真值。
     // 允许类属性未初始化（NestJS 的依赖注入属性是运行时赋值的，编译期无法确定）
     "strictPropertyInitialization": false,
+    // strictPropertyInitialization：指定该项的值；当前值为 false。 关键字：false＝布尔假值。
     // 编译产物输出目录（npm run build 后生成 dist/）
     "outDir": "dist",
+    // outDir：编译产物输出目录；当前值为 "dist"。
     // 源码根目录（编译后 dist/main.js 的位置对应 src/main.ts）
     "rootDir": "src",
+    // rootDir：源文件根目录；当前值为 "src"。
     // 允许 import JSON 文件
     "resolveJsonModule": true,
+    // resolveJsonModule：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
     // 文件名大小写必须一致（跨平台兼容：Windows 不区分大小写，Linux 区分）
     "forceConsistentCasingInFileNames": true
+    // forceConsistentCasingInFileNames：指定该项的值；当前值为 true。 关键字：true＝布尔真值。
   },
+  // 结束当前对象或数组；末尾逗号表示后面还有同级条目。
   // 只编译 src/ 目录下的所有 .ts 文件
   "include": ["src/**/*"]
+  // include：参与编译的文件范围；当前值为 ["src/**/*"]。
 }
+// 结束当前对象或数组；末尾逗号表示后面还有同级条目。

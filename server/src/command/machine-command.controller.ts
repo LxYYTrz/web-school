@@ -28,37 +28,65 @@
  *   不是 SQL 拼接,但仍然不接收任意长/奇怪字符。
  */
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+// 从 @nestjs/common 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { CommandBody, CommandService } from './command.service';
+// 从 ./command.service 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { MachineTokenGuard } from './machine-token.guard';
+// 从 ./machine-token.guard 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import type { SessionUser } from '../auth/session-user';
+// 从 ../auth/session-user 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 
 export interface MachineCommandBody extends CommandBody {
+// 声明 MachineCommandBody 的结构。 关键字：export＝向其他模块开放符号；interface＝定义类型接口；extends＝继承父类。
   lineId?: string;
+  // 声明 可选字段 lineId，类型为 string。
   operator?: string;
+  // 声明 可选字段 operator，类型为 string。
 }
+// 结束当前对象、函数或条件代码块。
 
 /** operator 清洗:只保留字母数字和 -_:.,长度截断,防止审计里塞进奇怪内容 */
 function sanitizeOperator(raw: unknown): string {
+// 定义函数 sanitizeOperator。 关键字：function＝定义函数；unknown＝需检查后才能使用的类型。
   const s = String(raw ?? '').trim();
+  // 声明 s，初始值由 String(raw ?? '').trim() 计算得到。 关键字：const＝声明不可重新绑定的变量。
   const cleaned = s.replace(/[^A-Za-z0-9_:.-]/g, '').slice(0, 64);
+  // 声明 cleaned，初始值由 s.replace(/[^A-Za-z0-9_:.-]/g, '').slice(0, 64) 计算得到。 关键字：const＝声明不可重新绑定的变量。
   return cleaned || 'machine';
+  // 返回 cleaned || 'machine' 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数。
 }
+// 结束当前对象、函数或条件代码块。
 
 @Controller('api/machine')
+// 装饰器 Controller：声明 HTTP 控制器及路由前缀。
 export class MachineCommandController {
+// 声明 MachineCommandController 的结构。 关键字：export＝向其他模块开放符号；class＝定义类。
   constructor(private readonly commands: CommandService) {}
+  // 定义类的构造函数；创建实例时接收参数并初始化依赖。 关键字：private＝限定类内部访问；readonly＝禁止重新赋值。
 
   @Post('commands')
+  // 装饰器 Post：把方法绑定到 POST 路由。
   @UseGuards(MachineTokenGuard)
+  // 装饰器 UseGuards：执行路由前先应用权限守卫。
   send(@Body() body: MachineCommandBody) {
+  // 定义方法 send；括号中声明参数，花括号内实现逻辑。
     const lineCode = String(body?.lineId ?? '').trim();
+    // 声明 lineCode，初始值由 String(body?.lineId ?? '').trim() 计算得到。 关键字：const＝声明不可重新绑定的变量。
     if (!lineCode) {
+    // 判断 if (!lineCode) { 中的条件，成立时执行对应分支。 关键字：if＝按条件分支。
       return { ok: false, error: 'lineId 不能为空' };
+      // 返回 { ok: false, error: 'lineId 不能为空' } 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数；false＝布尔假值。
     }
+    // 结束当前对象、函数或条件代码块。
     const operator = sanitizeOperator(body.operator);
+    // 声明 operator，初始值由 sanitizeOperator(body.operator) 计算得到。 关键字：const＝声明不可重新绑定的变量。
     // SessionUser 这里只用于承载 operator —— issue() 只读 user.username。
     // level 固定 3:机器通道的权限由密钥本身决定,不走三级 RBAC。
     const user: SessionUser = { username: operator, level: 3 };
+    // 声明 user，初始值由 { username: operator, level: 3 } 计算得到。 关键字：const＝声明不可重新绑定的变量。
     return this.commands.issue(lineCode, body, user);
+    // 返回 this.commands.issue(lineCode, body, user) 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数；this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 }
+// 结束当前对象、函数或条件代码块。

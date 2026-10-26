@@ -40,6 +40,7 @@
  *     重连间隔从 1 秒开始，逐步退避到最多 5 秒，避免疯狂重连打爆服务器。
  */
 import { io, type Socket } from 'socket.io-client';
+// 从 socket.io-client 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 
 // 连接管理:
 // - 开发:走 Vite 代理(import.meta.env.VITE_API_BASE 为空时连接同源)
@@ -47,6 +48,7 @@ import { io, type Socket } from 'socket.io-client';
 // 后端基地址。VITE_API_BASE 未定义时为 undefined → 走同源。
 // `as string | undefined` 是类型断言：告诉 TS 这个值可能是 undefined
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) || undefined;
+// 声明 BASE，初始值由 (import.meta.env.VITE_API_BASE as string | undefined) || undefined 计算得到。 关键字：const＝声明不可重新绑定的变量；import＝导入模块或符号；undefined＝未定义值。
 
 /**
  * 模块级 socket 单例。
@@ -55,20 +57,32 @@ const BASE = (import.meta.env.VITE_API_BASE as string | undefined) || undefined;
  * 还可能造成重复连接。模块级单例保证整个 SPA 只有一条连接。
  */
 let socket: Socket | null = null;
+// 声明 socket，初始值由 null 计算得到。 关键字：let＝声明可重新赋值的变量；null＝空值。
 
 export function getSocket(): Socket {
+// 定义函数 getSocket。 关键字：export＝向其他模块开放符号；function＝定义函数。
   // 还没创建过 → 创建
   if (!socket) {
+  // 判断 if (!socket) { 中的条件，成立时执行对应分支。 关键字：if＝按条件分支。
     socket = io(BASE ?? '/', {
+    // 把右侧表达式的结果写入 socket。
       transports: ['websocket'],
+      // 设置字段 transports。
       reconnectionAttempts: Infinity,
+      // 设置字段 reconnectionAttempts。
       reconnectionDelay: 1000,
+      // 设置字段 reconnectionDelay。
       reconnectionDelayMax: 5000,
+      // 设置字段 reconnectionDelayMax。
     });
+    // 结束当前回调或对象，并完成外层函数调用。
   }
+  // 结束当前对象、函数或条件代码块。
   // 返回 socket 实例
   return socket;
+  // 返回 socket 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数。
 }
+// 结束当前对象、函数或条件代码块。
 
 /**
  * 拉取产线快照（首屏用）。
@@ -77,12 +91,18 @@ export function getSocket(): Socket {
  * @returns 快照对象，结构见 types.ts 的 LineSnapshot
  */
 export async function fetchSnapshot(lineId: string) {
+// 定义函数 fetchSnapshot。 关键字：export＝向其他模块开放符号；async＝声明异步函数；function＝定义函数。
   // BASE 为空时用空字符串，拼出的路径是 /api/lines/...（同源相对路径）
   const base = BASE ?? '';
+  // 声明 base，初始值由 BASE ?? '' 计算得到。 关键字：const＝声明不可重新绑定的变量。
   // 发 GET 请求
   const res = await fetch(`${base}/api/lines/${lineId}/snapshot`);
+  // 声明 res，初始值由 await fetch(${base}/api/lines/${lineId}/snapshot) 计算得到。 关键字：const＝声明不可重新绑定的变量；await＝等待异步操作完成。
   // 非 2xx 就抛错，调用方（useLineData.preload）会 catch 并静默降级
   if (!res.ok) throw new Error(`snapshot ${res.status}`);
+  // 判断 if (!res.ok) throw new Error(snapshot ${res.status}); 中的条件，成立时执行对应分支。 关键字：if＝按条件分支；throw＝抛出错误；new＝创建对象实例。
   // 解析 JSON 并返回
   return res.json();
+  // 返回 res.json() 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数。
 }
+// 结束当前对象、函数或条件代码块。

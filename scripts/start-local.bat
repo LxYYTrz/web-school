@@ -1,4 +1,5 @@
 @echo off
+rem 关闭批处理命令回显，让输出只显示实际提示。
 rem ============================================================================
 rem 文件作用：本地闭环一键启动脚本（后端 + 采集器 + 前端 dev）
 rem 所属模块：scripts/
@@ -38,37 +39,55 @@ rem ============================================================================
 
 rem ROOT = 上一级目录（line-twin 根目录）
 set ROOT=%~dp0..
+rem 将批处理变量 ROOT 设为等号右侧的值；set 用于设置环境变量。
 
 rem ---- 采集器选择：读环境变量 COLLECTOR，默认为 plc ----
 set COLLECTOR=%COLLECTOR%
+rem 将批处理变量 COLLECTOR 设为等号右侧的值；set 用于设置环境变量。
 if "%COLLECTOR%"=="" set COLLECTOR=plc
+rem 用 if 判断采集器选择是否符合条件，进入对应的分支。
 
 rem 根据 COLLECTOR 决定跑哪个采集器脚本
 if /i "%COLLECTOR%"=="mock" (
+rem 用 if 判断采集器选择是否符合条件，进入对应的分支。
     set EDGE_SCRIPT=mock_collector.py
+    rem 将批处理变量 EDGE_SCRIPT 设为等号右侧的值；set 用于设置环境变量。
 ) else (
+rem 结束前一分支，并进入条件不成立时的 else 分支。
     set EDGE_SCRIPT=plc_collector.py
+    rem 将批处理变量 EDGE_SCRIPT 设为等号右侧的值；set 用于设置环境变量。
 )
+rem 结束当前 if 分支。
 
 echo Starting line-twin local loop from %ROOT%
+rem 用 echo 向控制台输出这一行启动提示。
 echo Edge collector: %EDGE_SCRIPT%  (COLLECTOR=%COLLECTOR%)
+rem 用 echo 向控制台输出这一行启动提示。
 
 rem ---- ① 启动后端（3000 端口）----
 rem cd /d 切目录；node dist\main.js 运行编译产物
 start "lt-server" cmd /k "cd /d %ROOT%\server && node dist\main.js"
+rem 用 start 新开命令窗口，执行引号内的服务启动命令。
 
 rem ---- 等待 3 秒，避免采集器比后端先发数据 ----
 timeout /t 3 /nobreak >nul
+rem 用 timeout 暂停指定秒数，等待后端准备就绪。
 
 rem ---- ② 启动采集器（plc 或 mock）----
 start "lt-edge"   cmd /k "cd /d %ROOT%\edge && py -3 %EDGE_SCRIPT%"
+rem 用 start 新开命令窗口，执行引号内的服务启动命令。
 
 rem ---- ③ 启动前端 dev server（5173 端口）----
 rem npm run dev 启动 Vite；/api 与 /socket.io 由 vite.config.ts 代理到 3000
 start "lt-web"    cmd /k "cd /d %ROOT%\web && npm run dev"
+rem 用 start 新开命令窗口，执行引号内的服务启动命令。
 
 rem ---- 完成提示 ----
 echo.
+rem 用 echo 向控制台输出这一行启动提示。
 echo Wait 5-10 seconds, then open http://localhost:5173 in browser.
+rem 用 echo 向控制台输出这一行启动提示。
 echo Keep all 3 windows open. Close them to stop.
+rem 用 echo 向控制台输出这一行启动提示。
 echo To switch back to mock (no PLC needed):  set COLLECTOR=mock ^&^& scripts\start-local.bat
+rem 用 echo 向控制台输出这一行启动提示。

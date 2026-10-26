@@ -78,7 +78,9 @@
 --    规则是 <表名>_<列名>_check。
 --    ★ 这里刻意不加 IF EXISTS：约束名对不上时要报错停下来，而不是静默跳过。
 ALTER TABLE control_commands
+-- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表。
   DROP CONSTRAINT control_commands_type_check;
+  -- 删除数据库对象。 关键字：DROP＝删除数据库对象；CONSTRAINT＝命名约束。
 
 -- ② 再加回新约束（6 项白名单）。
 --    ADD CONSTRAINT = 加一条约束；CHECK = 行级校验条件。
@@ -90,5 +92,8 @@ ALTER TABLE control_commands
 --                   params.action = acquire | release）
 --    · alarm_clear = 清除报警（现场暂未开放对应寄存器，edge 会回 rejected）
 ALTER TABLE control_commands
+-- 修改数据库结构。 关键字：ALTER＝修改数据库对象；TABLE＝数据库表。
   ADD CONSTRAINT control_commands_type_check
+  -- 继续当前 SQL 语句的字段、约束、参数或查询子句。 关键字：CONSTRAINT＝命名约束。
   CHECK (type IN ('start','stop','reset','changeover','mode_set','alarm_clear'));
+  -- 检查字段取值。 关键字：CHECK＝校验数据约束；IN＝检查是否属于集合。

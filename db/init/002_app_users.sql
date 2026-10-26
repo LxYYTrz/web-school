@@ -79,17 +79,21 @@
 --   CREATE SCHEMA = 建命名空间
 --   IF NOT EXISTS = 已存在就跳过（幂等）
 CREATE SCHEMA IF NOT EXISTS app;
+-- 创建数据库模式 app。 关键字：CREATE＝创建数据库对象；SCHEMA＝数据库模式；IF＝按条件执行 SQL；NOT＝逻辑否定；EXISTS＝检查对象或查询结果存在。
 
 -- 账号表：当前登录链路真正使用的用户表。
 --   只有三样东西：账号名、密码散列、权限等级 —— 够用且不含多余信息。
 --   app.app_users = schema 名 . 表名（跨 schema 引用就是这么写）
 CREATE TABLE IF NOT EXISTS app.app_users (
+-- 创建数据库表 app.app_users。 关键字：CREATE＝创建数据库对象；TABLE＝数据库表；IF＝按条件执行 SQL；NOT＝逻辑否定；EXISTS＝检查对象或查询结果存在。
   username   TEXT PRIMARY KEY,
+  -- 定义字段 username 的类型及约束。 关键字：PRIMARY＝主键约束；KEY＝键定义。
              -- TEXT = 变长字符串
              -- PRIMARY KEY = 主键：唯一 + 非空 + 自动建索引
              -- ★ 直接做主键（不另设 id）：登录就是按名字查，
              --   没有"先查 id 再查别的"这一步，也就不存在 id 冲突问题
   password   TEXT NOT NULL,
+  -- 定义字段 password 的类型及约束。 关键字：NOT＝逻辑否定；NULL＝数据库空值。
              -- TEXT = 口令散列串
              -- NOT NULL = 必填：没有散列就没法校验
              -- 内容形如 $2a$10$... ：$2a$ 是 bcrypt 算法标识，10 是 cost（计算强度）。
@@ -98,18 +102,21 @@ CREATE TABLE IF NOT EXISTS app.app_users (
              -- ★ 注意生成方是 bcryptjs（Node 侧），与 001 里 pgcrypto 的 crypt()
              --   不是同一种格式——那张表是给 public.users 用的，两套不要混用。
   level      SMALLINT NOT NULL CHECK (level IN (1, 2, 3)),
+  -- 定义数据库字段 level 的类型、默认值或约束。 关键字：NOT＝逻辑否定；NULL＝数据库空值；CHECK＝校验数据约束；IN＝检查是否属于集合。
              -- SMALLINT = 16 位整数（够放 1/2/3，还省内存）
              -- NOT NULL = 必填
              -- CHECK = 权限等级写死在数据库层：代码里万一漏了校验，
              --   也写不进第 4 种等级
              -- 取值：1 = 普通用户，2 = 二级用户，3 = 管理员
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  -- 定义字段 created_at 的类型及约束。 关键字：NOT＝逻辑否定；NULL＝数据库空值；DEFAULT＝默认值。
              -- TIMESTAMPTZ = 带时区的时间戳
              -- NOT NULL = 必填
              -- DEFAULT now() = 插入时自动取数据库当前时间
              --   （取库的时间，不依赖应用服务器时钟）
              -- 用途：查"这个账号什么时候建的"
 );
+-- 结束当前 SQL 表或函数定义。
 
 -- 索引：按等级排序查（用户管理页默认按 level DESC, username 排）。
 --   CREATE INDEX = 建普通索引
@@ -118,7 +125,9 @@ CREATE TABLE IF NOT EXISTS app.app_users (
 --   等级取值只有 3 种、区分度低，索引收益有限，这里建它主要是为了
 --   "列出所有管理员"这类查询不必走全表扫。
 CREATE INDEX IF NOT EXISTS app_users_level_idx
+-- 创建数据库索引 app_users_level_idx。 关键字：CREATE＝创建数据库对象；INDEX＝数据库索引；IF＝按条件执行 SQL；NOT＝逻辑否定；EXISTS＝检查对象或查询结果存在。
   ON app.app_users(level);
+  -- 设置连接或冲突条件。 关键字：ON＝指定连接或冲突条件。
 
 -- ★ 不预置任何默认账号。
 --   001 里那个 admin/Admin@123 是给 public.users 用的，**不是**给登录用的。

@@ -45,21 +45,31 @@
  */
 // 引入 NestJS 的模块装饰器：@Module({...}) 声明一个模块
 import { Module } from '@nestjs/common';
+// 从 @nestjs/common 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 // 1) 基础设施模块：PG 连接池、Redis、编码映射（全局模块）
 import { InfraModule } from './infra/infra.module';
+// 从 ./infra/infra.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 // 2) 状态模块：Redis 实时快照
 import { StateModule } from './state/state.module';
+// 从 ./state/state.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 // 3) 历史模块：TimescaleDB 落库
 import { HistoryModule } from './history/history.module';
+// 从 ./history/history.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 // 4) 实时模块：WebSocket 网关 + 快照 REST 接口
 import { RealtimeModule } from './realtime/realtime.module';
+// 从 ./realtime/realtime.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 // 5) 入口模块：MQTT 订阅与三路分发
 import { IngestModule } from './ingest/ingest.module';
+// 从 ./ingest/ingest.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 // 6) 控制模块：指令下发（白名单 + 审计）
 import { CommandModule } from './command/command.module';
+// 从 ./command/command.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { AuthModule } from './auth/auth.module';
+// 从 ./auth/auth.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { UsersModule } from './users/users.module';
+// 从 ./users/users.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { AiModule } from './ai/ai.module';
+// 从 ./ai/ai.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 
 /**
  * 根模块。
@@ -67,16 +77,30 @@ import { AiModule } from './ai/ai.module';
  * 逐个实例化 providers，最后触发 onModuleInit 生命周期钩子。
  */
 @Module({
+// 装饰器 Module：声明 NestJS 模块的依赖和导出。
   imports: [
+  // 设置字段 imports。
     InfraModule,
+    // 把变量 InfraModule 作为同名对象字段加入当前对象。
     StateModule,
+    // 把变量 StateModule 作为同名对象字段加入当前对象。
     HistoryModule,
+    // 把变量 HistoryModule 作为同名对象字段加入当前对象。
     RealtimeModule,
+    // 把变量 RealtimeModule 作为同名对象字段加入当前对象。
     IngestModule,
+    // 把变量 IngestModule 作为同名对象字段加入当前对象。
     CommandModule,
+    // 把变量 CommandModule 作为同名对象字段加入当前对象。
     AuthModule,
+    // 把变量 AuthModule 作为同名对象字段加入当前对象。
     UsersModule,
+    // 把变量 UsersModule 作为同名对象字段加入当前对象。
     AiModule,
+    // 把变量 AiModule 作为同名对象字段加入当前对象。
   ],
+  // 结束当前数组，继续外层表达式。
 })
+// 继续当前表达式；这一行的值由外层代码块或调用使用。
 export class AppModule {}
+// 声明 AppModule 的结构。 关键字：export＝向其他模块开放符号；class＝定义类。

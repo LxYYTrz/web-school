@@ -45,75 +45,116 @@
  *   subscribe / unsubscribe│ subscribe          │ 客户端 → 服务端的控制指令
  */
 import {
+// 导入或导出模块符号。 关键字：import＝导入模块或符号。
   ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway, WebSocketServer,
+  // 继续当前表达式；这一行的值由外层代码块或调用使用。
 } from '@nestjs/websockets';
+// 继续当前表达式；这一行的值由外层代码块或调用使用。 关键字：from＝指定导入来源。
 import { Server, Socket } from 'socket.io';
+// 从 socket.io 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { config } from '../config/configuration';
+// 从 ../config/configuration 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 
 // WebSocket 推送(socket.io)。前端先 emit('subscribe', {lineId}) 加入对应产线房间。
 // TODO:接入会话鉴权和产线范围校验,防止未授权订阅其他产线。
 @WebSocketGateway({ cors: { origin: config.http.corsOrigin } })
+// 装饰器 WebSocketGateway：声明 WebSocket 网关。
 export class TelemetryGateway {
+// 声明 TelemetryGateway 的结构。 关键字：export＝向其他模块开放符号；class＝定义类。
   // @WebSocketServer()：由 Nest 注入 socket.io 的 Server 实例（就是那个 http server）
   @WebSocketServer() server: Server;
+  // 装饰器 WebSocketServer：给后面的类、方法或参数附加元数据。
 
   /**
    * 客户端订阅某条产线。
    * 前端 emit('subscribe', { lineId: 'line-01' })
    */
   @SubscribeMessage('subscribe')
+  // 装饰器 SubscribeMessage：订阅指定 WebSocket 消息。
   handleSubscribe(@ConnectedSocket() client: Socket, @MessageBody() body: { lineId?: string }) {
+  // 定义方法 handleSubscribe；括号中声明参数，花括号内实现逻辑。
     // 参数校验：没有 lineId 直接拒绝（返回对象会作为 ack 回给客户端）
     if (!body?.lineId) return { ok: false, error: 'lineId required' };
+    // 判断 if (!body?.lineId) return { ok: false, error: 'lineId required' }; 中的条件，成立时执行对应分支。 关键字：if＝按条件分支；return＝返回结果并结束当前函数；false＝布尔假值。
     // 把这个 socket 加入产线房间。之后该产线的所有广播都会推给它。
     // void 前缀：join 返回 Promise（Redis 适配器场景下是异步的），这里不关心结果
     void client.join(`line:${body.lineId}`);
+    // 调用 client.join；括号中的表达式是传入的参数。 关键字：void＝表示没有返回值。
     // 返回确认信息（socket.io 的 emit 带回调函数时会收到这个对象）
     return { ok: true, lineId: body.lineId };
+    // 返回 { ok: true, lineId: body.lineId } 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数；true＝布尔真值。
   }
+  // 结束当前对象、函数或条件代码块。
 
   /**
    * 客户端取消订阅（切换产线时用）。
    */
   @SubscribeMessage('unsubscribe')
+  // 装饰器 SubscribeMessage：订阅指定 WebSocket 消息。
   handleUnsubscribe(@ConnectedSocket() client: Socket, @MessageBody() body: { lineId?: string }) {
+  // 定义方法 handleUnsubscribe；括号中声明参数，花括号内实现逻辑。
     if (body?.lineId) void client.leave(`line:${body.lineId}`);
+    // 判断 if (body?.lineId) void client.leave(line:${body.lineId}); 中的条件，成立时执行对应分支。 关键字：if＝按条件分支；void＝表示没有返回值。
     return { ok: true };
+    // 返回 { ok: true } 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数；true＝布尔真值。
   }
+  // 结束当前对象、函数或条件代码块。
 
   broadcastRobot(lineId: string, msg: unknown) {
+  // 定义方法 broadcastRobot；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
     this.server?.to(`line:${lineId}`).emit('robot_state', msg);
+    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 
   broadcastLineStatus(lineId: string, msg: unknown) {
+  // 定义方法 broadcastLineStatus；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
     this.server?.to(`line:${lineId}`).emit('line_status', msg);
+    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 
   // 产线 IO(DB3 word 11~16,契约 §3.8)
   broadcastIo(lineId: string, msg: unknown) {
+  // 定义方法 broadcastIo；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
     this.server?.to(`line:${lineId}`).emit('io_state', msg);
+    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 
   /**
    * 广播生产事件 / 报警。
    */
   broadcastEvent(lineId: string, msg: unknown) {
+  // 定义方法 broadcastEvent；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
     this.server?.to(`line:${lineId}`).emit('event', msg);
+    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 
   broadcastEdge(lineId: string, msg: unknown) {
+  // 定义方法 broadcastEdge；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
     this.server?.to(`line:${lineId}`).emit('edge_status', msg);
+    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 
   // 控制指令回执推前端(cmd_ack → command_ack)
   broadcastCommandAck(lineId: string, msg: unknown) {
+  // 定义方法 broadcastCommandAck；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
     this.server?.to(`line:${lineId}`).emit('command_ack', msg);
+    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 
   // AI 建议推前端(propose_action MCP 工具 → 抽屉里的建议卡片)。
   // 推给整条产线房间而非个人:房间成员都能看到这条建议,
   // 谁点确认由各自的权限决定 —— 建议本身不构成授权。
   broadcastAiProposal(lineId: string, msg: unknown) {
+  // 定义方法 broadcastAiProposal；括号中声明参数，花括号内实现逻辑。 关键字：unknown＝需检查后才能使用的类型。
     this.server?.to(`line:${lineId}`).emit('ai_proposal', msg);
+    // 调用 .to，把括号中的值作为参数传入。 关键字：this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 }
+// 结束当前对象、函数或条件代码块。

@@ -10,14 +10,14 @@
 
 > **2026-10-23 起仓库做了"代码最小化"**:原 `docs/deployment.md`、`docs/deploy-guide.md`、
 > `docs/feishu-hermes.md`、`docs/工控机部署手册-U盘版.md`、`docs/产线数字孪生平台-技术设计文档.md`
-> 全部删除,**知识已压进本文件对应小节**(§2 / §4.4 / §4.5 / §4.7 / §6);`docs/` 另有数据契约和逐行源码说明。
+> 全部删除,**知识已压进本文件对应小节**(§2 / §4.4 / §4.5 / §4.7 / §6);`docs/` 另有数据契约和关键字速查，逐行说明直接写在手写源码中。
 > 讲解稿《代码讲解》《讲稿》**只存飞书**,不进仓库。
 
 | 你要写 / 要查的东西 | 去哪 |
 |---|---|
 | **给 AI 的项目上下文**(决策 / 踩坑 / 现状 / 待办 / 运维速查) | **本文件** |
 | 边缘 / 后端 / 前端 三方的唯一约定 | `docs/contract/README.md` |
-| 按原文件行号查看手写源码和语法关键字 | `docs/code-notes/README.md` |
+| 查看手写源码的逐行注释和语法关键字 | 对应源码文件；`docs/keywords.md` |
 | 各目录是干什么的(逐目录贴代码) | `db/ deploy/ edge/ scripts/ server/ web/README.md` |
 | 投屏 / 讲给别人听 | **飞书**(链接见 §8),仓库里不留 |
 | **写讲解稿的规范**(两栏对照表、记忆锚点、防串台) | `.claude/skills/code-walkthrough-script/SKILL.md` |
@@ -626,7 +626,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `.claude/skills/codebase-explainer/` | 通用:解读陌生代码库(报告 + demo + 踩坑) |
 | `.claude/skills/lt-push/` | 借云服务器中转推 GitHub(本机连不上 github.com:443) |
 | `docs/contract/README.md` | **数据契约 v1.3**(边缘/后端/前端唯一约定) |
-| `docs/code-notes/README.md` | 手写源码逐行说明与关键字速查 |
+| `docs/keywords.md` | 手写源码行下注释的语法关键字速查 |
 | `scripts/ipc-recover.ps1` | 检查本机服务并按需启动隧道、后端、采集器,然后体检 |
 | `scripts/tunnel-keepalive.ps1` | 隧道看门狗(-InstallTask 装开机自启 + 巡检) |
 | `scripts/verify-line.ps1` | 全链路只读体检(只查不下发) |

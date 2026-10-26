@@ -26,5 +26,7 @@
 
 # MQTT 客户端（mock_collector.py / plc_collector.py 共用）
 paho-mqtt>=2.0,<3.0
+# 安装 Python 包 paho-mqtt；允许版本范围为大于等于 2.0 且小于 3.0。
 # Modbus TCP 客户端（plc_collector.py 读 PLC 用；mock 不需要但现场切换时免装）
 pymodbus>=3.10,<4.0
+# 安装 Python 包 pymodbus；允许版本范围为大于等于 3.10 且小于 4.0。

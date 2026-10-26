@@ -47,14 +47,20 @@
  */
 // 1) 引入 reflect-metadata polyfill：让 TypeScript 装饰器能携带类型元数据（见上方说明）
 import 'reflect-metadata';
+// 运行反射元数据补丁，让 NestJS 装饰器可以读取参数类型；import 表示加载模块。
 // 2) NestJS 核心工厂：创建/启动 HTTP + WebSocket 应用
 import { NestFactory } from '@nestjs/core';
+// 从 @nestjs/core 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { NestExpressApplication } from '@nestjs/platform-express';
+// 从 @nestjs/platform-express 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import cookieSession from 'cookie-session';
+// 从 cookie-session 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 // 3) 根模块：汇总所有业务模块（infra/state/history/realtime/ingest/command）
 import { AppModule } from './app.module';
+// 从 ./app.module 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 // 4) 统一配置对象：端口、数据库、MQTT 地址等，全部来自环境变量
 import { config } from './config/configuration';
+// 从 ./config/configuration 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 
 /**
  * 引导函数（bootstrap）：后端的异步启动流程。
@@ -62,33 +68,53 @@ import { config } from './config/configuration';
  * （onModuleInit）等异步工作，必须 await 之后才算「就绪」。
  */
 async function bootstrap() {
+// 定义函数 bootstrap。 关键字：async＝声明异步函数；function＝定义函数。
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // 声明 app，初始值由 await NestFactory.create<NestExpressApplication>(AppModule) 计算得到。 关键字：const＝声明不可重新绑定的变量；await＝等待异步操作完成。
 
   // 登录会话:HttpOnly + SameSite=Lax;prod 上 HTTPS 后把 secure 改 true
   app.use(
+  // 调用 app.use，把括号中的值作为参数传入。
     cookieSession({
+    // 调用 cookieSession，把括号中的值作为参数传入。
       name: 'lt_sess',
+      // 设置字段 name。
       keys: [config.http.sessionSecret],
+      // 设置字段 keys。
       httpOnly: true,
+      // 设置字段 httpOnly。 关键字：true＝布尔真值。
       sameSite: 'lax',
+      // 设置字段 sameSite。
       secure: false,
+      // 设置字段 secure。 关键字：false＝布尔假值。
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天
+      // 设置字段 maxAge。
     }),
+    // 结束当前回调或对象，并完成外层函数调用。
   );
+  // 结束当前函数的参数列表并完成调用。
 
   // CORS:多个 origin 用逗号分隔;cross-origin cookie 必须 credentials=true
   const raw = config.http.corsOrigin;
+  // 声明 raw，初始值由 config.http.corsOrigin 计算得到。 关键字：const＝声明不可重新绑定的变量。
   const origins = raw === '*' ? true : raw.split(',').map((s) => s.trim());
+  // 声明 origins，初始值由 raw === '*' ? true : raw.split(',').map((s) => s.trim()) 计算得到。 关键字：const＝声明不可重新绑定的变量；true＝布尔真值。
   app.enableCors({ origin: origins, credentials: true });
+  // 调用 app.enableCors，把括号中的值作为参数传入。 关键字：true＝布尔真值。
 
   // 7) 优雅关闭钩子：进程退出时调用各模块的 onModuleDestroy
   app.enableShutdownHooks();
+  // 调用 app.enableShutdownHooks，把括号中的值作为参数传入。
   // 8) 监听端口：HTTP REST 与 WebSocket(socket.io) 共用这一个端口
   await app.listen(config.http.port);
+  // 调用 app.listen，把括号中的值作为参数传入。 关键字：await＝等待异步操作完成。
   // 9) 启动成功日志：部署人员看到这行即代表后端已就绪（对应 CLAUDE.md §6 验收标准）
   console.log(`[server] HTTP/WebSocket listening on :${config.http.port}`);
+  // 调用 console.log，把括号中的值作为参数传入。
 }
+// 结束当前对象、函数或条件代码块。
 
 // 10) 调用引导函数。用 `void` 显式忽略返回的 Promise：Node 进程会因 HTTP 监听
 //     而保持存活，不需要 await；同时避免 lint 报 "floating promise"。
 void bootstrap();
+// 调用 bootstrap；括号中的表达式是传入的参数。 关键字：void＝表示没有返回值。

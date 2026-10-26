@@ -32,63 +32,99 @@
  *   topicPrefix ──▶ 数据契约的 MQTT 主题前缀，见 docs/contract/README.md
  */
 import 'dotenv/config';
+// 导入或导出模块符号。 关键字：import＝导入模块或符号。
 
 // 统一配置入口:全部从环境变量读取,默认值仅供本地开发
 // 统一配置对象：导出为 const，进程内全局唯一（Node 的模块缓存保证只求值一次）
 export const config = {
+// 导出这一行声明的符号，供项目其他模块使用。 关键字：export＝向其他模块开放符号；const＝声明不可重新绑定的变量。
   // ---------------- MQTT（消息总线）配置 ----------------
   mqtt: {
+  // 设置字段 mqtt。
     // Broker 地址。`??` 表示「环境变量不存在时才用默认值」（null/undefined 才触发）
     url: process.env.MQTT_URL ?? 'mqtt://localhost:1883',
+    // 设置字段 url。
     // 用户名/密码。空字符串视为「未配置」，用 || 转成 undefined，让 mqtt 库走匿名连接
     username: process.env.MQTT_USERNAME || undefined,
+    // 设置字段 username。 关键字：undefined＝未定义值。
     password: process.env.MQTT_PASSWORD || undefined,
+    // 设置字段 password。 关键字：undefined＝未定义值。
     // 客户端 ID：必须全局唯一。这里拼上进程 PID 防止多实例互相踢线
     clientId: `line-twin-server-${process.pid}`,
+    // 设置字段 clientId。
   },
+  // 结束当前对象或代码块，并完成这条语句。
   // ---------------- PostgreSQL / TimescaleDB（历史数据 + 业务表）配置 ----------------
   pg: {
+  // 设置字段 pg。
     // 完整连接串，等价于 host/port/user/password/database 五个参数
     connectionString:
+    // 设置字段 connectionString。
       process.env.DATABASE_URL ?? 'postgres://postgres:postgres123@localhost:5432/linetwin',
+      // 读取进程环境变量中的配置值。
   },
+  // 结束当前对象或代码块，并完成这条语句。
   // ---------------- Redis（实时快照缓存）配置 ----------------
   redis: {
+  // 设置字段 redis。
     url: process.env.REDIS_URL ?? 'redis://localhost:6379',
+    // 设置字段 url。
   },
+  // 结束当前对象或代码块，并完成这条语句。
   // ---------------- HTTP / WebSocket 服务配置 ----------------
   http: {
+  // 设置字段 http。
     // 监听端口。Number() 把字符串环境变量转成数字
     port: Number(process.env.PORT ?? 3000),
+    // 设置字段 port。
     // 多个 origin 用逗号分隔(供 cookie 跨域携带);dev 默认 vite dev server
     corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+    // 设置字段 corsOrigin。
     sessionSecret: process.env.SESSION_SECRET ?? 'dev-only-session-secret-change-me',
+    // 设置字段 sessionSecret。
   },
+  // 结束当前对象或代码块，并完成这条语句。
   app: {
+  // 设置字段 app。
     // 首次启动自动 bootstrap admin 的初始密码;null 表示禁用自动建号
     adminPassword:
+    // 设置字段 adminPassword。
       process.env.ADMIN_PASSWORD === '' ? null : process.env.ADMIN_PASSWORD ?? 'admin123',
+      // 把右侧表达式的结果写入 process.env.ADMIN_PASSWORD。 关键字：null＝空值。
   },
+  // 结束当前对象或代码块，并完成这条语句。
   // ---------------- 数据契约主题前缀 ----------------
   // 所有 MQTT 主题以此开头：tl/v1/{lineId}/...
   // 契约版本升级（如 v1 → v2）时只改这里 + 各端对齐，破坏性变更可灰度并行
   topicPrefix: process.env.TOPIC_PREFIX ?? 'tl/v1',
+  // 设置字段 topicPrefix。
   // ---------------- 机器通道(AI / 脚本直控)----------------
   // 给「不是浏览器」的控制入口用:hermes 的 MCP server 用它调 /api/machine/commands,
   // 让飞书里的 AI 能直接下发指令(演示阶段用)。
   // 留空 = 通道关闭,端点一律 503 —— 不静默放行,也不静默失败。
   machine: {
+  // 设置字段 machine。
     commandToken: process.env.MACHINE_COMMAND_TOKEN ?? '',
+    // 设置字段 commandToken。
   },
+  // 结束当前对象或代码块，并完成这条语句。
   ai: {
+  // 设置字段 ai。
     // Hermes 自带的 OpenAI 兼容 API Server。只绑 loopback,外部够不着;
     // 浏览器也永远拿不到 apiKey —— 所有调用都从这里出。
     baseUrl: process.env.AI_BASE_URL ?? 'http://127.0.0.1:8642/v1',
+    // 设置字段 baseUrl。
     // 缺 key 时 AI 端点一律 503,不静默降级成"假装能聊"
     apiKey: process.env.AI_API_KEY ?? '',
+    // 设置字段 apiKey。
     model: process.env.AI_MODEL ?? 'hermes-agent',
+    // 设置字段 model。
     timeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 120000),
+    // 设置字段 timeoutMs。
     // hermes session 前缀:同一用户复用同一 session,才能保住它的 memory/skills
     sessionPrefix: process.env.AI_SESSION_PREFIX ?? 'lt',
+    // 设置字段 sessionPrefix。
   },
+  // 结束当前对象或代码块，并完成这条语句。
 };
+// 结束当前对象或代码块，并完成这条语句。

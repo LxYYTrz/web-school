@@ -26,18 +26,27 @@
  *          → 写本机 PG + publish MQTT（工控机本机）
  */
 import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+// 从 @nestjs/common 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { CommandBody, CommandService } from './command.service';
+// 从 ./command.service 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { AuthGuard } from '../auth/auth.guard';
+// 从 ../auth/auth.guard 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { CommandGuard } from './command.guard';
+// 从 ./command.guard 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { CurrentUser } from '../auth/current-user.decorator';
+// 从 ../auth/current-user.decorator 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import type { SessionUser } from '../auth/session-user';
+// 从 ../auth/session-user 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 
 /**
  * 控制指令控制器。
  */
 @Controller('api/lines')
+// 装饰器 Controller：声明 HTTP 控制器及路由前缀。
 export class CommandController {
+// 声明 CommandController 的结构。 关键字：export＝向其他模块开放符号；class＝定义类。
   constructor(private readonly commands: CommandService) {}
+  // 定义类的构造函数；创建实例时接收参数并初始化依赖。 关键字：private＝限定类内部访问；readonly＝禁止重新赋值。
 
   // 鉴权链:
   //   AuthGuard 先保证 session 有 username + level,
@@ -52,12 +61,22 @@ export class CommandController {
    * 直接 return 服务的结果，NestJS 自动转 JSON。
    */
   @Post(':lineId/commands')
+  // 装饰器 Post：把方法绑定到 POST 路由。
   @UseGuards(AuthGuard, CommandGuard)
+  // 装饰器 UseGuards：执行路由前先应用权限守卫。
   send(
+  // 调用 send，把括号中的值作为参数传入。
     @Param('lineId') lineId: string,
+    // 装饰器 Param：读取 URL 路径参数。
     @Body() body: CommandBody,
+    // 装饰器 Body：读取请求体。
     @CurrentUser() user: SessionUser,
+    // 装饰器 CurrentUser：给后面的类、方法或参数附加元数据。
   ) {
+  // 继续当前表达式；这一行的值由外层代码块或调用使用。
     return this.commands.issue(lineId, body, user);
+    // 返回 this.commands.issue(lineId, body, user) 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数；this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 }
+// 结束当前对象、函数或条件代码块。

@@ -27,18 +27,28 @@
  *          → 原路返回
  */
 import { Controller, Get, Param } from '@nestjs/common';
+// 从 @nestjs/common 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 import { LineStateService } from '../state/line-state.service';
+// 从 ../state/line-state.service 导入这一行列出的符号，供本文件调用。 关键字：import＝导入模块或符号；from＝指定导入来源。
 
 // 产线快照:前端首屏/断线重连时一次性拉取当前状态(数据来自 Redis)
 /**
  * 快照控制器：对外暴露产线快照查询接口。
  */
 @Controller('api/lines')
+// 装饰器 Controller：声明 HTTP 控制器及路由前缀。
 export class SnapshotController {
+// 声明 SnapshotController 的结构。 关键字：export＝向其他模块开放符号；class＝定义类。
   constructor(private readonly state: LineStateService) {}
+  // 定义类的构造函数；创建实例时接收参数并初始化依赖。 关键字：private＝限定类内部访问；readonly＝禁止重新赋值。
 
   @Get(':lineId/snapshot')
+  // 装饰器 Get：把方法绑定到 GET 路由。
   snapshot(@Param('lineId') lineId: string) {
+  // 定义方法 snapshot；括号中声明参数，花括号内实现逻辑。
     return this.state.getLineSnapshot(lineId);
+    // 返回 this.state.getLineSnapshot(lineId) 的值，结束当前函数。 关键字：return＝返回结果并结束当前函数；this＝当前对象实例。
   }
+  // 结束当前对象、函数或条件代码块。
 }
+// 结束当前对象、函数或条件代码块。
