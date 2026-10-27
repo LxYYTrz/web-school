@@ -59,6 +59,11 @@ import { PG_POOL, REDIS } from './tokens';
 @Module({
 // 装饰器 Module：声明 NestJS 模块的依赖和导出。
 // Module：NestJS 声明模块依赖、提供者和导出的装饰器
+
+  // InfraModule 用注入令牌提供数据库连接池、Redis 客户端与基础目录，供业务服务复用。
+  // PG_POOL 对应 pg.Pool，连接串来自 config.pg.connectionString；REDIS 对应 ioredis 实例，目标来自 config.redis.url。
+  // 业务服务注入的是现有连接实例，再按各自用途查询、写快照或保存历史，不是每个接口都重新创建一套基础服务。
+
   providers: [
   // 声明或设置 providers，用于当前对象或接口的对应数据。
   // providers 是此处声明的字段，类型或取值约束为 [

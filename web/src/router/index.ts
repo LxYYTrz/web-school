@@ -40,6 +40,10 @@ export const router = createRouter({
   // 创建或使用Vue Router 创建浏览器 history 路由模式的函数。
   // history：历史写入服务实例；createWebHistory：Vue Router 创建浏览器 history 路由模式的函数
   // 路由表
+
+  // 路由表把访问路径对应到页面组件：/login 登录，/twin 机械臂，/io 点位展示，/users 用户管理。
+  // 路由负责用户界面中进入哪个页面，组件再处理自己的数据和交互；页面进入条件与后端接口权限分别检查。
+
   routes: [
   // 声明或设置 routes，用于当前对象或接口的对应数据。
   // routes 是此处声明的字段，类型或取值约束为 [
@@ -92,6 +96,11 @@ setUnauthorizedHandler(() => {
 // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
 
 // 路由守卫:首次进入前先拉一次 /me,确定登录态后再放行
+
+// 跳转页面前先取得 auth 共享登录状态，首次未就绪时等待 refresh() 调用 /api/auth/me。
+// 没有有效登录时转到登录页，并记录目标位置，供登录后回到原页面；用户管理页面另有管理员级别要求。
+// 这层导航检查帮助组织界面，真正提交控制或用户管理请求时仍由后端独立校验会话和权限。
+
 router.beforeEach(async (to) => {
 // 执行 beforeEach 对应的本地处理，使用本行提供的数据。
 // router：前端页面路由器实例；beforeEach：本处声明的字段或类型，类型为 () => void；to：当前方法接收的参数

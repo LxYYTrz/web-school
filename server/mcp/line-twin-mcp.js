@@ -161,9 +161,13 @@ async function resolveLine(code) {
 // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
 // 这一段提供了将产线编码查询为数据库产线记录并短暂缓存的实现；实际结果由运行时输入和执行分支决定。
 
+// 这里创建项目自己的 MCP 工具服务，向 Hermes 提供名称明确、参数受约束的业务能力。
+// 模型提出工具和参数，Hermes 组织调用，本文件的执行函数才实际查询 Redis、PostgreSQL 或访问后端机器接口。
+// 工具说明中的网页与飞书使用规则主要约束模型选择，不能把提示词直接当成严格的通道身份隔离。
+
 const server = new McpServer(
-// 创建或使用MCP SDK 的工具服务类，向 AI 暴露已注册工具，将结果保存或写入 server。
-// server：本处保存 new McpServer( { name: 'line-twin', version: '1.1.0' }, { ca… 的结果；McpServer：MCP SDK 的工具服务类，向 AI 暴露已注册工具
+// 创建项目的 MCP 工具服务，用注册的名称、参数和执行函数向 Hermes 暴露业务能力。
+// server 是 McpServer 实例；查询工具访问 Redis/PostgreSQL，控制工具调用后端机器接口，实际能力要看各工具执行函数。
   { name: 'line-twin', version: '1.1.0' },
   // 开始对象字面量，并在这一行设置其中列出的字段。
   // name：当前对象的名称字段
@@ -234,14 +238,19 @@ const server = new McpServer(
  * 空闲产线的这些值本来就会是 null,不要解读成「故障」。
  */
 // 这一段定义 getLineSnapshot，用于读取并汇总产线状态、IO、边缘在线信息和机器人最新帧。
+
+// 查询工具从 Redis 读取当前产线的工序与边缘状态，并汇总机器人等快照给调用方。
+// lineId 是业务编码，用于组成 rt:产线:* 的 key；查到的 JSON 需要解析成业务对象，过期或不存在的项可能为空。
+// 工具返回的是最后保存的状态，不会为了回答模型临时去 PLC 读取一次，也不能凭空补出缺失的现场数据。
+
 async function getLineSnapshot(lineId) {
-// 定义函数 getLineSnapshot。
-// getLineSnapshot：读取并汇总产线状态、IO、边缘在线信息和机器人最新帧；lineId：产线标识，接口通常使用 line-01 等编码
+// 读取当前产线的 Redis 快照，组装工序、边缘状态和机器人等信息返回给查询工具。
+// lineId 是业务编码；redis.mget() 读取多个 key，机器人 key 根据产线模式查找；缺失或过期项不会在这里凭空生成现场值。
   const [status, edge] = await redis.mget(`rt:${lineId}:status`, `rt:${lineId}:edge`);
   // 一次读取多个 Redis 字符串键。
   // status：当前连接、产线、请求或指令的状态字段；redis：注入或创建的 Redis 客户端；mget：一次读取多个 Redis 字符串键；lineId：产线标识，接口通常使用 line-01 等编码
   const keys = await redis.keys(`rt:${lineId}:robot:*`);
-  // 取得字典或对象中的所有键，将结果保存或写入 keys。
+  // 查询当前产线已保存机器人帧的 Redis key，后面再批量取值并解析 JSON。
   // keys：本处保存 await redis.keys(`rt:${lineId}:robot:*`) 的结果；redis：注入或创建的 Redis 客户端；lineId：产线标识，接口通常使用 line-01 等编码
   const frames = keys.length ? await redis.mget(keys) : [];
   // 一次读取多个 Redis 字符串键，将结果保存或写入 frames。
@@ -381,9 +390,14 @@ async function getRecentEvents(lineCode, hours, onlyProblems, limit) {
  * 「AI 永不自动控制设备」这条不变式就破了。
  */
 // 这一段定义 proposeAction，用于校验并保存 AI 控制建议，通过 Redis 通知前端待确认。
+
+// 网页助手用这个工具登记待确认的控制建议，先检查契约与参数，再写入 Redis 并发布建议通知。
+// type、params、reason 描述建议内容与理由。建议出现不等于 PLC 已收到命令，更不表示已经停机或启动。
+// 人工在网页确认后，后端领取并再次校验，才交给 CommandService.issue()。
+
 async function proposeAction(lineId, deviceId, type, params, reason) {
-// 定义函数 proposeAction。
-// proposeAction：校验并保存 AI 控制建议，通过 Redis 通知前端待确认；lineId：产线标识，接口通常使用 line-01 等编码；deviceId：设备标识，接口使用配置中的设备编码；type：当前报文、指令或对象的类别字段；params：指令附加参数对象；reason：AI 给出控制建议的理由
+// 校验并登记一个等待人工确认的控制建议，再通过 Redis 通知后端与网页。
+// lineId、deviceId、type、params 指定建议动作，reason 解释理由；生成建议还没有调用现场写入，人工确认后才进入命令服务。
   if (!contract.allowedTypes.includes(type)) {
   // 检查(!contract.allowedTypes.includes(type))，按判断结果进入对应的处理分支。
   // contract：本处保存 require(path.join(SERVER_ROOT, 'src', 'command', 'command-co… 的结果；allowedTypes：contract 对象上的字段或操作；includes：判断数组或字符串是否包含指定内容；type：当前报文、指令或对象的类别字段
@@ -570,9 +584,14 @@ function machineChannelReady() {
 
 /** 调后端机器通道下发一条指令 */
 // 这一段定义 machineIssue，用于调用本机后端机器通道提交控制指令。
+
+// 直接控制工具通过本机后端 /api/machine/commands 提交业务指令，而不是在 MCP 中直接写 Modbus。
+// lineId、deviceId、type、params 描述目标与动作；MACHINE_TOKEN 放入机器通道请求头，由后端另行验证。
+// 取得 cmdId 后轮询控制记录等待回执，默认等待 18 秒、轮询间隔约 400 毫秒；acked 仍主要说明写入正常响应。
+
 async function machineIssue({ lineId, deviceId, type, params, operator }) {
-// 定义函数 machineIssue。
-// machineIssue：调用本机后端机器通道提交控制指令；lineId：产线标识，接口通常使用 line-01 等编码；deviceId：设备标识，接口使用配置中的设备编码；type：当前报文、指令或对象的类别字段；params：指令附加参数对象
+// 经本机后端机器通道提交一条命令，再等待对应控制记录的回执状态。
+// API_BASE 是后端地址，MACHINE_TOKEN 放入请求头；lineId、deviceId、type、params 描述动作；返回 acked 主要对应 Modbus 写响应。
   if (!machineChannelReady()) {
   // 检查(!machineChannelReady())，按判断结果进入对应的处理分支。
   // machineChannelReady：检查机器通道是否配置可用的控制令牌
@@ -588,6 +607,11 @@ async function machineIssue({ lineId, deviceId, type, params, operator }) {
   try {
   // 开始执行可能失败的操作，错误由后续异常分支处理。
   // 本块中的数据库、网络或状态操作可能抛出异常；后续 catch 或 except 分支负责处理
+
+    // 将这次工具操作提交给后端机器通道，API_BASE 是后端地址配置，x-machine-token 携带配置的机器令牌。
+    // 后端通过机器通道守卫后仍调用共用 CommandService，再进入 MQTT、采集器和 PLC 的既有控制链。
+    // operator 是此通道传入的操作者标识，不能把机器令牌检查和网页 cookie-session 登录验证混为一谈。
+
     res = await fetch(`${API_BASE}/api/machine/commands`, {
     // 把右侧表达式的结果写入 res。
     // res：当前 HTTP 响应对象或 fetch 返回的响应；fetch：发起 HTTP 请求并返回 Response 的标准函数；API_BASE：本处保存 (process.env.LINE_TWIN_API_BASE || 'http://127.0.0.1:3000').… 的结果
@@ -991,9 +1015,14 @@ const OPERATIONS = {
 // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
 
 // 这一段定义 runOperation，用于按现场联锁顺序执行完整控制操作并汇总步骤结果。
+
+// runOperation() 按代码预设顺序调用多条控制指令，步骤不是模型临时拼出的现场动作。
+// 传送带正转先 stop 并等待 stopped，再取得手动模式并等待 manual_mode，最后发 conveyor forward；前序失败就停止继续。
+// 最后正转步骤没有在这里额外验证实际转动。dryRun 分支返回计划，不进入对应真实执行步骤。
+
 async function runOperation(op, { lineId, deviceId, operator, dryRun }) {
-// 定义函数 runOperation。
-// runOperation：按现场联锁顺序执行完整控制操作并汇总步骤结果；op：当前方法接收的参数；lineId：产线标识，接口通常使用 line-01 等编码；deviceId：设备标识，接口使用配置中的设备编码
+// 按预设操作顺序逐步执行，并汇总各步骤结果；前序失败就停止继续下发。
+// op 选择 OPERATIONS 中的操作；lineId、deviceId 指定目标；dryRun 返回计划；传送带正转按停止、取得手动模式、正转的顺序处理。
   const meta = OPERATIONS[op];
   // 根据 OPERATIONS[op] 设置 meta，供当前流程后续使用。
   // meta：本处保存 OPERATIONS[op] 的结果；OPERATIONS：本处保存 { conveyor_start: { title: '传送带正转', desc: '按「停止 → 获取手动模式 → 传… 的结果；op：当前方法接收的参数
@@ -1268,9 +1297,13 @@ const READ_ONLY = { readOnlyHint: true };
 // 根据 { readOnlyHint: true } 设置 READ_ONLY，供当前流程后续使用。
 // READ_ONLY：本处保存 { readOnlyHint: true } 的结果
 
+// 注册 get_line_snapshot：名称与说明让调用方知道工具用途，inputSchema 用 zod 约束 lineId 参数。
+// 执行函数调用本文件的 getLineSnapshot() 取得实际快照，再包装成 MCP 文本结果返回。
+// READ_ONLY 是工具的只读提示，不能据此把所有其他工具也视为只读，控制能力要看对应执行函数。
+
 server.registerTool(
-// 向 MCP 服务注册工具名称、说明、入参校验和执行函数。
-// server：本处保存 new McpServer( { name: 'line-twin', version: '1.1.0' }, { ca… 的结果；registerTool：向 MCP 服务注册工具名称、说明、入参校验和执行函数
+// 将产线快照工具登记到 MCP 服务，供调用方发现并按参数规则执行。
+// registerTool() 接收名称、工具说明、zod 入参定义和回调；getLineSnapshot(lineId) 取得实际数据，content 将结果包装成 MCP 文本。
   'get_line_snapshot',
   // 把这一段文字作为当前调用、数组或对象的值。
   // 这一行提供给外层调用的字符串参数或模板文本，其含义由所在函数及相邻参数确定
@@ -1835,14 +1868,19 @@ server.registerTool(
 // ---------------------------------------------------------------------------
 
 // 这一段定义 main，用于连接 MCP 标准输入输出传输并开始处理工具调用。
+
+// Hermes 启动此进程后，这里创建 StdioServerTransport，并把 MCP 服务连接到标准输入输出传输。
+// 工具请求与结果通过父子进程管道交换，不需要为这个 MCP stdio 服务额外监听一个 TCP 端口。
+// 这不是采集器到 Broker 的 MQTT 连接，也不是浏览器到后端的 Socket.IO 连接。
+
 async function main() {
-// 执行 main 对应的本地处理，使用本行提供的数据。
-// main：连接 MCP 标准输入输出传输并开始处理工具调用
+// 将 MCP 服务接到标准输入输出传输，等待启动本进程的调用方发现与调用工具。
+// transport 是 StdioServerTransport；server.connect() 在这里接入进程管道，不为本 MCP stdio 服务额外监听 TCP 端口。
   const transport = new StdioServerTransport();
   // 创建或使用MCP SDK 的标准输入输出传输类，将结果保存或写入 transport。
   // transport：本处保存 new StdioServerTransport() 的结果；StdioServerTransport：MCP SDK 的标准输入输出传输类
   await server.connect(transport);
-  // 尝试建立网络连接。
+  // 把 MCP 服务连接到标准输入输出管道，供启动本进程的 Hermes 调用工具；这里不建立 TCP 服务端口。
   // server：本处保存 new McpServer( { name: 'line-twin', version: '1.1.0' }, { ca… 的结果；connect：尝试建立网络连接；transport：本处保存 new StdioServerTransport() 的结果
   log(`已启动;proposal 频道=${PROPOSAL_CHANNEL},ttl=${PROPOSAL_TTL_SEC}s`);
   // 输出调试或运行日志。

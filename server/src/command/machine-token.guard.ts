@@ -68,9 +68,14 @@ export class MachineTokenGuard implements CanActivate {
   // logger：当前模块的日志记录器；Logger：NestJS 按模块名称记录日志的工具类；MachineTokenGuard：后端机器通道令牌守卫；name：当前对象的名称字段
 
   // 这一段定义 canActivate，用于检查当前请求是否满足本守卫的登录、级别或令牌要求。
+
+  // 机器控制入口在这里检查通道是否配置启用、来源是否满足回环限制以及请求令牌是否匹配。
+  // token 来自后端配置，调用方在 x-machine-token 请求头提供；没有配置表示通道关闭，和“令牌提供错误”是不同情况。
+  // 这层校验不读取网页 Cookie，也不单独实现飞书与网页 MCP 工具的身份隔离；通过后仍进入命令业务检查。
+
   canActivate(context: ExecutionContext): boolean {
-  // 定义方法 canActivate；括号中声明参数，花括号内实现逻辑。
-  // canActivate：检查当前请求是否满足本守卫的登录、级别或令牌要求；context：当前方法接收的参数，类型为 ExecutionContext；ExecutionContext：NestJS 当前请求上下文类型，用于获取 HTTP 请求或消息连接
+  // 检查机器命令入口是否启用、请求来源是否满足本机限制以及机器令牌是否匹配。
+  // context 提供当前 HTTP 请求；配置 commandToken 为空表示通道关闭；x-machine-token 是调用方的机器凭据，和网页会话 Cookie 分别校验。
     const token = config.machine.commandToken;
     // 根据 config.machine.commandToken 设置 token，供当前流程后续使用。
     // token：本处保存 config.machine.commandToken 的结果；config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；machine：config 对象上的字段或操作；commandToken：本机机器控制通道的共享令牌，为空时关闭通道

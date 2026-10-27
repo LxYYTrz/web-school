@@ -52,6 +52,11 @@ export class SnapshotController {
   // 这一段提供了初始化 snapshot.controller 使用的实例状态和依赖的实现；实际结果由运行时输入和执行分支决定。
 
   // 这一段定义 snapshot，用于向调用方返回指定产线的实时快照。
+
+  // 浏览器通过 GET /api/lines/:lineId/snapshot 请求首屏已有状态，lineId 由 URL 提取。
+  // 控制器交给 LineStateService.getLineSnapshot() 从 Redis 汇总数据并返回 JSON；浏览器不直接连接 Redis。
+  // 后续实时新帧走 Socket.IO，快照接口本身不是持续推送连接。
+
   @Get(':lineId/snapshot')
   // 装饰器 Get：把方法绑定到 GET 路由。
   // Get：NestJS 将方法绑定到 HTTP GET 路由的装饰器

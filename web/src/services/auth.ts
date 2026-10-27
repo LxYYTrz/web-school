@@ -29,6 +29,10 @@ async function http<T>(method: string, path: string, body?: unknown): Promise<T>
     method,
     // 把变量 method 作为同名对象字段加入当前对象。
     // method：HTTP 请求方法
+
+    // credentials: include 让浏览器按 Cookie 规则发送适用的登录凭据，也接收适用的 Set-Cookie 响应。
+    // 后端 cookie-session 才能从后续请求读取签名会话。这个选项不会自行创建登录身份，也不会替代浏览器的 Cookie 与跨域规则。
+
     credentials: 'include',  // cookie-session 必须
     // 声明或设置 credentials，用于浏览器请求是否携带登录 Cookie 的配置。
     // credentials：浏览器请求是否携带登录 Cookie 的配置
@@ -92,9 +96,13 @@ async function http<T>(method: string, path: string, body?: unknown): Promise<T>
 // ===== 鉴权 API =====
 
 // 这一段定义 apiLogin，用于调用后端登录接口建立用户会话。
+
+// 登录页面把输入的用户名和密码交给 apiLogin()，由统一 http() 函数 POST 到后端 /api/auth/login。
+// 成功响应返回 username、level 等用户信息，后端同时通过 Cookie 建立会话；密码验证和摘要比对发生在 AuthService。
+
 export function apiLogin(username: string, password: string): Promise<AuthUser> {
-// 定义 apiLogin，用于调用后端登录接口建立用户会话。
-// apiLogin：调用后端登录接口建立用户会话；username：账号用户名；password：登录口令或数据库保存的口令摘要，具体取决于所在对象；Promise：JavaScript 异步结果类型，表示操作将来完成或失败；AuthUser：从 ../stores/auth 导入的对象，用于本文件的调用或类型约束
+// 通过统一 HTTP 请求函数向后端提交用户名和密码，取得验证后的用户信息。
+// username、password 来自登录表单；http() 处理 JSON 与适用 Cookie；AuthUser 描述成功返回的 username 和 level。
   return http<AuthUser>('POST', '/api/auth/login', { username, password });
   // 把http<AuthUser>('POST', '/api/auth/login', { username, password })作为当前函数的结果返回。
   // http：发送携带登录 Cookie 的 JSON 请求并统一处理 HTTP 错误；AuthUser：从 ../stores/auth 导入的对象，用于本文件的调用或类型约束；username：账号用户名；password：登录口令或数据库保存的口令摘要，具体取决于所在对象

@@ -22,6 +22,11 @@ export class CommandGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<Request>();
     // 切换到 HTTP 接口继续获取实时数据，将结果保存或写入 req。
     // req：当前 HTTP 请求对象；context：当前方法接收的参数，类型为 ExecutionContext；switchToHttp：本处声明的字段或类型，类型为 HttpArgumentsHost；getRequest：本处声明的字段或类型，类型为 T；Request：从 express 导入的对象，用于本文件的调用或类型约束
+
+    // 网页控制在通过登录守卫后，还需通过这里的级别检查。
+    // level 取自 req.session；不是 number 或小于 2 时抛 403，通过后仍需 CommandService 检查设备、类型和参数。
+    // 因此登录成功、页面按钮可用和一次指令真正通过后端业务检查，是三个需要分开理解的环节。
+
     const level = req.session?.level;
     // 根据 req.session?.level 设置 level，用于用户操作级别或事件严重级别，依据当前接口结构区分。
     // level：用户操作级别或事件严重级别，依据当前接口结构区分；req：当前 HTTP 请求对象；session：HTTP 登录会话对象

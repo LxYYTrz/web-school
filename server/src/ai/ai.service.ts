@@ -157,6 +157,11 @@ export class AiService {
         try {
         // 开始执行可能失败的操作，错误由后续异常分支处理。
         // 本块中的数据库、网络或状态操作可能抛出异常；后续 catch 或 except 分支负责处理
+
+          // 网页聊天由 AiService 代理到 Hermes 的 /chat/completions；凭据与目标地址来自后端配置。
+          // X-Hermes-Session-Id 按用户生成会话标识，messages 包含当前产线的系统提示和用户输入，stream=true 请求流式响应。
+          // 后端继续解析并转发事件给网页；配置中的 hermes-agent 是 API 模型标识，不能单凭它确定底层实际使用哪一个模型。
+
           const res = await fetch(`${config.ai.baseUrl}/chat/completions`, {
           // 向指定 HTTP 接口发送请求，将结果保存或写入 res。
           // res：当前 HTTP 响应对象或 fetch 返回的响应；fetch：发起 HTTP 请求并返回 Response 的标准函数；config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；ai：config 对象上的字段或操作；baseUrl：Hermes API 的服务根地址
@@ -465,9 +470,14 @@ export class AiService {
    *    所以这里显式禁用直控工具,避免模型在网页端绕过人工确认直接下发。
    */
   // 这一段定义 systemPrompt，用于为指定产线构造 AI 查询和控制建议的约束提示。
+
+  // 为网页助手生成提示词，要求查询用工具查证、操作先 propose_action 等待人工确认。
+  // 这些字符串作为对话上下文发送给模型，影响工具选择与回答措辞；它们没有为 MCP 执行函数增加网页、飞书身份判定。
+  // 真正提交控制时，还要经过建议确认接口或机器通道各自的后端检查，不能把模型遵守提示词当成严格权限隔离。
+
   private systemPrompt(lineId: string) {
-  // 定义方法 systemPrompt；括号中声明参数，花括号内实现逻辑。
-  // systemPrompt：为指定产线构造 AI 查询和控制建议的约束提示；lineId：产线标识，接口通常使用 line-01 等编码
+  // 生成网页助手的系统提示，要求查询有工具依据、控制先登记建议并等待人工确认。
+  // lineId 指定当前产线；返回字符串随 messages 发送给 Hermes；提示词约束模型行为，本方法没有为 MCP 工具新增通道身份校验。
     return [
     // 把[作为当前函数的结果返回。
     // 方括号中的条目组成返回数组，调用方按顺序使用其中的数据

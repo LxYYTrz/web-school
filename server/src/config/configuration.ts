@@ -32,6 +32,11 @@
  *   http.corsOrigin ─▶ 跨域白名单。生产应收敛为前端域名（当前是 '*'）
  *   topicPrefix ──▶ 数据契约的 MQTT 主题前缀，见 docs/contract/README.md
  */
+
+// dotenv/config 在配置模块求值前从当前进程工作目录读取 .env，默认不覆盖已存在的进程环境变量。
+// 下面各字段再通过 process.env 取连接目标、端口等配置，缺失时才采用代码默认值。
+// 运行进程的工作目录、已有环境变量和构建产物共同影响实际行为，不能只看到某个 .env 文件就断定进程已经使用它。
+
 import 'dotenv/config';
 // 从 dotenv/config 加载本文件需要的对象，供后续处理使用。
 // dotenv/config 在导入时执行自身初始化；本行只需要其全局样式、元数据或配置副作用

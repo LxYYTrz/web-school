@@ -157,9 +157,14 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
 
   // 契约 §5 第 4 条:扫 sent 超 15s 的置 timeout
   // 这一段定义 sweepTimeout，用于将超时仍未收到回执的控制记录标记为 timeout。
+
+  // 定时扫描仍为 sent 且超过配置等待时间的控制记录，将它们标记为 timeout。
+  // 这个数据库状态说明未按时取得回执，不会向 PLC 发一条撤销命令，也无法区分“未写入”和“写入后回执丢失”。
+  // 超时记录与迟到回执如何相处，还要结合 ackCommand() 仅更新 pending、sent 的 SQL 条件理解。
+
   private async sweepTimeout() {
-  // 定义方法 sweepTimeout；括号中声明参数，花括号内实现逻辑。
-  // sweepTimeout：将超时仍未收到回执的控制记录标记为 timeout
+  // 将超过配置等待时间且仍为 sent 的记录标记成 timeout，供查询识别未按时取得回执的命令。
+  // CMD_TIMEOUT_SEC 是等待阈值；issued_at 是记录创建时间；这段 SQL 不向 PLC 发送撤销动作。
     try {
     // 开始执行可能失败的操作，错误由后续异常分支处理。
     // 本块中的数据库、网络或状态操作可能抛出异常；后续 catch 或 except 分支负责处理
@@ -206,9 +211,15 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
   // 这一段提供了将超时仍未收到回执的控制记录标记为 timeout的实现；实际结果由运行时输入和执行分支决定。
 
   // 这一段定义 issue，用于校验指令和目标设备，写入审计记录并经 MQTT 下发。
+
+  // 这里是网页控制与机器通道共用的指令业务入口，先检查请求，再记录并安排 MQTT 下发。
+  // lineCode、body.deviceId 是业务编码；body.type 与 params 描述动作；user 是调用入口提供的操作人信息。
+  // 白名单、目录与参数检查都通过后才创建 control_commands，取得 cmdId，再写审计并发布命令。
+  // 返回 ok 和 cmdId 不等待现场回执。后续采集器 cmd_ack 通过同一个编号关联回来。
+
   async issue(lineCode: string, body: CommandBody, user: SessionUser) {
-  // 定义方法 issue；括号中声明参数，花括号内实现逻辑。
-  // issue：校验指令和目标设备，写入审计记录并经 MQTT 下发；lineCode：对外使用的产线字符串编码；body：当前 HTTP 请求或消息的正文；CommandBody：后端控制接口的请求体结构，包含设备编码、指令类型和参数；user：当前会话或调用方的用户信息；SessionUser：项目定义的登录用户结构，保存用户名和操作级别
+  // 校验本次控制请求，建立命令记录与编号，再通过 MQTT 安排下发。
+  // lineCode 是产线业务编码；body 包含设备、类型和参数；user 是入口提供的操作人；cmdId 供后续回执与网页对应本次命令。
     // ---------- 校验 1：参数完整 + 类型在白名单内 ----------
     // 任一不满足就拒绝。**先校验再落库再下发**，绝不能"先发出去再说"
     if (!body?.deviceId || !body?.type || !ALLOWED_TYPES.has(body.type)) {
@@ -263,6 +274,11 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
     // 根据用户名查找用于审计关联的数据库用户主键，将结果保存或写入 userId。
     // userId：本处保存 await this.resolveUserId(operator) 的结果；resolveUserId：根据用户名查找用于审计关联的数据库用户主键；operator：本处保存 user?.username || 'unknown' 的结果
 
+    // 先把这次操作写入 control_commands，保存产线、设备、关联用户、类型、参数，并把初始状态设为 sent。
+    // lineId、deviceId、userId 在这条 SQL 中是数据库内部编号，$1～$5 对应下方参数数组，params 编码为 JSON。
+    // RETURNING 取回 idempotency_key，后面作为 cmdId 放进 MQTT 消息和 HTTP 响应，让回执与页面等待都找到同一次操作。
+    // 编号负责关联记录，当前采集器并没有因此获得持久去重能力，不能把它理解成物理动作恰好执行一次。
+
     const r = await this.pool.query(
     // 通过数据库连接池执行参数化查询，将结果保存或写入 r。
     // r：本处保存 await this.pool.query( `INSERT INTO control_commands (line_i… 的结果；pool：注入或创建的 PostgreSQL 连接池；query：通过 PostgreSQL 连接池执行参数化 SQL，返回 rows 与 rowCount 等结果
@@ -284,6 +300,11 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
     // 契约 §5 第 5 条:全流程落 audit_logs
     // detail 里带 operator —— 机器通道的 operator 是 'ai:feishu:ou_xxx' 这种,
     // 光看 user_id(会兜底成 admin)追不到人,必须把操作者身份写进 detail。
+
+    // audit_logs 保留这次操作的审计信息：target 表达目标，detail 另存 cmdId、参数与真实 operator 字符串。
+    // 控制记录跟踪命令状态，审计记录说明这次操作相关信息。这里异步发起，失败只写日志。
+    // 该查询、控制记录与 MQTT 发布没有组成保证同时成功的事务，不能把命令成功返回当成审计一定已写入。
+
     this.pool
     // 读取 this.pool，作为下一行链式方法调用的接收对象。
     // pool：注入或创建的 PostgreSQL 连接池
@@ -349,6 +370,11 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
   private async resolveUserId(username: string): Promise<number> {
   // 定义方法 resolveUserId；括号中声明参数，花括号内实现逻辑。
   // resolveUserId：根据用户名查找用于审计关联的数据库用户主键；username：账号用户名；Promise：JavaScript 异步结果类型，表示操作将来完成或失败
+
+    // 登录验证使用 app.app_users，但控制记录 user_id 引用的是 users；本方法处理这两套账号结构间的关联。
+    // 先按 operator 的用户名查询 users，找不到则尝试返回 users 中 admin 的 id。
+    // 因此 control_commands.user_id 不一定就是登录账号本人，核对操作人还应查看 audit_logs.detail.operator 等信息。
+
     const r = await this.pool.query('SELECT id FROM users WHERE username = $1', [username]);
     // 通过数据库连接池执行参数化查询，将结果保存或写入 r。
     // r：本处保存 await this.pool.query('SELECT id FROM users WHERE username =… 的结果；pool：注入或创建的 PostgreSQL 连接池；query：通过 PostgreSQL 连接池执行参数化 SQL，返回 rows 与 rowCount 等结果；username：账号用户名

@@ -85,6 +85,11 @@ export class CatalogService implements OnModuleInit, OnModuleDestroy {
   // 定义方法 onModuleInit；括号中声明参数，花括号内实现逻辑。
   // onModuleInit：在模块启动时初始化 catalog.service 所需的连接、订阅或周期任务
     // 先加载一次：保证服务刚起来就能处理报文，不会因为映射空而丢数据
+
+    // 模块启动时先等待 reload() 载入数据库基础档案，再每 60 秒重新加载映射。
+    // 这份目录用于把消息中的 line-01、robot-01 等业务编码对应到数据库内部 id，避免每帧都重复查相同档案。
+    // 目录保存在 NestJS 进程的 Map 中，和 Redis 的现场快照是不同位置、不同用途的缓存。
+
     await this.reload();
     // 重新加载产线和设备编码到主键的目录映射。
     // reload：重新加载产线和设备编码到主键的目录映射
@@ -130,6 +135,11 @@ export class CatalogService implements OnModuleInit, OnModuleDestroy {
   // 定义方法 reload；括号中声明参数，花括号内实现逻辑。
   // reload：重新加载产线和设备编码到主键的目录映射
     // 查产线表：只取 id 和 code 两列
+
+    // 从 production_lines 和 devices 读取 id、code，分别重建产线与设备的 code → id 映射。
+    // 例如教学数据 line-01 → 1、robot-01 → 2；实际编号取决于数据库记录，不能根据编码末尾数字推算。
+    // 历史写入和命令服务使用这份目录进行关联；调用方遇到查不到的编码时按各自分支返回或放弃该条处理。
+
     const lines = await this.pool.query('SELECT id, code FROM production_lines');
     // 通过数据库连接池执行参数化查询，将结果保存或写入 lines。
     // lines：本处保存 await this.pool.query('SELECT id, code FROM production_lines… 的结果；pool：注入或创建的 PostgreSQL 连接池；query：通过 PostgreSQL 连接池执行参数化 SQL，返回 rows 与 rowCount 等结果

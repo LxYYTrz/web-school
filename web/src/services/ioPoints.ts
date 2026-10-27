@@ -99,9 +99,14 @@ export interface IoPoint {
 // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
 // 这一段定义了 IoPoint 的字段或服务能力，供项目其他模块使用。
 
+// IO_POINTS 是各 IO 点位的网页显示规则，不是机器人关节角的下一次转换。
+// field 对应 IO 报文里的字段，word 对应现场寄存器地址；传感器的 1/0 显示有料/无料，机构的 1/0 显示上升/下降。
+// lightColor 用枚举规则把 0/1/2 显示为绿/黄/红；同一个数必须结合点位解释，不能统一套一个布尔文案。
+// 格式化函数读取这些规则后生成文字和色调；无数据与合法的 0 分开处理。
+
 export const IO_POINTS: IoPoint[] = [
-// 导出这一行声明的符号，供项目其他模块使用。
-// IO_POINTS：本处保存 [ { index: 12, word: 11, field: 'sensorIn', label: '入料传感器', … 的结果，类型为 IoPoint[]
+// 集中定义各 IO 字段的显示规则，让页面按点位生成对应文字和色调。
+// IO_POINTS 的 field 对应 IO 报文字段；word 是点表地址；spec 区分布尔标签和灯色枚举，不能把所有 1 都显示成同一种含义。
   { index: 12, word: 11, field: 'sensorIn', label: '入料传感器',
   // 开始对象字面量，并在这一行设置其中列出的字段。
   // index 12 是点位序号；word 11 是 PLC 寄存器号；field sensorIn 是 IO 报文中的字段名

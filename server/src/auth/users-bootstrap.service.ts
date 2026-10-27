@@ -81,6 +81,11 @@ export class UsersBootstrapService implements OnApplicationBootstrap {
       }
       // 结束当前函数、分支或对象配置，返回上一层处理流程。
       // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
+
+      // 初始化管理员时，将配置提供的初始密码交给 bcrypt.hash()，生成将来用于比对的密码摘要。
+      // 10 是本次 hash 的工作因子，hash 才写入 app.app_users.password；登录时使用 bcrypt.compare() 验证输入。
+      // 这段处于账号初始化分支，不表示每次启动都无条件覆盖已有账号或重设密码。
+
       const hash = await bcrypt.hash(initialPwd, 10);
       // 使用 bcrypt 为口令生成摘要，将结果保存或写入 hash。
       // hash：本处保存 await bcrypt.hash(initialPwd, 10) 的结果；bcrypt：从 bcryptjs 导入的口令摘要与验证 API；initialPwd：本处保存 config.app.adminPassword 的结果

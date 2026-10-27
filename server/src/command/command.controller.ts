@@ -74,6 +74,11 @@ export class CommandController {
    * 直接 return 服务的结果，NestJS 自动转 JSON。
    */
   // 这一段定义 send，用于把浏览器控制请求交给指令服务校验和下发。
+
+  // 前端控制请求进入 POST /api/lines/:lineId/commands，先依次通过 AuthGuard 和 CommandGuard。
+  // Param 提取路径中的产线编码，Body 提取设备、类型和参数，CurrentUser 从会话取已登录操作者。
+  // 控制器将这些信息交给 CommandService.issue()，自己不直接访问 PLC；权限通过不代表设备立即动作。
+
   @Post(':lineId/commands')
   // 装饰器 Post：把方法绑定到 POST 路由。
   // Post：NestJS 将方法绑定到 HTTP POST 路由的装饰器

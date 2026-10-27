@@ -36,6 +36,13 @@ export class AuthController {
 
   // 登录:成功后把 username/level 写入 cookie-session
   // 这一段定义 login，用于校验登录请求并将认证结果写入当前 Cookie 会话。
+
+  // 这是 POST /api/auth/login 的后端入口，LoginDto 提供请求体中的用户名与密码。
+  // 调用注入的 AuthService.verifyCredentials() 查询并验证账号，验证失败抛错，不进入下面的会话写入。
+  // 验证通过才把 username、level、loginAt 放入 req.session，由 cookie-session 在响应中保存带签名的 Cookie。
+  // req 是 Express 当前 HTTP 请求，dto 是 NestJS 从请求体解析的 LoginDto；这里的 auth 是后端 AuthService 实例。
+  // 会话中的用户和级别取自验证结果，loginAt 是当前登录时间。后续 Guard 检查会话，而不是每次重新比对密码。
+
   @Post('login')
   // 装饰器 Post：把方法绑定到 POST 路由。
   // Post：NestJS 将方法绑定到 HTTP POST 路由的装饰器
@@ -47,7 +54,11 @@ export class AuthController {
   // login：校验登录请求并将认证结果写入当前 Cookie 会话；Body：NestJS 从请求体提取参数的装饰器；dto：当前方法接收的参数，类型为 LoginDto；LoginDto：从 ./dto/login.dto 导入的对象，用于本文件的调用或类型约束；Req：NestJS 注入当前 HTTP 请求对象的装饰器；req：当前 HTTP 请求对象；Request：从 express 导入的对象，用于本文件的调用或类型约束
     const user = await this.auth.verifyCredentials(dto.username, dto.password);
     // 查询账号并校验口令摘要，返回可写入登录会话的用户信息，将结果保存或写入 user。
-    // user：当前会话或调用方的用户信息；auth：Pinia 登录状态仓库实例；verifyCredentials：查询账号并校验口令摘要，返回可写入登录会话的用户信息；dto：当前方法接收的参数，类型为 LoginDto；username：账号用户名；password：登录口令或数据库保存的口令摘要，具体取决于所在对象
+    // user 来自账号验证结果；auth 是 NestJS 注入的 AuthService，verifyCredentials() 查询账号并验证输入密码；dto 是登录请求体。
+
+    // user 来自密码校验的返回结果，所以这里记录的是已验证身份，而不是请求正文任意提交的 level。
+    // cookie-session 会把该对象放入客户端签名 Cookie；签名检查篡改，内容本身并未因此加密。
+
     req.session = { username: user.username, level: user.level, loginAt: Date.now() };
     // 把右侧表达式的结果写入 req.session。
     // req：当前 HTTP 请求对象；session：HTTP 登录会话对象；username：账号用户名；user：当前会话或调用方的用户信息；level：用户操作级别或事件严重级别，依据当前接口结构区分；Date：JavaScript 日期与当前时间 API；now：取得当前时间戳；Date.now 使用毫秒
@@ -61,6 +72,10 @@ export class AuthController {
 
   // 登出:清空 session 字段;AuthGuard 下次因 username 缺失拒绝访问
   // 这一段定义 logout，用于清除当前请求的登录会话。
+
+  // 退出接口删除当前会话中的 username、level、loginAt，后续请求就无法再满足 AuthGuard 的登录条件。
+  // 这一步处理浏览器账号会话，不会向设备发停止动作，也不清理现场历史数据。
+
   @Post('logout')
   // 装饰器 Post：把方法绑定到 POST 路由。
   // Post：NestJS 将方法绑定到 HTTP POST 路由的装饰器
@@ -95,6 +110,10 @@ export class AuthController {
 
   // 当前用户:前端启动时调一次,401 即未登录
   // 这一段定义 me，用于返回当前会话中的登录用户信息。
+
+  // 网页刷新或首次进入时请求 /api/auth/me，用它恢复当前登录用户与级别。
+  // AuthGuard 先验证会话条件，CurrentUser 再取出会话信息返回；它不是通过 Redis 会话编号再次查询用户的实现。
+
   @Get('me')
   // 装饰器 Get：把方法绑定到 GET 路由。
   // Get：NestJS 将方法绑定到 HTTP GET 路由的装饰器

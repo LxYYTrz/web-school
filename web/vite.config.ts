@@ -63,6 +63,11 @@ export default defineConfig({
     // 声明或设置 proxy，用于当前对象或接口的对应数据。
     // proxy 是此处声明的字段，类型或取值约束为 {
       // 开发期把 /api 与 /socket.io 代理到本地 NestJS,生产构建后用 Nginx 同源反代
+
+      // 本地开发由 Vite 提供网页，/api 和 /socket.io 请求通过这里的代理转到后端 3000。
+      // ws:true 为实时连接开启 WebSocket 代理；这是开发服务器行为，构建后的 web/dist 由部署中的 Nginx 提供。
+      // 显式设置前端 API 基址可能改变请求目标，不能把开发代理配置直接当成线上请求路径。
+
       '/api': { target: 'http://localhost:3000', changeOrigin: true },
       // 声明或设置 '/api'，用于当前对象或接口的对应数据。
       // 这一行提供给外层调用的字符串参数或模板文本，其含义由所在函数及相邻参数确定

@@ -99,9 +99,14 @@ export async function apiAiStatus(): Promise<{ enabled: boolean; model: string }
  * onEvent 抛错会中断本次流(用于组件卸载/切换会话时取消)。
  */
 // 这一段定义 apiAiChat，用于发送 AI 对话请求并逐条消费 SSE 返回事件。
+
+// 网页发送本次 AI 消息，并持续读取后端 HTTP 响应中的 SSE 事件。
+// onEvent 接收 delta、tool、error、done 等业务事件，供抽屉更新文本与工具过程；组件取消时可中断本次读取。
+// 这是保持中的 HTTP 响应流，与现场机器人数据使用的 Socket.IO 事件连接分别工作。
+
 export async function apiAiChat(
-// 定义函数 apiAiChat。
-// apiAiChat：发送 AI 对话请求并逐条消费 SSE 返回事件
+// 向后端提交当前对话，并持续解析 SSE 返回事件，供网页 AI 抽屉更新显示。
+// lineId、message 描述本次请求；onEvent 接收 delta、tool、error、done 等事件；取消或组件卸载时可中断这次响应读取。
   lineId: string,
   // 设置字段 lineId，供当前处理流程继续使用。
   // lineId：产线标识，接口通常使用 line-01 等编码

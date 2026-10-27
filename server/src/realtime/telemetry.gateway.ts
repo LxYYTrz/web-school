@@ -80,6 +80,11 @@ export class TelemetryGateway {
    * 前端 emit('subscribe', { lineId: 'line-01' })
    */
   // 这一段定义 handleSubscribe，用于校验订阅请求并把客户端加入目标产线的消息房间。
+
+  // 浏览器在 Socket.IO 连接上发项目自定义 subscribe 事件，声明要接收哪条产线的数据。
+  // 后端将该连接加入 line:产线编码 房间，broadcastRobot 等方法随后只向对应房间发送事件。
+  // 这个房间订阅与后端连接 Broker 后的 MQTT 主题订阅发生在不同程序、不同连接中。
+
   @SubscribeMessage('subscribe')
   // 装饰器 SubscribeMessage：订阅指定 WebSocket 消息。
   // SubscribeMessage：NestJS 声明 Socket.IO 消息处理方法的装饰器
@@ -191,9 +196,14 @@ export class TelemetryGateway {
 
   // 控制指令回执推前端(cmd_ack → command_ack)
   // 这一段定义 broadcastCommandAck，用于向产线房间广播控制指令回执。
+
+  // 把带 cmdId 的命令结果发送给订阅该产线的网页，Socket.IO 事件名为 command_ack。
+  // MQTT 上采集器发布的主题名称是 cmd_ack；这里完成到网页事件通道的转交，页面再按编号匹配当前请求。
+  // 此推送不代表数据库更新与消息通知已经组成保证同时成功的事务。
+
   broadcastCommandAck(lineId: string, msg: unknown) {
-  // 定义方法 broadcastCommandAck；括号中声明参数，花括号内实现逻辑。
-  // broadcastCommandAck：向产线房间广播控制指令回执；lineId：产线标识，接口通常使用 line-01 等编码；msg：当前收到的消息或提示文字
+  // 将这条命令回执推送给正在订阅对应产线的网页。
+  // lineId 决定 line:产线 房间；msg 带 cmdId 等结果字段；事件名 command_ack 与采集器的 MQTT cmd_ack 主题名称不同。
     this.server?.to(`line:${lineId}`).emit('command_ack', msg);
     // 选择要广播消息的 Socket.IO 房间。
     // server：本处声明的字段或类型，类型为 Server；to：选择要广播消息的 Socket.IO 房间；lineId：产线标识，接口通常使用 line-01 等编码；emit：向 Socket.IO 连接或房间发送事件；msg：当前收到的消息或提示文字

@@ -21,6 +21,11 @@ export class AuthGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<Request>();
     // 切换到 HTTP 接口继续获取实时数据，将结果保存或写入 req。
     // req：当前 HTTP 请求对象；context：当前方法接收的参数，类型为 ExecutionContext；switchToHttp：本处声明的字段或类型，类型为 HttpArgumentsHost；getRequest：本处声明的字段或类型，类型为 T；Request：从 express 导入的对象，用于本文件的调用或类型约束
+
+    // AuthGuard 从当前 HTTP 请求读取已经由 cookie-session 处理的会话。
+    // 要求会话存在、用户名非空且 level 为 number；不满足时抛 401，满足后才允许进入后续守卫或接口。
+    // 这里检查会话条件，不重新查询账号密码；控制操作需要的 level 门槛由 CommandGuard 继续检查。
+
     const session = req.session;
     // 根据 req.session 设置 session，用于HTTP 登录会话对象。
     // session：HTTP 登录会话对象；req：当前 HTTP 请求对象

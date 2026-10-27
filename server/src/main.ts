@@ -78,13 +78,22 @@ import { config } from './config/configuration';
 async function bootstrap() {
 // 定义函数 bootstrap。
 // bootstrap：创建 NestJS 应用、配置会话和跨域并监听服务端口
+
+  // 后端启动入口让 NestJS 根据 AppModule 创建应用实例，并装配模块和依赖。
+  // app 是后端 NestExpressApplication，与浏览器 main.ts 中 Vue 的 app 是不同对象；后面的 app.use() 注册 HTTP 中间件。
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // 根据 await NestFactory.create<NestExpressApplication>(AppModule) 设置 app，供当前流程后续使用。
   // app：本处保存 await NestFactory.create<NestExpressApplication>(AppModule) 的结果；NestFactory：从 @nestjs/core 导入的对象，用于本文件的NestJS 应用创建与请求上下文支持；create：提供 create 的本地处理逻辑；NestExpressApplication：从 @nestjs/platform-express 导入的对象，用于本文件的NestJS 对 Express HTTP 服务的类型支持；AppModule：从 ./app.module 导入的对象，用于本文件的调用或类型约束
 
   // 登录会话:HttpOnly + SameSite=Lax;prod 上 HTTPS 后把 secure 改 true
+
+  // 把 cookie-session 注册为后端 HTTP 中间件，使登录接口可以写 req.session，后续请求可以读取并验证它。
+  // keys 来自配置中的会话签名密钥；HttpOnly 限制脚本读取，SameSite=Lax 约束 Cookie 发送，maxAge 设为 7 天。
+  // secure=false 不强制只经 HTTPS 发送；签名用于检查篡改，不等于会话数据加密，也不是 Redis 服务端会话存储。
+
   app.use(
-  // 向应用实例注册状态管理、路由或界面组件插件。
+  // 将 cookie-session 注册为 NestJS/Express 的 HTTP 中间件，使后续接口能读取和写入 req.session。
   // app：本处保存 await NestFactory.create<NestExpressApplication>(AppModule) 的结果；use：本处声明的字段或类型，类型为 this
     cookieSession({
     // 执行 cookieSession 对应的本地处理，使用本行提供的数据。
@@ -130,6 +139,10 @@ async function bootstrap() {
   // 执行 enableShutdownHooks 对应的本地处理，使用本行提供的数据。
   // app：本处保存 await NestFactory.create<NestExpressApplication>(AppModule) 的结果；enableShutdownHooks：本处声明的字段或类型，类型为 this
   // 8) 监听端口：HTTP REST 与 WebSocket(socket.io) 共用这一个端口
+
+  // 应用完成前面的会话、跨域等配置后，监听 config.http.port 指定的 HTTP 端口，默认值来自统一配置。
+  // 本地开发代理和公网 SSH 转发最终都要找到这个后端服务；进程开始监听本身不证明 PLC、数据库或实时数据已经全部可用。
+
   await app.listen(config.http.port);
   // 让后端 HTTP 服务在配置的端口开始接收请求。
   // app：本处保存 await NestFactory.create<NestExpressApplication>(AppModule) 的结果；listen：本处声明的字段或类型，类型为 Promise<TServer>；config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；http：发送携带登录 Cookie 的 JSON 请求并统一处理 HTTP 错误；port：网络连接的目标端口

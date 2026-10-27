@@ -59,9 +59,14 @@ export interface SendCommandResult {
 // POST /api/lines/{lineId}/commands
 // 后端:AuthGuard + CommandGuard(level>=2) + 契约 v1.1 白名单
 // 这一段定义 apiSendCommand，用于通过 HTTP 向后端提交设备控制指令并处理失败响应。
+
+// 网页确认操作后，从这里将命令 JSON 提交到当前产线的后端控制入口。
+// lineId 用于 URL，cmd 提供 deviceId、type、params，credentials: include 携带适用 Cookie，操作者由后端会话取得。
+// HTTP 响应中的 ok、cmdId 表示后端处理阶段的结果；页面还要根据同一 cmdId 等待 command_ack，不能把请求返回当成物理动作完成。
+
 export async function apiSendCommand(
-// 定义函数 apiSendCommand。
-// apiSendCommand：通过 HTTP 向后端提交设备控制指令并处理失败响应
+// 将网页确认后的业务指令提交到当前产线的控制接口，返回后端受理结果。
+// lineId 进入 URL，cmd 提供 deviceId、type、params；返回 cmdId 后页面继续等待 command_ack，HTTP 返回不等于物理动作完成。
   lineId: string,
   // 后端:AuthGuard + CommandGuard(level>=2) + 契约 v1.1 白名单。
   // lineId：产线标识，接口通常使用 line-01 等编码

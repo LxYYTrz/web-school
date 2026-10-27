@@ -132,6 +132,11 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
   // 定义方法 onModuleInit；括号中声明参数，花括号内实现逻辑。
   // onModuleInit：在模块启动时初始化 history-writer.service 所需的连接、订阅或周期任务
     // 每 1000ms 把缓冲区里的机器人帧批量写入数据库
+
+    // 每秒触发一次 flushRobots()，将这一秒内已经入队的多帧组织成一批写入。
+    // 1000 是批量写入触发间隔，不是只保存每秒最后一帧的采样规则；帧先由 bufferRobotFrame() 逐条加入内存。
+    // 定时器停止或进程退出前，尚未成功落库的缓冲仍可能丢失。
+
     this.timer = setInterval(() => this.flushRobots(), 1000);
     // 把右侧表达式的结果写入 this.timer。
     // timer：周期任务计时器句柄；setInterval：按固定间隔重复执行回调并返回计时器句柄；flushRobots：把累计机器人帧批量写入历史表，减少逐帧数据库操作
@@ -162,9 +167,15 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
   // 这一段提供了在模块关闭时清理 history-writer.service 持有的连接、订阅或计时器的实现；实际结果由运行时输入和执行分支决定。
 
   // 这一段定义 bufferRobotFrame，用于将机器人遥测帧加入内存批量写入队列。
+
+  // 这段把机器人帧整理进历史缓冲，尚未直接写数据库。
+  // deviceCode 是外部设备编码，CatalogService 将它对应成内部 deviceId；time、joints 等一起组成一条待保存记录。
+  // 目录找不到设备就跳过这一条历史入队，实时推送与 Redis 路径不因此必然停止。
+  // 缓冲达到上限时丢弃较早条目，后续 flushRobots() 才执行批量 INSERT。
+
   bufferRobotFrame(deviceCode: string, msg: any) {
-  // 定义方法 bufferRobotFrame；括号中声明参数，花括号内实现逻辑。
-  // bufferRobotFrame：将机器人遥测帧加入内存批量写入队列；deviceCode：对外使用的设备字符串编码；msg：当前收到的消息或提示文字
+  // 将机器人帧整理为一条待保存历史，加入内存队列，等待定时批量写入。
+  // deviceCode 是外部编码，catalog.deviceId() 查内部 id；msg 提供采集时间、joints 等字段，robotBuffer 保存本进程尚待落库的数据。
     // ① 翻译 code → id。查不到就直接丢弃这条（返回 undefined）
     const deviceId = this.catalog.deviceId(deviceCode);
     // 从目录缓存读取设备编码对应的数据库主键，将结果保存或写入 deviceId。
@@ -227,9 +238,14 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
    * 这是整个服务里最需要理解的函数 —— 重点是"多行 INSERT"的拼装方式。
    */
   // 这一段定义 flushRobots，用于把累计机器人帧批量写入历史表，减少逐帧数据库操作。
+
+  // 从 robotBuffer 取出本批帧，按多行参数化 INSERT 写入 robot_joint_states。
+  // values 按每条记录的八个字段排列，tuple 中的 $1 等占位符与该数组逐项对应，每条帧保留自己的时间和设备编号。
+  // 当前 splice() 先移出缓冲；异步查询失败会记录错误，未在这里把这一批重新放回队列，因此不能保证失败后自动补齐历史。
+
   private flushRobots() {
-  // 定义方法 flushRobots；括号中声明参数，花括号内实现逻辑。
-  // flushRobots：把累计机器人帧批量写入历史表，减少逐帧数据库操作
+  // 取出本批缓冲帧，组织参数化的多行 INSERT，写入 robot_joint_states。
+  // rows 是从 robotBuffer 移出的本批记录；values 保存八字段一组的参数；写入失败不会自动把已移出的这批帧放回原队列。
     // ① splice(0, length) 取出全部并清空缓冲。
     //    注意：必须在取出的瞬间清空，这样新到的帧会进入新的缓冲，
     //    不会和正在写入的这批混淆（避免写入期间数据丢失）
@@ -311,9 +327,14 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
    * @param msg      契约定义的 line_status 报文
    */
   // 这一段定义 insertLineStatus，用于把产线状态帧写入历史状态表。
+
+  // 工序状态消息在这里分别维护“当前记录”和“变化历史”，不与机器人关节表混用。
+  // 先用产线业务编码取得内部 lineId，再把同一组状态字段用于两条 SQL：当前表按 line_id 更新，历史表追加带时间的新行。
+  // 两条查询由代码分别发起并记录错误，没有构成保证同时成功的事务；网页首屏读取的 Redis 快照仍是另一份存储。
+
   insertLineStatus(lineCode: string, msg: any) {
-  // 定义方法 insertLineStatus；括号中声明参数，花括号内实现逻辑。
-  // insertLineStatus：把产线状态帧写入历史状态表；lineCode：对外使用的产线字符串编码；msg：当前收到的消息或提示文字
+  // 将一条工序状态分别写成产线当前记录与一条带时间的状态历史。
+  // lineCode 先由 CatalogService 对应到内部 lineId；msg 提供状态和产量等字段；两条 SQL 并发发起，没有被这里包成同一事务。
     // ① code → id
     const lineId = this.catalog.lineId(lineCode);
     // 从目录缓存读取产线编码对应的数据库主键，将结果保存或写入 lineId。
@@ -449,9 +470,14 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
    * @param msg 契约定义的 command_ack 报文 { cmdId, ts, status, message }
    */
   // 这一段定义 ackCommand，用于根据指令编号更新控制审计记录的回执状态。
+
+  // 采集器业务回执到达后，用 msg.cmdId 对应 control_commands.idempotency_key，更新本次命令的状态与完整回执。
+  // 只接受 acked、rejected、failed；SQL 还限制原记录必须处于 pending 或 sent，已经进入其他状态的记录不由这条更新覆盖。
+  // acked 的现场含义来自采集器写入响应，不是本方法再次验证物理动作完成；数据库更新与网页实时通知也不是同一事务。
+
   ackCommand(msg: any) {
-  // 定义方法 ackCommand；括号中声明参数，花括号内实现逻辑。
-  // ackCommand：根据指令编号更新控制审计记录的回执状态；msg：当前收到的消息或提示文字
+  // 按回执中的命令编号更新控制记录，保存回执状态、内容和接收时间。
+  // msg.cmdId 对应 idempotency_key；只接受 acked、rejected、failed，SQL 同时要求原记录仍为 pending 或 sent，避免覆盖其他终态。
     // ① 没有 cmdId 的回执无法定位指令，直接忽略
     if (!msg.cmdId) return;
     // 检查(!msg.cmdId) return;，按判断结果进入对应的处理分支。

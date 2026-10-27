@@ -223,9 +223,15 @@ const { io, edgeOnline, edgeText } = useLineData();
 const STALE_MS = 5_000;
 // 根据 5_000 设置 STALE_MS，供当前流程后续使用。
 // STALE_MS：本处保存 5_000 的结果
+
+// 这里为 IO 页面维护一个每 500 毫秒更新的浏览器时钟，促使 stale 的计算定期重新执行。
+// stale 比较 now 与 io.ts：没有 IO 帧，或帧时间超过 STALE_MS（5 秒），页面就显示数据停滞。
+// 这是网页对 IO 数据新鲜度的判断，不会删除 Redis 快照，也不保证自动清空浏览器保留的上次点位值。
+// 两端时间参与比较，现场数据时钟与浏览器时钟存在偏差时也会影响这个判断。
+
 const now = ref(Date.now());
-// 创建或使用Vue 创建可通过 .value 读写的响应式引用，将结果保存或写入 now。
-// now：本处保存 ref(Date.now()) 的结果；ref：Vue 创建可通过 .value 读写的响应式引用；Date：JavaScript 日期与当前时间 API
+// 保存浏览器当前时间，下面定时更新它，以便 stale 计算能持续判断帧是否停滞。
+// now 是 ref；io.ts 是上报帧时间；STALE_MS 为 5000 毫秒，定时器每 500 毫秒更新时间，和 Redis 60 秒有效期是不同判断。
 const timer = setInterval(() => { now.value = Date.now(); }, 500);
 // 启动周期执行的定时任务，将结果保存或写入 timer。
 // timer：周期任务计时器句柄；setInterval：按固定间隔重复执行回调并返回计时器句柄；now：本处保存 ref(Date.now()) 的结果；value：当前字段或点位的实际取值；Date：JavaScript 日期与当前时间 API

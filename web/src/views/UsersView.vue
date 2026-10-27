@@ -354,6 +354,11 @@ async function onCreate() {
   try {
   // 开始执行可能失败的操作，错误由后续异常分支处理。
   // 本块中的数据库、网络或状态操作可能抛出异常；后续 catch 或 except 分支负责处理
+
+    // 创建表单校验通过后，把用户名、密码和 level 提交到用户管理接口，等待后端检查并保存。
+    // 成功时显示提示、关闭弹窗，再 refresh() 重新查询列表；失败时显示接口错误，并在 finally 清理提交中状态。
+    // 用户列表通过 HTTP 请求刷新，和机器人持续接收 robot_state 的更新方式不同。
+
     await apiCreateUser(createForm.username, createForm.password, createForm.level);
     // 向后端提交新账号信息。
     // apiCreateUser：从 ../services/auth 导入的对象，用于本文件的调用或类型约束；createForm：本处保存 reactive({ username: '', password: '', level: 1 as Level }) 的结果；username：账号用户名；password：登录口令或数据库保存的口令摘要，具体取决于所在对象；level：用户操作级别或事件严重级别，依据当前接口结构区分

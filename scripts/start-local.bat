@@ -78,6 +78,11 @@ rem EDGE_SCRIPT 是由批处理环境变量提供的当前配置或路径；COLL
 
 rem ---- ① 启动后端（3000 端口）----
 rem cd /d 切目录；node dist\main.js 运行编译产物
+
+rem 这里启动 Node.js 执行 server/dist/main.js，即已经构建的后端产物，工作目录切到 server。
+rem ROOT 是项目根目录；后续还会启动采集器等程序。修改 src 后如果未重新构建，这个命令仍运行旧 dist。
+rem 本脚本启动应用进程，不负责自动安装全部数据库、Redis 和 Broker 基础设施。
+
 start "lt-server" cmd /k "cd /d %ROOT%\server && node dist\main.js"
 rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
 rem ROOT 是由批处理环境变量提供的当前配置或路径

@@ -70,6 +70,10 @@
       <!-- 结束 div 元素及其中的内容。 -->
       <!-- div 是当前使用的界面元素或组件 -->
       <!-- 无数据时的占位 -->
+
+      <!-- robot 为空时显示等待文案，对应“尚未取得机器人帧”的页面状态。 -->
+      <!-- 已经收到过的旧帧不会仅因 Redis 的 key 过期就被这里自动清空，是否仍有新数据需结合时间和实时链路判断。 -->
+
       <el-empty v-else description="等待机器人数据…" :image-size="60" />
       <!-- 渲染el-empty 元素或组件。 -->
       <!-- el-empty 是当前使用的界面元素或组件；v-else 表示前面条件都不成立时渲染；:image-size 表示把表达式结果动态绑定到组件属性，当前值为 60 -->
@@ -187,9 +191,12 @@ let arm: RobotArm | null = null;
 // 声明 arm，初始值由 null 计算得到，供当前处理流程继续使用。
 // arm：本处保存 null 的结果，类型为 RobotArm | null；RobotArm：项目定义的程序化六轴机械臂模型类
 
+// 页面容器挂载后，先创建 SceneManager，再创建 RobotArm，将模型放入场景并开始绘制。
+// host 是网页中的 DOM 容器；scene 与 arm 都是浏览器对象。现场数据尚未到达时，初始模型姿态不代表实测姿态。
+
 onMounted(() => {
-// 创建或使用Vue 注册组件挂载完成回调的函数。
-// onMounted：Vue 注册组件挂载完成回调的函数
+// 在页面容器已经挂载后，创建场景与机械臂模型，将模型加入场景并开始绘制。
+// onMounted 是 Vue 生命周期钩子；host.value 是 DOM 容器；scene 和 arm 分别保存 SceneManager 与 RobotArm 实例。
   // 模板 ref 还没拿到 DOM（理论上不会发生，但类型系统要求判空）
   if (!host.value) return;
   // 检查(!host.value) return;，按判断结果进入对应的处理分支。
@@ -239,9 +246,14 @@ onBeforeUnmount(() => {
  * 侦听 robot 变化 → 驱动 3D 模型。
  * 这是"数据 → 画面"的关键一行。
  */
+
+// 这段承接机器人数据的显示分支：useLineData 更新 robot 后，watch 得到最新帧 r。
+// 只有帧和模型都存在时才把 r.joints 交给 setJoints()；数组元素仍以度表示，度转弧度在 RobotArm 内部完成。
+// setAlarm() 根据报警码更新模型显示。工序中文和 IO 点位值由另外的显示规则处理，不经过 setJoints()。
+
 watch(robot, (r) => {
-// 创建或使用Vue 监听状态变化并执行回调的函数。
-// watch：Vue 监听状态变化并执行回调的函数；r：当前方法接收的参数
+// 机器人共享状态变化时，取最新帧更新模型关节角和报警显示。
+// robot 来自 useLineData()；r 是本次机器人帧；arm 是已创建的 RobotArm；r.joints 的元素是度数，弧度转换在模型内部进行。
   // 没有数据或模型还没建好就跳过
   if (!r || !arm) return;
   // 检查(!r || !arm) return;，按判断结果进入对应的处理分支。

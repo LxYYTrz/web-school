@@ -340,6 +340,11 @@ let offAck: (() => void) | null = null;
 onMounted(() => {
 // 创建或使用Vue 注册组件挂载完成回调的函数。
 // onMounted：Vue 注册组件挂载完成回调的函数
+
+  // 收到 command_ack 时先比对 ack.cmdId 与 currentCmdId，只处理当前这次命令的结果。
+  // acked、timeout 和拒绝等状态分别更新页面提示；“已执行”的文字依据采集器回执，实际含义主要是 Modbus 写入正常响应。
+  // 不能仅凭这里的提示判断传送带已经转动或机器人已经完成某个物理动作。
+
   offAck = onCommandAck((ack: CommandAck) => {
   // 把右侧表达式的结果写入 offAck。
   // offAck：本处保存 null 的结果，类型为 (() => void) | null；onCommandAck：从 ../services/control 导入的对象，用于本文件的调用或类型约束；ack：当前方法接收的参数，类型为 CommandAck；CommandAck：项目数据契约中的指令回执结构，通过 cmdId 关联下发指令
@@ -428,9 +433,14 @@ function scheduleReset() {
 // 这一段提供了安排操作提示自动恢复为空闲状态的实现；实际结果由运行时输入和执行分支决定。
 
 // 这一段定义 confirm，用于确认当前按钮对应的控制操作，提交指令并显示等待回执状态。
+
+// 点击控制按钮后先检查当前页面状态与动作条件，再弹出二次确认框；用户取消就结束本次交互。
+// 确认后记录待发类型与参数，并通过 apiSendCommand() 发送请求；这里的界面限制仍由后端守卫和业务检查再次验证。
+// 取得 cmdId 后转入等待回执，避免同时处理另一条按钮操作。
+
 async function confirm(type: CmdType, params?: Record<string, unknown>) {
-// 弹出确认对话框，取得用户对当前操作的选择。
-// confirm：确认当前按钮对应的控制操作，提交指令并显示等待回执状态；type：当前报文、指令或对象的类别字段；CmdType：本处声明的字段或类型，类型为 'start' | 'stop' | 'mode_set' | 'conveyor'；params：指令附加参数对象；Record：TypeScript 的键值对象类型，用键类型约束属性、值类型约束内容
+// 在当前页面状态允许且用户确认后，发起本次控制请求并进入等待回执状态。
+// type、params 描述动作；can() 检查当前界面条件；apiSendCommand() 返回的 cmdId 保存为 currentCmdId，供回执匹配。
   if (state.value !== 'idle') return;
   // 检查(state.value !== 'idle') return;，按判断结果进入对应的处理分支。
   // state：当前状态值或实时状态服务实例，以所在对象为准；value：当前字段或点位的实际取值
@@ -544,6 +554,10 @@ async function confirm(type: CmdType, params?: Record<string, unknown>) {
     // 结束当前函数、分支或对象配置，返回上一层处理流程。
     // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
     // 15s 没收到 ack → 视为超时(契约 §5 第 4 条)
+
+    // 网页从 HTTP 返回后等待当前 cmdId 的业务回执，15 秒后仍为 sent 就把本次等待显示为 timeout。
+    // 判断同时核对编号，避免旧定时器误改新命令。这个计时器不撤销 PLC 写入，也不能证明现场根本没有处理。
+
     setTimeout(() => {
     // 安排延迟执行的回调。
     // setTimeout：延迟执行回调并返回计时器句柄

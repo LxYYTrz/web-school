@@ -27,9 +27,14 @@ export class AuthService {
   // 这一段提供了初始化 auth.service 使用的实例状态和依赖的实现；实际结果由运行时输入和执行分支决定。
 
   // 这一段定义 verifyCredentials，用于查询账号并校验口令摘要，返回可写入登录会话的用户信息。
+
+  // 这是登录凭据验证：按 username 查询 app.app_users，得到数据库保存的密码摘要和操作级别。
+  // bcrypt.compare() 将本次输入密码与摘要匹配，不需要把摘要还原成原密码；账号不存在或不匹配都返回登录失败。
+  // 验证成功返回 username、level，AuthController 才据此建立会话。这里不把数据库密码摘要回传给浏览器。
+
   async verifyCredentials(username: string, password: string): Promise<{ username: string; level: number }> {
-  // 定义方法 verifyCredentials；括号中声明参数，花括号内实现逻辑。
-  // verifyCredentials：查询账号并校验口令摘要，返回可写入登录会话的用户信息；username：账号用户名；password：登录口令或数据库保存的口令摘要，具体取决于所在对象；Promise：JavaScript 异步结果类型，表示操作将来完成或失败；level：用户操作级别或事件严重级别，依据当前接口结构区分
+  // 按用户名查询账号并验证输入密码，成功后返回可建立会话的用户名与级别。
+  // username、password 来自登录请求；pool 查询 app.app_users；bcrypt.compare() 将输入密码与数据库摘要匹配，不还原原密码。
     if (!username || !password) {
     // 检查(!username || !password)，按判断结果进入对应的处理分支。
     // username：账号用户名；password：登录口令或数据库保存的口令摘要，具体取决于所在对象

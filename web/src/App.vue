@@ -186,6 +186,10 @@
     <!-- 渲染页面主体，应用 body 样式类。 -->
     <!-- el-main 是当前使用的界面元素或组件；class 表示应用的样式类，当前值为 body -->
       <!-- 路由出口 -->
+
+      <!-- router-view 是当前路由页面的显示位置：菜单切换后，路由器在这里显示孪生、IO 或用户管理等组件。 -->
+      <!-- App 的公共框架继续存在，页面需要的数据由对应逻辑取得；这个标签自身不读取 PLC，也不查询数据库。 -->
+
       <router-view />
       <!-- 在界面中配置 router-view 元素及其内容或事件绑定。 -->
       <!-- router-view 是当前使用的界面元素或组件 -->
@@ -253,6 +257,11 @@ setAiUnauthorizedHandler(() => {
  * 注意：useLineData 内部是模块级单例，这里传什么产线，
  * 第一次调用时决定，之后所有调用返回同一个实例。
  */
+
+// App 在这里使用 line-01 的共享现场状态，顶栏取其中的连接、边缘在线和工序字段。
+// useLineData() 复用模块级 shared 实例，机械臂和 IO 页面因此能使用同一套状态与订阅。
+// 当前不是按每次传入的产线编码创建独立实例，不能据此宣称已经支持任意多产线切换。
+
 const { connected, edgeOnline, edgeText, status, alarmText } = useLineData('line-01');
 // 取得按产线编码复用的数据单例，供多个页面共享状态。
 // connected：连接是否已建立的状态标记；status：当前连接、产线、请求或指令的状态字段；useLineData：从 ./composables/useLineData 导入的对象，用于本文件的调用或类型约束

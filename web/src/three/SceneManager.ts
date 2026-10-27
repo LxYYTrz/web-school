@@ -75,9 +75,14 @@ export class SceneManager {
   // disposed 记录当前场景是否已经释放，防止重复清理资源
 
   // 这一段定义 constructor，用于初始化 SceneManager 使用的实例状态和依赖。
+
+  // 这段创建网页三维场景的基础设施：渲染器、观察相机、灯光和交互控制。
+  // container 是 TwinView 传入的页面容器，renderer.domElement 是挂入该容器的 canvas，模型另由 RobotArm 创建后加入场景。
+  // 拖拽和缩放改变观察相机；现场关节角到达时由模型方法更新姿态，这两种变化都由渲染器画到同一 canvas。
+
   constructor(private readonly container: HTMLElement) {
-  // 开始声明当前类的构造函数，列出创建服务实例时注入的依赖。
-  // container：当前方法接收的参数，类型为 HTMLElement；HTMLElement：本处保存的局部数据，类型为 { prototype: HTMLElement; new(): HTMLElement; }
+  // 为孪生页面创建渲染器、相机、灯光和观察交互，并把渲染 canvas 加入页面容器。
+  // container 是 TwinView 挂载后的 HTMLElement；THREE.WebGLRenderer 负责绘制，RobotArm 模型在页面代码中另行创建并加入场景。
     // ---------- 渲染器 ----------
     // antialias: 开启抗锯齿（边缘平滑），对细长的机械臂尤其重要
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -274,9 +279,14 @@ export class SceneManager {
   // 这一段提供了按设备编码把机械臂模型加入三维场景与实例映射的实现；实际结果由运行时输入和执行分支决定。
 
   // 这一段定义 start，用于启动 Three.js 的连续渲染循环。
+
+  // start() 开始浏览器的持续绘制循环，每次 requestAnimationFrame 回调更新观察控制并渲染当前场景。
+  // 关节旋转已经由 RobotArm.setJoints() 写进模型，render() 使用这些现成姿态和相机视角生成画面。
+  // 重复绘制不产生新的现场测量帧，渲染频率与 PLC 采集周期分别由各自程序控制。
+
   start() {
-  // 定义方法 start；括号中声明参数，花括号内实现逻辑。
-  // start：启动 Three.js 的连续渲染循环
+  // 启动浏览器绘制循环，持续把当前模型姿态和观察视角渲染成画面。
+  // requestAnimationFrame 调度下一次绘制；this.controls 更新相机交互，this.renderer.render() 使用场景中的现成姿态，不生成新的 PLC 测量帧。
     // 循环体（每帧执行一次）
     // 这一段定义 loop，用于推进每帧更新并绘制三维场景。
     const loop = () => {

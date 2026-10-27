@@ -450,9 +450,15 @@ def _words_to_u32(regs: list[int]) -> int:
 
 
 # 这一段定义 decode_signal，用于按点位类型、偏移和缩放系数把原始寄存器转换为物理量。
+
+# 这段完成现场原始值到业务数值的转换，由 Plc.read_all() 在读到寄存器后调用。
+# regs 是本次 Modbus 响应中的 16 位寄存器数组；sig 是 CSV 点表里对应信号的名称、类型、偏移和缩放配置。
+# 例如 J1 点位的原始值为 250，按 INT 解释后计算 (250 + 0) * 0.1，得到 25 度，供机器人报文的 joints 使用。
+# 没有读到值返回 None；这里不做 Three.js 的度转弧度，也不把读取失败替换为有效的 0。
+
 def decode_signal(regs: list[int], sig: Signal) -> Any:
-# 定义函数 decode_signal。
-# decode_signal：按点位类型、偏移和缩放系数把原始寄存器转换为物理量；regs：从 Modbus 响应 rr 取得的 16 位寄存器值数组；sig：方法输入参数，类型为 Signal；Signal：本文件定义的点位配置类型，包含名称、地址、类型和缩放参数；Any：从 typing 导入的对象，类型为 typing
+# 按点表规定的类型解释这次寄存器响应，再应用偏移和缩放，返回业务数值；没有读到值时保留 None。
+# regs 是这次 Modbus 响应的寄存器数组；sig 是本点位的 Signal 配置，提供 type、offset、scale 等解释规则。
     """把 Modbus 寄存器值翻译成物理量。Modbus 协议是大端字序(高字在前);
     S7 的 MB_SERVER 默认也是大端;若现场 PLC 用了小端,把 PLC_WORD_ORDER 改 LITTLE。"""
     # 没有读到寄存器 → 返回 None（表示本次读失败/无数据）
@@ -467,6 +473,10 @@ def decode_signal(regs: list[int], sig: Signal) -> Any:
     # 检查sig.type in ("INT16", "INT"):，按判断结果进入对应的处理分支。
     # sig：方法输入参数，类型为 Signal；type：当前报文、指令或对象的类别字段
         # Modbus 的寄存器是无符号的：>= 0x8000 视为负数，减去 0x10000 转成有符号
+
+        # regs[0] 是原始 16 位字，可能以 0～65535 表示；达到 0x8000 的值减去 0x10000 后才是对应有符号整数。
+        # 例如原始 65526 在 INT 分支解释为 -10，再使用点表缩放系数，避免负角度被误读成很大的正数。
+
         raw = regs[0] if regs[0] < 0x8000 else regs[0] - 0x10000
         # 根据 regs[0] if regs[0] < 0x8000 else regs[0] - 0x10000 设置 raw，供当前流程后续使用。
         # raw：保存 regs[0] if regs[0] < 32768 else regs[0] - 65536 的结果；regs：从 Modbus 响应 rr 取得的 16 位寄存器值数组
@@ -610,9 +620,15 @@ class Plc:
             # 这一段实现了在互斥锁保护下关闭 PLC 连接并清除连接标记；返回值或异常由调用方按当前分支处理。
 
     # 这一段定义 read_all，用于读取全部配置的只读点位，逐点解码并保留读取失败的空值。
+
+    # 这段是每轮现场采集的读取入口：按点表逐个读取 PLC，再返回“信号名称 → 已解码值”的字典。
+    # signals 来自点表；s.address 是寄存器起始地址，s.count 是占用的寄存器数量，self.unit 是 Modbus 从站编号。
+    # read_holding_registers() 发出请求，rr 保存 PLC 的本次响应；成功后把 rr.registers 交给 decode_signal() 解释类型与单位。
+    # 主循环取得这份字典后，分别组装机器人、IO 和工序状态报文；通信错误与合法零值在这里保留区别。
+
     def read_all(self, signals: list[Signal]) -> dict[str, Any]:
-    # 定义 read_all，用于读取全部配置的只读点位，逐点解码并保留读取失败的空值。
-    # read_all：读取全部配置的只读点位，逐点解码并保留读取失败的空值；signals：方法输入参数，类型为 list[Signal]；Signal：本文件定义的点位配置类型，包含名称、地址、类型和缩放参数；Any：从 typing 导入的对象，类型为 typing
+    # 读取本轮点表配置的现场信号，将读取响应逐点解码，返回按业务名称组织的结果字典。
+    # self 是已有 Plc 客户端；signals 是点表 Signal 列表；返回字典供 group_signals()、io_payload() 等分别组装消息。
         """逐个读取已配置点位，返回本轮采集结果。"""
         # 没连上 → 先尝试连接，失败就直接返回空字典（主循环会 sleep 后重试）
         if not self.connected:
@@ -644,6 +660,10 @@ class Plc:
                 with self.lock:
                 # ★ 核心读操作：读保持寄存器（功能码 0x03）。
                 # 本行使用当前函数或配置段中已经定义的名称，具体取值由相邻的定义和数据契约确定
+
+                    # 在已有 PLC 连接上读取这一点位，响应保存在 rr，供下面检查错误和提取 registers。
+                    # address、count 来自当前点表信号 s；device_id 使用 self.unit，三者共同确定本次向 PLC 读什么。
+
                     rr = self.cli.read_holding_registers(
                     # 向 PLC 读取指定寄存器，将结果保存或写入 rr。
                     # rr：本次 read_holding_registers 调用返回的 Modbus 响应，包含错误标记与寄存器数组；cli：在本文件创建的 Modbus TCP 通信客户端，用于连接 PLC 并发送寄存器请求；read_holding_registers：通过 Modbus 功能码 0x03 读取连续保持寄存器，返回响应对象
@@ -933,9 +953,14 @@ def make_mqtt() -> mqtt.Client:
 
 
 # 这一段定义 publish，用于将契约报文编码为 JSON 并发布到指定 MQTT 主题。
+
+# 这段负责将已组装的业务报文交给 MQTT 客户端发布，调用方已经决定主题、内容和 QoS。
+# c 是与 Broker 建立连接的 paho-mqtt 客户端；topic 决定消息栏目，payload 是 Python 字典，json.dumps() 将其编码为 JSON 文本。
+# 机器人与 IO 上报可使用 QoS 0，命令回执由对应调用提供自己的投递参数；发布不等于后端已经保存历史或 PLC 已完成物理动作。
+
 def publish(c: mqtt.Client, topic: str, payload: dict, qos=0, retain=False):
-# 定义 publish，用于将契约报文编码为 JSON 并发布到指定 MQTT 主题。
-# publish：向 MQTT 主题或 Redis 频道发布消息，以客户端类型为准；c：方法输入参数，类型为 mqtt.Client；mqtt：Paho MQTT 客户端模块，用于发布上行帧并订阅下行指令；topic：MQTT 发布或订阅使用的主题路径；payload：消息或事件携带的数据内容；qos：MQTT 消息投递质量等级，本次传入 0；retain：MQTT 是否保留主题的最后一条消息，本次传入 False
+# 将 payload 编码为 JSON 文本，交给已连接 Broker 的客户端向 topic 发布。
+# c 是 paho-mqtt 客户端；topic 是消息主题；qos 和 retain 来自本次调用参数，决定这次消息的投递选项。
     c.publish(topic, json.dumps(payload, ensure_ascii=False), qos=qos, retain=retain)
     # 把消息发布到指定主题或频道。
     # publish：向 MQTT 主题或 Redis 频道发布消息，以客户端类型为准；topic：MQTT 发布或订阅使用的主题路径；qos：MQTT 消息投递质量等级，本次传入 qos；retain：MQTT 是否保留主题的最后一条消息，本次传入 retain；c：方法输入参数，类型为 mqtt.Client；dumps：把 Python 对象编码成 JSON 文本；payload：消息或事件携带的数据内容；json：Python JSON 编解码库
@@ -993,9 +1018,14 @@ CONVEYOR_VALUE = {'stop': 0, 'forward': 1}
 #   现在 3 → waiting_robot(等待机器人完成),4 → unload_done(下料完成)不变。
 #   旧契约值 'unloading' 只在历史数据里保留(DB 约束不删,见 005 迁移),
 #   采集端不再产出。
+
+# 这张映射表解释工序状态，和机器人角度的数值缩放是两条不同的处理分支。
+# PLC 现场整数 3 在这里对应 waiting_robot；line_status_payload() 再把契约字符串装入工序状态报文。
+# 网页的 lineState.ts 随后把 waiting_robot 显示为“等待机器人完成”并选择色调；中文显示和颜色不在本表里生成。
+
 STATE_MAP = {
-# 根据 { 设置 STATE_MAP，供当前流程后续使用。
-# STATE_MAP：保存 {0: 'waiting_feed', 1: 'feeding', 2: 'assembling', 3: 'waiting_robot',… 的结果
+# 建立现场工序整数到契约状态字符串的对应关系，供状态报文组装时查找。
+# STATE_MAP 的键来自 PLC 工序状态值；例如 3 对应 waiting_robot，中文文案再由前端映射生成。
     0:   'waiting_feed',   # 等待入料
     # 设置字段 0，值为 'waiting_feed',   # 等待入料，供当前处理流程继续使用。
     # 本行使用当前函数或配置段中已经定义的名称，具体取值由相邻的定义和数据契约确定
@@ -1121,9 +1151,15 @@ def _dispatch_cmd(plc: Plc, cmd_type: str, params: dict) -> tuple[bool, str]:
 
 
 # 这一段定义 _write_cmd，用于在 PLC 连接和锁保护下写入一个控制寄存器并返回结果。
+
+# 控制链到这里才真正写 PLC：_dispatch_cmd() 已经把 start 等业务指令对应到点表地址和写入值。
+# plc 是已有的现场客户端；address 是寄存器地址，value 是本次要写的值，plc.unit 指定 Modbus 从站编号。
+# write_register() 返回的 rr 是本次写请求响应；返回 True 只表示取得正常 Modbus 写响应，不能据此宣布物理动作完成。
+# 当前相关脉冲点按既有约定由 PLC 清零，Python 只写一次；未连接、错误响应或异常分别返回失败信息。
+
 def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
-# 定义函数 _write_cmd。
-# _write_cmd：在 PLC 连接和锁保护下写入一个控制寄存器并返回结果；plc：方法输入参数，类型为 Plc；Plc：本文件封装的 PLC 客户端，负责串行读写、重连和通信状态管理；address：Modbus 寄存器起始地址，使用从 0 开始的编号；value：当前字段或点位的实际取值
+# 向指定 PLC 寄存器写入一次值，依据本次 Modbus 响应返回成功标记与失败说明。
+# plc 是现场 Plc 对象，address 和 value 已由指令分发及点表确定；返回 True 不单独证明物理动作完成。
     """写 PLC 寄存器(只写一次,不回写 0)。
 
     2026-10-16 现场确认:停止 / 启动 / 手动模式切换这三个点,PLC 在完成动作后
@@ -1148,6 +1184,10 @@ def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
                 return False, 'PLC 未连接,指令未下发'
                 # 把False, 'PLC 未连接,指令未下发'作为当前函数的结果返回。
                 # 返回值或异常使用上方流程得到的数据，由当前函数的调用方处理
+
+            # 按已确定的地址和值发出一次 Modbus 写请求，并把响应保存到 rr。
+            # 随后检查 rr.isError() 决定返回成功或失败；这一步没有等待独立的现场动作完成信号。
+
             rr = plc.cli.write_register(address=address, value=value, device_id=plc.unit)
             # 向 PLC 写入指定寄存器，将结果保存或写入 rr。
             # rr：本次 read_holding_registers 调用返回的 Modbus 响应，包含错误标记与寄存器数组；write_register：向一个 Modbus 保持寄存器写入指定值，返回写入响应；address：Modbus 寄存器起始地址，使用从 0 开始的编号，本次传入 address；value：当前字段或点位的实际取值，本次传入 value；device_id：pymodbus 当前接口的目标设备站号参数，本次传入 plc.unit；cli：在本文件创建的 Modbus TCP 通信客户端，用于连接 PLC 并发送寄存器请求；unit：设备站号或点位物理单位，依据所在对象区分；plc：方法输入参数，类型为 Plc
@@ -1170,9 +1210,15 @@ def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
 
 
 # 这一段定义 on_command，用于构造 MQTT 控制消息回调，解析指令并发布回执。
+
+# 这段把 MQTT 命令接收接回现场写入，并为本次命令生成带 cmdId 的业务回执。
+# 回调从 msg.payload 读取 JSON，取得 type、params、cmdId，再调用 _dispatch_cmd() 选择写点和处理分支。
+# 写入结果被组装为 cmd_ack 发布回 Broker；后端靠 cmdId 更新控制记录，再向网页发 command_ack。
+# 这里的 acked 表示本次 Modbus 写入正常响应；当前没有按 cmdId 持久保存并过滤已执行命令。
+
 def on_command(c: mqtt.Client, plc: Plc):
-# 定义函数 on_command。
-# on_command：构造 MQTT 控制消息回调，解析指令并发布回执；c：方法输入参数，类型为 mqtt.Client；mqtt：Paho MQTT 客户端模块，用于发布上行帧并订阅下行指令；plc：方法输入参数，类型为 Plc；Plc：本文件封装的 PLC 客户端，负责串行读写、重连和通信状态管理
+# 为 MQTT 命令安装接收处理：解析报文、按契约分发、调用现场写入，再发布带编号的回执。
+# c 是 MQTT 客户端；plc 是现场连接对象；回调 msg.payload 中的 cmdId 用来对应后端控制记录和网页等待结果。
     """订阅控制指令。校验白名单 → 真写 PLC(PLC 未连则 rejected)→ 回 cmd_ack。
     cmdId 缺失 → 回 rejected;ack 始终回(契约 §3.7)。"""
     # 内部回调函数（paho 的签名：client, userdata, message）
@@ -1386,9 +1432,15 @@ def main():
                 # 执行 debug 对应的本地处理，使用本行提供的数据。
                 # LOG：保存 logging.getLogger('plc-collector') 的结果
             # ---- 读 PLC ----
+
+            # 这是持续采集循环中的一轮读取，values 保存本轮各点位已经解释后的值。
+            # 机器人报文由 group_signals() 组装；满足组装条件就发布，没有先比较本轮与上一轮关节角是否相同。
+            # IO 和工序状态另走各自组装与发布分支，不能把它们画成“同一角度依次翻译成工序再变成 IO”。
+            # 目标周期来自配置，读取耗时与重试影响实际间隔；机器人不动也可以持续上报新的同值帧。
+
             values = plc.read_all(signals)
-            # 读取全部配置的只读点位，逐点解码并保留读取失败的空值，将结果保存或写入 values。
-            # values：取得字典或映射中的所有值；read_all：读取全部配置的只读点位，逐点解码并保留读取失败的空值；signals：保存 _read_csv(MAPPING_FILE) 的结果；plc：保存 Plc(PLC_HOST, PLC_PORT, PLC_UNIT_ID) 的结果
+            # 执行这一轮 PLC 读取，将各信号的已解码值保存到 values，随后分别组装机器人、工序与 IO 消息。
+            # values 是本轮业务名称到数值的字典；signals 来自点表；plc.read_all() 不先判断角度是否变化，所以同值新帧也能继续上报。
             # 一个值都没读到 → PLC 没响应，记警告并等 1 秒后重试
             if not values:
             # 检查not values:，按判断结果进入对应的处理分支。

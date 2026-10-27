@@ -12,9 +12,14 @@
 
 /** 原 4 态(mock / 旧数据) + PLC 10 态工序 */
 // 这一段负责配置和实现 web/src/services/lineState.ts 对应的项目模块，为后续代码提供当前文件的处理入口。
+
+// 这里完成工序状态的网页显示翻译：输入是采集端已经约定好的契约字符串，输出是中文工序文案。
+// 例如 waiting_robot 对应“等待机器人完成”，现场整数 3 到 waiting_robot 的转换已在采集器 STATE_MAP 完成。
+// 下面的状态色调映射再决定 run、wait 等显示类别；它们用于界面表达，不是向 PLC 写入的控制值。
+
 export const STATE_TEXT: Record<string, string> = {
-// 导出这一行声明的符号，供项目其他模块使用。
-// STATE_TEXT：本处保存 { // 原 4 态 running: '运行中', idle: '待机', alarm: '报警', offline:… 的结果，类型为 Record<string, string>；Record：TypeScript 的键值对象类型，用键类型约束属性、值类型约束内容
+// 把已约定的工序状态字符串映射为页面中文，例如 waiting_robot 显示“等待机器人完成”。
+// STATE_TEXT 是前端显示词典；现场整数到契约字符串的翻译已由采集器 STATE_MAP 完成，色调使用后面的状态规则。
   // 原 4 态
   running: '运行中',
   // 把状态编码 running 映射到前端显示文字或样式分类「运行中」。

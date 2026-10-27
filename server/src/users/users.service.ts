@@ -62,9 +62,14 @@ export class UsersService {
 
   // POST /api/users —— 仅管理员可创建(level=3)
   // 这一段定义 create，用于校验账号与权限、生成口令摘要并创建新账号。
+
+  // 创建账号先检查管理员权限与用户名重复，再为输入密码生成摘要，写入 app.app_users。
+  // me 是当前登录操作者，dto 是待创建账号资料；新账号以后由 AuthService 从同一张表查询和验证。
+  // 保存的是 hash，不是原密码；创建成功并不自动建立新账号的浏览器会话。
+
   async create(me: SessionUser, dto: CreateUserDto): Promise<{ success: true; username: string }> {
-  // 定义方法 create；括号中声明参数，花括号内实现逻辑。
-  // create：校验账号与权限、生成口令摘要并创建新账号；me：当前方法接收的参数，类型为 SessionUser；SessionUser：项目定义的登录用户结构，保存用户名和操作级别；dto：当前方法接收的参数，类型为 CreateUserDto；CreateUserDto：从 ./dto/create-user.dto 导入的对象，用于本文件的调用或类型约束；Promise：JavaScript 异步结果类型，表示操作将来完成或失败；success：本处声明的字段或类型，类型为 true；username：账号用户名
+  // 检查创建权限与重复用户名，为密码生成摘要后建立新账号。
+  // me 是当前操作者，dto 是新账号资料；hash 保存 bcrypt 结果；app.app_users 同时是以后登录验证所查询的账号表。
     this.assertAdmin(me);
     // 检查操作人是否达到用户管理所需的管理员级别。
     // assertAdmin：检查操作人是否达到用户管理所需的管理员级别；me：当前方法接收的参数，类型为 SessionUser
@@ -105,9 +110,14 @@ export class UsersService {
 
   // PUT /api/users/:username —— 按 §B 规则校验后改密 / 改级
   // 这一段定义 update，用于校验管理权限后修改目标账号的密码或级别。
+
+  // 更新账号时，先确认要改密码、级别或两者，再分别检查当前操作者是否允许修改。
+  // 修改级别要求管理员；修改密码调用 canChangePwd() 按操作者和目标用户判断，不直接相信页面是否展示按钮。
+  // 通过检查才组织参数化 UPDATE；页面的 /users 进入门槛与这些具体后端规则需要分别理解。
+
   async update(me: SessionUser, targetUsername: string, dto: UpdateUserDto) {
-  // 定义方法 update；括号中声明参数，花括号内实现逻辑。
-  // update：校验管理权限后修改目标账号的密码或级别；me：当前方法接收的参数，类型为 SessionUser；SessionUser：项目定义的登录用户结构，保存用户名和操作级别；targetUsername：当前方法接收的参数，类型为 string；dto：当前方法接收的参数，类型为 UpdateUserDto；UpdateUserDto：从 ./dto/update-user.dto 导入的对象，用于本文件的调用或类型约束
+  // 根据请求的密码或级别变更分别核对权限，通过后组织数据库更新。
+  // me 是操作者，targetUsername 是被修改账号，dto 指定 new_password 或 new_level；修改级别要求管理员，密码范围由 canChangePwd() 判断。
     if (dto.new_password === undefined && dto.new_level === undefined) {
     // 检查(dto.new_password === undefined && dto.new_level === undefined)，按判断结果进入对应的处理分支。
     // dto：当前方法接收的参数，类型为 UpdateUserDto；new_password：本处声明的字段或类型，类型为 string；new_level：本处声明的字段或类型，类型为 1 | 2 | 3
@@ -245,9 +255,14 @@ export class UsersService {
   // ===== 严格对照 1.0.1 can_change_pwd / visible_users =====
 
   // 这一段定义 canChangePwd，用于判断操作人是否有权修改目标用户的密码。
+
+  // 这段专门判断当前操作者能否修改目标账号的密码，me 与 target 分别是操作人和被修改人。
+  // 管理员可操作；level 2 可改自己或 level 1；其他级别仅可改自己。下面 visibleUsers() 另行决定列表可见范围。
+  // 密码修改范围、级别修改权限和账号删除权限是不同规则，不能把本方法结果套到所有用户管理操作。
+
   private canChangePwd(me: SessionUser, target: { username: string; level: number }): boolean {
-  // 定义方法 canChangePwd；括号中声明参数，花括号内实现逻辑。
-  // canChangePwd：判断操作人是否有权修改目标用户的密码；me：当前方法接收的参数，类型为 SessionUser；SessionUser：项目定义的登录用户结构，保存用户名和操作级别；target：当前方法接收的参数，类型为 { username: string; level: number }；username：账号用户名；level：用户操作级别或事件严重级别，依据当前接口结构区分
+  // 判断当前用户是否可以修改目标账号密码，将布尔结果交给 update() 的权限分支。
+  // me 是操作者，target 是目标账号；管理员可操作，level 2 可改自己或 level 1，其他用户仅可改自己。
     if (me.level === 3) return true;
     // 检查(me.level === 3) return true;，按判断结果进入对应的处理分支。
     // me：当前方法接收的参数，类型为 SessionUser；level：用户操作级别或事件严重级别，依据当前接口结构区分

@@ -207,9 +207,14 @@ export class RobotArm {
   // rings：本处声明的字段或类型，类型为 THREE.Mesh[]；THREE：从 three 导入的三维 API 命名空间；Mesh：Three.js 将几何体与材质组合为可渲染物体的类
 
   // 这一段定义 constructor，用于初始化 RobotArm 使用的实例状态和依赖。
+
+  // RobotArm 构造函数在浏览器里创建六轴机械臂的几何示意模型，由 TwinView 挂载到三维场景。
+  // 这里建立底座、关节组和连杆的父子关系，并把可旋转的关节节点收进 this.joints，供 setJoints() 后续更新。
+  // 它没有访问 PLC，也没有根据模型外观反推现场角度；模型姿态来自网页收到的六个关节角。
+
   constructor() {
-  // 开始声明当前类的构造函数，列出创建服务实例时注入的依赖。
-  // constructor 是类实例创建时执行的初始化方法；括号内声明构造参数
+  // 创建机械臂的底座、关节和连杆示意几何体，并建立后续姿态更新所需的节点引用。
+  // RobotArm 是项目定义的浏览器模型类；this.group 是供 SceneManager 加入场景的总节点，this.joints 保存六个关节变换节点。
     // ---- 固定底座 ----
     // 底座主体：上小下大的圆柱（半径 0.20→0.24，高 0.12）
     const base = mesh(new THREE.CylinderGeometry(0.20, 0.24, 0.12, 32), MAT_BASE);
@@ -240,9 +245,14 @@ export class RobotArm {
 
     // ---- J1:底座回转(绕 Y) ----
     // 每个关节都是独立的 Group，作为下一级关节的父节点
+
+    // 从 J1 开始逐级建立关节父子关系：Group 是变换节点，Mesh 是挂在该节点下的可见几何体。
+    // 后续关节挂在前一关节下面，所以 J1 转动会同时带动其后的连杆和关节；每个关节仍能叠加自己的局部旋转。
+    // register() 保存关节引用，setJoints() 才能按 J1～J6 的次序找到应更新的节点。
+
     const j1 = new THREE.Group();
-    // 创建或使用Three.js 场景节点容器，子物体继承父节点变换，将结果保存或写入 j1。
-    // j1：本处保存 new THREE.Group() 的结果；THREE：从 three 导入的三维 API 命名空间；Group：Three.js 场景节点容器，子物体继承父节点变换
+    // 创建 J1 的关节变换组，下面再把可见几何体和后续关节挂到它的层级中。
+    // j1 是 Three.js 的 Group，不是现场 PLC 对象；父节点旋转会带动其子节点，register() 保存供 setJoints() 使用的引用。
     j1.position.y = 0.12;
     // 把右侧表达式的结果写入 j1.position.y。
     // j1：本处保存 new THREE.Group() 的结果；position：三维物体相对父节点的位置；y：本处声明的字段或类型，类型为 number
@@ -476,9 +486,15 @@ export class RobotArm {
 
   /** 按契约 joints[6](单位:度,J1~J6)驱动关节 */
   // 这一段定义 setJoints，用于把六轴角度从度转换为弧度并更新机械臂关节节点。
+
+  // 这段只负责将已经到达网页的六轴角度应用到模型，由 TwinView 对 robot 的监听回调调用。
+  // deg 按 J1～J6 排列，元素单位是度；this.joints 保存对应关节，JOINT_AXES 指定各关节使用 x、y 或 z 旋转轴。
+  // Three.js 的 rotation 用弧度，所以每个有效角度先经过 degToRad()，再写入对应 pivot.rotation 分量。
+  // 当前直接应用新角度，未在两帧之间做插值；跳过无效值会保留该关节原姿态，也不会向真实机器人下发动作。
+
   setJoints(deg: number[]) {
-  // 定义方法 setJoints；括号中声明参数，花括号内实现逻辑。
-  // setJoints：把六轴角度从度转换为弧度并更新机械臂关节节点；deg：当前方法接收的参数，类型为 number[]
+  // 将这帧六个有效的度数逐一转换为弧度，并设置各模型关节对应的旋转轴。
+  // deg 来自机器人帧的 joints；this.joints 按 J1～J6 保存节点；JOINT_AXES 指定轴，THREE.MathUtils.degToRad() 完成单位转换。
     // 遍历 6 个关节
     for (let i = 0; i < 6; i++) {
     // 按这一行指定的集合或范围逐个执行循环体。
@@ -497,6 +513,10 @@ export class RobotArm {
       // 根据 JOINT_AXES[i] 设置 axis，供当前流程后续使用。
       // axis：本处保存 JOINT_AXES[i] 的结果；JOINT_AXES：本处保存 ['y', 'z', 'z', 'y', 'z', 'y'] 的结果，类型为 Axis[]；i：本处保存 0 的结果
       // 度 → 弧度（Three.js 用弧度）
+
+      // d 已经是采集器换算后的物理角度，例子中是 25 度；这里将它换成 Three.js rotation 使用的弧度。
+      // 采集器的“原始整数乘 0.1”和本行“度转弧度”目的不同，不能重复缩放一次现场数据。
+
       const rad = THREE.MathUtils.degToRad(d);
       // 把角度值换算为 Three.js 使用的弧度，将结果保存或写入 rad。
       // rad：本处保存 THREE.MathUtils.degToRad(d) 的结果；THREE：从 three 导入的三维 API 命名空间；MathUtils：THREE 对象上的字段或操作；degToRad：把角度值换算为 Three.js 使用的弧度；d：本处保存 deg[i] 的结果

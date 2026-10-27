@@ -49,6 +49,11 @@ param(
     [string]$KeyPath = 'C:\ProgramData\line-twin\tunnel_ed25519',
     # 根据 'C:\ProgramData\line-twin\tunnel_ed25519', 设置 [string]$KeyPath，供当前流程后续使用。
     # $KeyPath 是本脚本或当前函数前面定义的配置、命令结果或路径值；line-twin 是 PowerShell 提供或本脚本定义的命令，用于执行本行指定的动作
+
+    # RemoteBind 描述云端 sshd 要创建的监听地址；LocalBackendPort 描述工控机 ssh 连接的本机后端目标。
+    # 下面 -R 将两者拼成“云端监听地址:工控机目标地址”，所以两个 127.0.0.1 属于不同机器。
+    # 工控机 ssh 先主动连接 CloudHost 的 SSH 服务，外部 API 请求随后才经这条既有通道转交。
+
     [string]$RemoteBind = '127.0.0.1:3300',
     # 根据 '127.0.0.1:3300', 设置 [string]$RemoteBind，供当前流程后续使用。
     # $RemoteBind 是本脚本或当前函数前面定义的配置、命令结果或路径值
@@ -129,6 +134,11 @@ function Start-Tunnel {
     }
     # 结束当前函数、分支或对象配置，返回上一层处理流程。
     # 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
+
+    # 下面的参数数组交给本机 ssh.exe，核心 -R 请求云端监听 RemoteBind，并把连接送往工控机本机后端端口。
+    # -N 不运行远程命令，连接用来承载转发；云端 Nginx 连到监听后，sshd 与本机 ssh 双向转交请求和响应字节。
+    # 这里的保活与退出选项帮助发现断连或转发失败，进程存在本身仍不能证明应用接口或现场数据已正常。
+
     $args = @(
     # 根据 @( 设置 $args，供当前流程后续使用。
     # $args 是本脚本或当前函数前面定义的配置、命令结果或路径值

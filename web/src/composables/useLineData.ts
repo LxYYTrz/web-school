@@ -225,9 +225,14 @@ function createLineData(lineId: string) {
   // 根据 ref<boolean | null>(null) 设置 edgeOnline，供当前流程后续使用。
   // edgeOnline：本处保存 ref<boolean | null>(null) 的结果；ref：Vue 创建可通过 .value 读写的响应式引用
   // 机器人最新一帧（10Hz 覆盖写）
+
+  // robot、status、io 分别保存机器人角度帧、工序状态和 IO 帧，供不同界面读取。
+  // ref 的值变化会通知依赖它的页面与 watch；同一对象的实时事件更新它自己的分支，不把关节角依次转换成工序和 IO。
+  // 初始 null 表示没有对应现场帧；收到过帧后，这份浏览器内存与后端 Redis 的有效期分别管理。
+
   const robot = ref<RobotState | null>(null);
-  // 根据 ref<RobotState | null>(null) 设置 robot，供当前流程后续使用。
-  // robot：本处保存 ref<RobotState | null>(null) 的结果；ref：Vue 创建可通过 .value 读写的响应式引用；RobotState：项目数据契约中的机器人遥测结构，包含六轴角度、模式和报警码
+  // 为机器人这一分支保存当前帧，初始 null 表示还没有收到对应数据。
+  // robot 是 Vue 的响应式 ref，类型为 RobotState 或 null；快照和 robot_state 回调写入它，TwinView 的 watch 读取它。
   // 产线当前状态（1Hz 覆盖写）
   const status = ref<LineStatus | null>(null);
   // 根据 ref<LineStatus | null>(null) 设置 status，用于当前连接、产线、请求或指令的状态字段。
@@ -253,9 +258,15 @@ function createLineData(lineId: string) {
    * 与 WebSocket 并行执行：谁先到谁先渲染，最终状态一致。
    */
   // 这一段定义 preload，用于加载产线快照，填充首次进入页面时的状态。
+
+  // preload() 请求后端快照，为刚打开的网页提供已有状态；实时订阅可以与这个 HTTP 请求并行。
+  // liveSeen 分别标记机器人、工序、IO 等分支是否已收到实时数据，避免较晚返回的旧快照覆盖先到的新帧。
+  // snap.robots 是按设备编码保存的帧集合；当前取其中第一台，App 的共享使用也固定在 line-01，不代表任意多设备切换。
+  // 演示回退只在 MOCK_ENABLED 的相应异常分支执行，不能把模拟值当成现场采集结果。
+
   async function preload() {
-  // 加载产线快照，填充首次进入页面时的状态。
-  // preload：加载产线快照，填充首次进入页面时的状态
+  // 为刚打开的页面预载后端已有快照，并防止迟到的旧快照覆盖先收到的实时帧。
+  // lineId 是当前产线编码；fetchSnapshot() 发 HTTP 请求；liveSeen 按机器人、工序、IO 等类别记录是否已经收到实时数据。
     try {
     // 开始执行可能失败的操作，错误由后续异常分支处理。
     // 本块中的数据库、网络或状态操作可能抛出异常；后续 catch 或 except 分支负责处理
@@ -522,9 +533,14 @@ function createLineData(lineId: string) {
 // 这一段提供了创建指定产线的共享实时数据、初始快照与消息订阅的实现；实际结果由运行时输入和执行分支决定。
 
 /** 模块级单例变量：保存唯一的数据层实例 */
+
+// shared 保存在模块作用域，多个组件调用 useLineData() 时取得同一个已有实例。
+// App、TwinView 和 IO 页面因此共享状态与订阅，而不是每处各自保留一套现场数据。
+// lineId 的默认值是 line-01；实例首次创建后后续调用复用它，不会因传入另一个编码自动切成多产线状态。
+
 let shared: ReturnType<typeof createLineData> | null = null;
-// 声明 shared，初始值由 null 计算得到，供当前处理流程继续使用。
-// shared：本处保存 null 的结果，类型为 ReturnType<typeof createLineData> | null；ReturnType：本处声明的字段或类型，类型为 T extends (...args: any) => infer R ? R : any；createLineData：创建指定产线的共享实时数据、初始快照与消息订阅
+// 在模块作用域保存唯一的现场数据实例，多个组件调用时复用它。
+// shared 为 null 时由 createLineData(lineId) 创建；默认产线为 line-01，后续传入其他编码不会自动创建独立的多产线实例。
 
 // 这一段定义 useLineData，用于取得按产线编码复用的数据单例，供多个页面共享状态。
 export function useLineData(lineId = 'line-01') {

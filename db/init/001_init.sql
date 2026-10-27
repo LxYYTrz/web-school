@@ -289,6 +289,11 @@ CREATE TABLE role_permissions (
 --     采集端发的 topic 是 tl/v1/{lineId}/...，后端靠 code 找到这里的 id。
 --     现场换产线编号时，只要把两边的 code 对齐即可，不用动数据库主键。
 -- 这一段建立产线目录表，声明它保存的字段和约束。
+
+-- production_lines 保存产线整体的基础身份，id 是内部主键，code 是消息与接口使用的业务编码。
+-- 设备通过 devices.line_id 关联该产线，历史和控制记录再关联相应对象；产线档案与设备档案不是重复保存同一个对象。
+-- CatalogService 读取 code 与 id 的对应关系，所以现场编码需要和数据库档案对齐，内部编号不能由名称猜测。
+
 CREATE TABLE production_lines (
 -- 创建数据库表 production_lines。
 -- production_lines 是保存产线目录的数据表
@@ -358,11 +363,16 @@ CREATE TABLE user_line_scope (
 
 -- 设备表：这条产线上挂了哪些设备。
 --   ★ code 必须与 MQTT 报文里的 deviceId、以及主题里的 {deviceId} 三者一致。
---   【现场加一台设备怎么做】在这加一行（填对 code）即可，采集端、消息主题、
---     页面就都认它了；设备在数据库里的自增 id 是多少完全不影响现场。
+--   增加设备档案只建立数据库身份；现场点表、报文编码与网页选择还需相应配置。
+--   不能仅凭数据库中增加一行，就认定当前网页支持任意多设备切换。
 --   【现场设备编号很脏很乱】正是靠"code 隔离在数据层"这一招，
 --     把现场编号问题挡在了系统之外（翻译见 catalog.service.ts）。
 -- 这一段建立设备目录表，声明它保存的字段和约束。
+
+-- devices 保存具体设备的档案，line_id 外键指向它所属的 production_lines.id。
+-- 同一条产线可以关联不同设备，机器人历史的 device_id 再引用这里的设备 id，形成归属关系。
+-- 增加档案只建立数据库身份；采集点表、消息编码与网页选择还需相应配置，当前网页共享实现并不自动支持任意设备切换。
+
 CREATE TABLE devices (
 -- 创建数据库表 devices。
 -- devices 是保存设备目录的数据表
@@ -424,16 +434,21 @@ CREATE TABLE devices (
 -- ===========================================================================
 
 -- 机器人六轴遥测（5~10Hz）：整个系统写入量最大的表。
---   【写入量级】10Hz × 86400 秒 = 86.4 万行/台/天；多台机器人再乘上去。
+--   实际行数取决于采集与成功写入频率，不能把示例频率当成现场实测。
 --   【谁写】server/src/history/history-writer.service.ts —— 内存缓冲攒 1 秒，
---          拼成一条多行 INSERT 批量落库（比每帧一条 INSERT 吞吐高约 100 倍）。
---   【谁读】前端 3D 孪生（最近帧）、分析页（历史曲线）。
+--          拼成一条多行 INSERT 批量落库，减少逐帧数据库调用；性能提升需要实际测量。
+--   当前首屏与实时姿态通过 Redis 快照和 Socket.IO 提供，历史表不等于页面已实现轨迹回放。
 -- 这一段建立robot_joint_states表，声明它保存的字段和约束。
+
+-- robot_joint_states 保存带采集时间与设备内部编号的关节历史，不覆盖成每台设备只剩最后一帧。
+-- HistoryWriter 先把多帧放入内存，再批量 INSERT；device_id 指向 devices，设备再关联所属产线。
+-- 首屏实时姿态主要经 Redis 快照与 Socket.IO 取得，存在这张历史表不表示当前页面已经实现轨迹回放。
+
 CREATE TABLE robot_joint_states (
 -- 创建数据库表 robot_joint_states。
 -- robot_joint_states 是保存该类业务数据的数据表
   "time"     TIMESTAMPTZ NOT NULL,
-  -- 拼成一条多行 INSERT 批量落库（比每帧一条 INSERT 吞吐高约 100 倍）。
+  -- 记录这一帧对应的时间，批量入库时仍保留各帧自己的时间值。
   -- time 是当前记录中的业务字段；TIMESTAMPTZ 指定此列的数据类型
              -- "time" 加双引号 = 保留字，转义成普通列名（TimescaleDB 时序表惯例）
              -- TIMESTAMPTZ = 带时区时间戳；这列同时是分区键
@@ -628,14 +643,19 @@ CREATE INDEX idx_pe_line_time ON production_events (line_id, "time" DESC);
 --    这一组回答"现在什么情况"和"谁动过什么"，都是低频但必须可靠的数据。
 -- ===========================================================================
 
--- 产线当前状态（单行快照，与 Redis 同步；前端首屏读这里）。
+-- 产线当前状态持久记录；网页首屏的当前实现从 Redis 快照读取。
 --   ★ 注意：这是**普通表**（不是 hypertable），因为它只保存"当前"这一行。
 --     每条产线就一行（line_id 是主键），后端每次收到产线状态就 UPSERT 覆盖
 --     （见 server/src/history/history-writer.service.ts）。
 --   【与 Redis 的关系】Redis 里也有一份同样的数据，**前端首屏实际读的是 Redis**
 --     （要求低延迟）；这张表主要用于持久化存档和给分析页做交叉校验
---     （Redis 挂了还能从库里恢复现场）。
+--     Redis 失效后不会仅凭存在这张表就自动切换为数据库回退读取。
 -- 这一段建立产线当前状态表，声明它保存的字段和约束。
+
+-- line_current_status 对每条产线保留一行当前状态，line_id 主键使新的状态可以更新同一行。
+-- line_status_history 另行追加带时间的工序记录；当前表、历史表与 Redis 最新快照分别由对应路径维护。
+-- 它们没有被当前代码包成一个保证同时成功的事务，也不能据此假定 Redis 故障后页面会自动改读本表。
+
 CREATE TABLE line_current_status (
 -- 创建数据库表 line_current_status。
 -- line_current_status 是保存产线当前状态的数据表

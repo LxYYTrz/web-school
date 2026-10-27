@@ -61,6 +61,11 @@ import './styles.css';
 // ./styles.css 在导入时执行自身初始化；本行只需要其全局样式、元数据或配置副作用
 
 // 创建 Vue 应用实例
+
+// 浏览器下载网页文件后，从这里创建 Vue 根应用，并按顺序安装共享状态、路由与界面组件插件。
+// App 是公共外框；router 决定 router-view 中显示 LoginView、TwinView、IoView 等哪个页面。
+// 挂载完成只是网页程序就绪，现场状态还需要通过快照接口和实时连接取得。
+
 const app = createApp(App);
 // 创建或使用Vue 创建应用实例的函数，将结果保存或写入 app。
 // app：本处保存 createApp(App) 的结果；createApp：Vue 创建应用实例的函数；App：从 ./App.vue 导入的对象，用于本文件的调用或类型约束

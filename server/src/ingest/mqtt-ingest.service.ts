@@ -147,6 +147,11 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
     // p：本处保存 config.topicPrefix 的结果；config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；topicPrefix：config 对象上的字段或操作
     // ② 建立连接。connect() 是同步返回客户端对象的，不会阻塞；
     //    真正的连接建立是异步的，靠下面的事件回调感知
+
+    // NestJS 在这里作为 MQTT 客户端主动连接 Broker，和采集器连接 Broker 是两条不同连接。
+    // 连接目标、客户端编号与认证信息来自统一配置。连接成功回调会登记订阅，Broker 才能沿这条连接交付匹配主题。
+    // 这里建立的是消息接入通道，不是采集器向后端发 HTTP 请求；网络重连与后续报文业务检查分别处理。
+
     this.client = connect(config.mqtt.url, {
     // 把右侧表达式的结果写入 this.client。
     // client：本处声明的字段或类型，类型为 MqttClient；connect：从 mqtt 导入的对象，用于本文件的MQTT 消息客户端；config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；mqtt：Paho MQTT 客户端模块，用于发布上行帧并订阅下行指令；url：当前服务的连接地址
@@ -179,6 +184,11 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
       // 通配符说明：
       //   +  = 单层通配，匹配恰好一个层级
       //   #  = 多层通配（本系统未使用，避免订阅范围过宽）
+
+      // 连接成功后登记业务订阅，主题中的产线编码与设备编码随后用于路由这条报文。
+      // robot 主题末尾有设备层级，IO、工序状态与 cmd_ack 使用各自主题；“+”只匹配单个主题层级。
+      // subscribe 的 QoS 不能把采集器以 QoS 0 发布的机器人帧变成保证补传的历史，消息接收也不等于数据库写入成功。
+
       this.client.subscribe(
       // 订阅消息主题、频道或事件流。
       // client：本处声明的字段或类型，类型为 MqttClient；subscribe：订阅消息主题、频道或事件流
@@ -266,9 +276,14 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
    * @param cmd      指令报文，结构见契约 3.5 节
    */
   // 这一段定义 publishCommand，用于把已校验的控制报文发布到目标设备的 MQTT 指令主题。
+
+  // CommandService 检查并记录命令后，通过本方法把带 cmdId 的报文发给设备的 MQTT 命令主题。
+  // lineId、deviceId 在这里仍是业务编码；cmd 是命令内容，JSON.stringify() 将它变成消息正文。
+  // 采集器预先订阅 cmd/+ 并接收。当前 publishCommand() 不等待采集器回执后才结束，HTTP 返回与现场回执是不同阶段。
+
   publishCommand(lineId: string, deviceId: string, cmd: Record<string, unknown>) {
-  // 定义方法 publishCommand；括号中声明参数，花括号内实现逻辑。
-  // publishCommand：把已校验的控制报文发布到目标设备的 MQTT 指令主题；lineId：产线标识，接口通常使用 line-01 等编码；deviceId：设备标识，接口使用配置中的设备编码；cmd：当前方法接收的参数，类型为 Record<string, unknown>；Record：TypeScript 的键值对象类型，用键类型约束属性、值类型约束内容
+  // 向指定设备的 MQTT 命令主题发布带编号的控制报文，采集器从其订阅连接接收。
+  // lineId、deviceId 是主题中的业务编码；cmd 由命令服务组装，JSON.stringify() 编码正文；QoS 1 不代表物理动作已完成。
     this.client.publish(
     // 把消息发布到指定主题或频道。
     // client：本处声明的字段或类型，类型为 MqttClient；publish：向 MQTT 主题或 Redis 频道发布消息，以客户端类型为准
@@ -361,14 +376,28 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
         // 结束当前函数、分支或对象配置，返回上一层处理流程。
         // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
         // 第 1 路：写 Redis 实时快照（覆盖写，带 60s TTL）
+
+        // 机器人消息检查通过后，从这里分出快照、历史缓冲和实时推送三条处理路径。
+        // lineId 与 deviceId 来自主题识别，msg 是解析后的机器人帧，包含 joints 等字段；同一帧分别交给三个服务。
+        // setRobotFrame() 更新 Redis 最新快照，bufferRobotFrame() 准备历史记录，broadcastRobot() 向产线房间推送。
+        // 这些调用不构成保证同时成功的事务，所以网页更新不能单独证明历史完整保存。
+
         this.state.setRobotFrame(lineId, deviceId, msg);
         // 把指定机器人的最新遥测帧存入 Redis 并设置有效期。
         // state：当前状态值或实时状态服务实例，以所在对象为准；setRobotFrame：把指定机器人的最新遥测帧存入 Redis 并设置有效期；lineId：产线标识，接口通常使用 line-01 等编码；deviceId：设备标识，接口使用配置中的设备编码；msg：当前收到的消息或提示文字
         // 第 2 路：放进历史缓冲队列（每秒批量写 TimescaleDB）
+
+        // 把同一条机器人消息交给历史缓冲；这个方法只负责入队，后续定时批量写 PostgreSQL。
+        // deviceId 在接入层是设备业务编码，HistoryWriter 会通过 CatalogService 找到数据库内部设备 id。
+
         this.history.bufferRobotFrame(deviceId, msg);
         // 将机器人遥测帧加入内存批量写入队列。
         // history：历史写入服务实例；bufferRobotFrame：将机器人遥测帧加入内存批量写入队列；deviceId：设备标识，接口使用配置中的设备编码；msg：当前收到的消息或提示文字
         // 第 3 路：WebSocket 推送给订阅了该产线房间的浏览器
+
+        // 将这帧机器人消息推送给正在订阅对应产线的网页，事件名为 robot_state。
+        // 网页收到后更新 useLineData 的 robot，TwinView 再把 joints 交给模型。
+
         this.gateway.broadcastRobot(lineId, msg);
         // 向产线房间广播机器人最新遥测。
         // gateway：当前方法接收的参数，类型为 TelemetryGateway；broadcastRobot：向产线房间广播机器人最新遥测；lineId：产线标识，接口通常使用 line-01 等编码；msg：当前收到的消息或提示文字

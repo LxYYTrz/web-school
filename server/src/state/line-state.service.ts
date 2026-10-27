@@ -71,12 +71,22 @@ export class LineStateService {
    * @param frame    契约定义的 robot_state 报文对象
    */
   // 这一段定义 setRobotFrame，用于把指定机器人的最新遥测帧存入 Redis 并设置有效期。
+
+  // 本方法保存某条产线中某台机器人的最新整帧，由 MQTT 接入服务的机器人分支调用。
+  // lineId、deviceId 组成 Redis key，frame 是整帧业务对象；新写入覆盖同一设备原有 JSON，不逐项追加关节历史。
+  // 浏览器首次加载经后端 getLineSnapshot() 取得这份状态；已连接网页的新帧由实时推送独立提供。
+
   setRobotFrame(lineId: string, deviceId: string, frame: unknown) {
-  // 定义方法 setRobotFrame；括号中声明参数，花括号内实现逻辑。
-  // setRobotFrame：把指定机器人的最新遥测帧存入 Redis 并设置有效期；lineId：产线标识，接口通常使用 line-01 等编码；deviceId：设备标识，接口使用配置中的设备编码；frame：当前方法接收的参数，类型为 unknown
+  // 保存指定产线、指定设备的最新机器人整帧，供后续快照接口读取。
+  // lineId、deviceId 是业务编码；frame 是接入服务传来的整帧对象；redis key 将二者组合起来，新帧覆盖同一设备旧值。
     // 不 await：这是"热路径"，每 100ms 调一次，不能阻塞 MQTT 消息处理。
     // 写失败只记日志，不能让 Redis 故障拖垮整个实时链路。
     // 参数含义：key, value, 'EX'(设置过期时间), 秒数
+
+    // 将 frame 编码为 JSON，并对该机器人 key 设置 EX 60，即本次成功写入后 60 秒过期。
+    // 每次成功 SET 都重新计时，即便关节数值相同也会刷新有效期；当前没有先比较两帧的 ts。
+    // key 过期后新快照请求不再取得该旧帧，但不会删除 PostgreSQL 历史或主动清空浏览器已经保留的数据。
+
     this.redis
     // 读取 this.redis，作为下一行链式方法调用的接收对象。
     // redis：注入或创建的 Redis 客户端
@@ -153,9 +163,14 @@ export class LineStateService {
   // 这一段提供了更新边缘采集器在线状态缓存的实现；实际结果由运行时输入和执行分支决定。
 
   // 这一段定义 getLineSnapshot，用于读取并汇总产线状态、IO、边缘在线信息和机器人最新帧。
+
+  // 快照接口调用本方法，从 Redis 汇总某条产线已经保存的工序、边缘状态、IO 和机器人帧。
+  // mget 取得多个状态 key；机器人 key 按 rt:产线:robot:设备 查找，并组装成以设备编码为键的 robots 集合。
+  // 返回的 JSON 供网页 preload() 使用。快照组装时刻与各帧自己的 ts 不同，不能用响应刚返回就证明每项现场数据都是新采集的。
+
   async getLineSnapshot(lineId: string) {
-  // 定义方法 getLineSnapshot；括号中声明参数，花括号内实现逻辑。
-  // getLineSnapshot：读取并汇总产线状态、IO、边缘在线信息和机器人最新帧；lineId：产线标识，接口通常使用 line-01 等编码
+  // 从 Redis 汇总当前产线已有的状态、IO、边缘信息和机器人帧，返回快照对象。
+  // lineId 用于组成 key；mget 读取多个状态值，robots 按设备编码组织；浏览器经 SnapshotController 使用结果，不直接访问 Redis。
     try {
     // 开始执行可能失败的操作，错误由后续异常分支处理。
     // 本块中的数据库、网络或状态操作可能抛出异常；后续 catch 或 except 分支负责处理

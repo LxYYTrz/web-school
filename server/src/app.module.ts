@@ -91,6 +91,11 @@ import { AiModule } from './ai/ai.module';
 @Module({
 // 装饰器 Module：声明 NestJS 模块的依赖和导出。
 // Module：NestJS 声明模块依赖、提供者和导出的装饰器
+
+  // AppModule 的 imports 告诉 NestJS 要装配哪些功能模块，根模块本身不逐帧解析遥测或直接写 PLC。
+  // Auth、Users 提供身份与账号，Ingest 接 MQTT，State、History 处理快照与历史，Realtime 推送，Command 处理指令，Ai 接网页助手。
+  // 功能模块中的 Controller 接收入口请求，Service 完成具体业务；模块依赖与注入配置让它们取得需要的服务实例。
+
   imports: [
   // 声明或设置 imports，用于当前对象或接口的对应数据。
   // imports 是此处声明的字段，类型或取值约束为 [
