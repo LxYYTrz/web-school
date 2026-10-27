@@ -134,8 +134,8 @@
 - **⚠️ MB_SERVER 只允许一个客户端** —— 2026-10-16 实测:采集器占着 503 时,
   任何第二个连接(含临时探测脚本)都被 RST 拒绝。想单独连 PLC 调试
   **必须先停采集器**,用完记得拉回来。
-- **`edge/_test_decode.py`**:13 读点 + 10 态枚举 + 4 写点地址 + io_payload 组装。
-- **`edge/_test_cmd.py`**:7 type 白名单 / 无点位 rejected / 只写一次 / 枚举校验 / 通信异常,全过。
+- **`edge/test/_test_decode.py`**:13 读点 + 10 态枚举 + 4 写点地址 + io_payload 组装。
+- **`edge/test/_test_cmd.py`**:7 type 白名单 / 无点位 rejected / 只写一次 / 枚举校验 / 通信异常,全过。
 
 **现场 10 态 state 枚举**(PLC `dataDB[6]` 原始整数):
 
@@ -250,7 +250,7 @@ curl http://localhost:3000/api/lines/line-01/snapshot
 
 | 现象 | 排查 |
 |---|---|
-| 公网页面能开但 `/api` 全 502 | 先在云端查看 Nginx 错误日志及 `ss -ltnp` 的 3300 监听；工控机跑 `scripts\verify-line.ps1`。 |
+| 公网页面能开但 `/api` 全 502 | 先在云端查看 Nginx 错误日志及 `ss -ltnp` 的 3300 监听；工控机跑 `scripts\test\verify-line.ps1`。 |
 | 云端 `ss -ltnp` 没有 3300 | 工控机侧 SSH 隧道没有建立，检查 `tunnel-keepalive.ps1` 的进程和密钥。 |
 | 重启后站点一直 502 | 隧道/中间件/后端没自启。跑 `scripts\ipc-recover.ps1` 恢复,再用 `scripts\tunnel-keepalive.ps1 -InstallTask` 装开机自启 |
 
@@ -445,8 +445,8 @@ MACHINE_COMMAND_TOKEN=
 - ✅ **恢复流程脚本化(幂等)** —— 新增:
   - `scripts/ipc-recover.ps1` —— 一键拉起 中间件 → 隧道 → 后端 → 采集器,末尾自动体检
   - `scripts/tunnel-keepalive.ps1` —— 隧道看门狗,`-InstallTask` 装开机自启(关掉待办里的"隧道做成开机自启")
-  - `scripts/verify-line.ps1` —— 全链路只读体检(Docker/端口/隧道/本地 API/公网 API/PLC 状态)
-  - `edge/plc_read_state.py` —— PLC 只读探针(打印 state/IO/关节角,不做任何写操作)
+  - `scripts/test/verify-line.ps1` —— 全链路只读体检(Docker/端口/隧道/本地 API/公网 API/PLC 状态)
+  - `edge/test/plc_read_state.py` —— PLC 只读探针(打印 state/IO/关节角,不做任何写操作)
 - ⚠️ **现场仍未恢复**:本机(开发机)到厂区/工控机的网络被网关挡死
   (192.168.10.x 全端口"可连"但无任何服务回应;云端也 ping 不通厂区),
   **隧道只能由工控机侧发起 → 必须在工控机上跑 `scripts\ipc-recover.ps1`**。
@@ -489,7 +489,7 @@ MACHINE_COMMAND_TOKEN=
 - [ ] **🔴 现场恢复公网实时数据(最高优先,2026-10-23 起)** —— 工控机上跑
       `powershell -ExecutionPolicy Bypass -File scripts\ipc-recover.ps1`,
       再 `scripts\tunnel-keepalive.ps1 -InstallTask` 装开机自启;
-      最后 `scripts\verify-line.ps1` 必须全绿(公网 `/api` 200 + PLC 状态读得到)。
+      最后 `scripts\test\verify-line.ps1` 必须全绿(公网 `/api` 200 + PLC 状态读得到)。
       恢复不了 → 控制指令验证没法做(前端要连后端)。
 - [ ] **收紧飞书访问控制 + 关掉直控通道** —— 当前 `FEISHU_ALLOW_ALL_USERS=true`
       (任何人可私聊 hermes)且 `MACHINE_COMMAND_TOKEN` 非空(任何人可让产线动起来)。
@@ -563,7 +563,7 @@ npm run dev
 cd ../edge
 pip install -r requirements.txt
 python plc_collector.py
-# (或本地试 mock: COLLECTOR=mock python mock_collector.py)
+# (或本地试 mock: COLLECTOR=mock python test/mock_collector.py)
 ```
 
 **工控机无外网时的离线装法**(仓库自带 wheel):
@@ -588,7 +588,7 @@ psql -U postgres -d linetwin -c "SELECT code FROM production_lines;"
 
 ```powershell
 .\scripts\ipc-recover.ps1      # 检查本机服务 → 隧道 → 后端 → 采集器 → 自动体检
-.\scripts\verify-line.ps1      # 只读体检,不下发任何控制指令
+.\scripts\test\verify-line.ps1      # 只读体检,不下发任何控制指令
 .\scripts\tunnel-keepalive.ps1 -InstallTask   # 隧道开机自启 + 30s 巡检
 ```
 
@@ -631,11 +631,11 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `docs/keywords.md` | 手写源码行下注释的语法关键字速查 |
 | `scripts/ipc-recover.ps1` | 检查本机服务并按需启动隧道、后端、采集器,然后体检 |
 | `scripts/tunnel-keepalive.ps1` | 隧道看门狗(-InstallTask 装开机自启 + 巡检) |
-| `scripts/verify-line.ps1` | 全链路只读体检(只查不下发) |
+| `scripts/test/verify-line.ps1` | 全链路只读体检(只查不下发) |
 | `edge/register-mapping.csv` | **17 点位** Modbus 映射(现场实测;电气工程师 xls 为准) |
 | `edge/plc_collector.py` | 真实 PLC 采集器(pymodbus 3.x + `STATE_MAP` + `CMD_DISPATCH` + 字序可配) |
-| `edge/_test_decode.py` | 解码测试(7 读点 + 10 态枚举 + 4 写点地址,双字序) |
-| `edge/_test_cmd.py` | 指令派发测试(7 type / 脉冲 vs 电平 / 枚举校验 / 无点位 rejected) |
+| `edge/test/_test_decode.py` | 解码测试(7 读点 + 10 态枚举 + 4 写点地址,双字序) |
+| `edge/test/_test_cmd.py` | 指令派发测试(7 type / 脉冲 vs 电平 / 枚举校验 / 无点位 rejected) |
 | `db/init/001_init.sql` | 业务表(robot_state/line_status/event) |
 | `db/init/002_app_users.sql` | RBAC 表(app_users + level CHECK) |
 | `db/init/003_control_commands_extension.sql` | 契约 v1.1:type CHECK 扩到 6 项 |
@@ -655,7 +655,7 @@ ssh -o ControlMaster=no -o ControlPath=none \
 | `web/src/components/IoPanel.vue` | 孪生页右侧:六轴关节角 + I/O 灯矩阵 + 报警灯 + 前置条件提示 |
 | `web/src/components/ControlButtons.vue` | 4 个可执行按钮(启动/停止/手动模式/传送带)+ 3 个置灰 + 确认弹窗 + ack 状态机 + 15s UI 超时 |
 | `web/src/composables/useLineData.ts` | 产线数据 composable(mock fallback) |
-| `edge/_test_cmd.py` | **路线 6**:控制命令 dispatch 单元测试(8 用例) |
+| `edge/test/_test_cmd.py` | **路线 6**:控制命令 dispatch 单元测试(8 用例) |
 | `deploy/nginx/cloud.conf` | 云服务器原生 Nginx 站点配置 |
 
 ## 8. 重要环境信息(**敏感**,不进仓库**)

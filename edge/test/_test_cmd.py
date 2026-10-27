@@ -1,6 +1,6 @@
 """控制命令 dispatch 单元测试(不连真实 PLC,纯本地)
 
-跑法:  cd edge && python _test_cmd.py
+跑法:  cd edge && python test/_test_cmd.py
 
 测什么:
   1. register-mapping.csv 加载: cmd.* 进 _cmd_signals(写),其余进 sigs(读)
@@ -33,7 +33,7 @@ from pathlib import Path
 # 从 pathlib 导入 Path，供后续代码使用。
 # Path：来自 pathlib，pathlib 的文件路径类
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # 将本行提供的值插入列表或搜索路径的指定位置。
 # sys：Python 运行环境与退出状态接口；Path：pathlib 的文件路径类
 
@@ -53,9 +53,9 @@ from plc_collector import (
 # 结束当前函数、分支或对象配置，返回上一层处理流程。
 # 本行结束上面最近一层已经介绍的表达式或代码块
 
-MAPPING = Path(__file__).with_name("register-mapping.csv")
+MAPPING = Path(__file__).resolve().parent.parent / "register-mapping.csv"
 # 将字符串或父路径构造成可操作的文件路径对象，将结果保存或写入 MAPPING。
-# MAPPING：保存 Path(__file__).with_name('register-mapping.csv') 的结果；with_name：保留父目录，仅替换路径中的文件名；Path：pathlib 的文件路径类
+# MAPPING：保存 Path(__file__).resolve().parent.parent / 'register-mapping.csv' 的结果；with_name：保留父目录，仅替换路径中的文件名；Path：pathlib 的文件路径类
 
 # 现场 PLC 没有寄存器的指令 → 必须 rejected
 NO_PLC_POINT = ("reset", "changeover", "alarm_clear")
@@ -148,7 +148,7 @@ def main() -> int:
 # main：本文件定义的函数，用于运行  的入口流程
     sigs = _read_csv(MAPPING)
     # 读取点位映射表，将可读信号与控制写点分开保存，将结果保存或写入 sigs。
-    # sigs：保存 _read_csv(MAPPING) 的结果；_read_csv：读取点位映射表，将可读信号与控制写点分开保存；MAPPING：保存 Path(__file__).with_name('register-mapping.csv') 的结果
+    # sigs：保存 _read_csv(MAPPING) 的结果；_read_csv：读取点位映射表，将可读信号与控制写点分开保存；MAPPING：保存 Path(__file__).resolve().parent.parent / 'register-mapping.csv' 的结果
     read_names = {s.name for s in sigs}
     # 根据 {s.name for s in sigs} 设置 read_names，供当前流程后续使用。
     # read_names：保存 {s.name for s in sigs} 的结果；name：当前对象的名称字段；sigs：保存 _read_csv(MAPPING) 的结果

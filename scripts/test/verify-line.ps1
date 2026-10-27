@@ -26,10 +26,10 @@
     用法:
     # 继续当前表达式；这一行的值由外层代码块或调用使用，供当前处理流程继续使用。
     # 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
-        .\scripts\verify-line.ps1
+        .\scripts\test\verify-line.ps1
         # 继续当前表达式；这一行的值由外层代码块或调用使用，供当前处理流程继续使用。
         # verify-line 是 PowerShell 提供或本脚本定义的命令，用于执行本行指定的动作
-        .\scripts\verify-line.ps1 -CloudHost 119.91.145.27 -CloudPort 8081
+        .\scripts\test\verify-line.ps1 -CloudHost 119.91.145.27 -CloudPort 8081
         # 继续当前表达式；这一行的值由外层代码块或调用使用，供当前处理流程继续使用。
         # verify-line 是 PowerShell 提供或本脚本定义的命令，用于执行本行指定的动作
     退出码:0=全部通过;1=有 FAIL

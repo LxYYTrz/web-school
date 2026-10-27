@@ -26,7 +26,7 @@
         4. PLC 采集器(python edge/plc_collector.py)
         # 调用 采集器，把括号中的值作为参数传入，供当前处理流程继续使用。
         # 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
-        5. 调 scripts\verify-line.ps1 自检
+        5. 调 scripts\test\verify-line.ps1 自检
         # 继续当前表达式；这一行的值由外层代码块或调用使用，供当前处理流程继续使用。
         # verify-line 是 PowerShell 提供或本脚本定义的命令，用于执行本行指定的动作
 
@@ -329,7 +329,7 @@ if ($collector) {
 Write-Step '体检'
 # 执行 PowerShell 命令或补全参数，供当前处理流程继续使用。
 # Write-Step 是 PowerShell 提供或本脚本定义的命令，用于执行本行指定的动作
-& (Join-Path $root 'scripts\verify-line.ps1') -CloudHost $CloudHost
+& (Join-Path $root 'scripts\test\verify-line.ps1') -CloudHost $CloudHost
 # 执行 PowerShell 命令或补全参数，供当前处理流程继续使用。
 # $root 是本脚本或当前函数前面定义的配置、命令结果或路径值；$CloudHost 是本脚本或当前函数前面定义的配置、命令结果或路径值；Join-Path 是 PowerShell 提供或本脚本定义的命令，用于执行本行指定的动作
 exit $LASTEXITCODE

@@ -1,7 +1,7 @@
 """plc_collector 解码单元测试(不连 PLC,纯本地验证)
 
-跑法:  cd edge && python _test_decode.py
-       或:  PLC_WORD_ORDER=LITTLE python _test_decode.py   # 测西门子 DINT 场景
+跑法:  cd edge && python test/_test_decode.py
+       或:  PLC_WORD_ORDER=LITTLE python test/_test_decode.py   # 测西门子 DINT 场景
 
 设计:从 register-mapping.csv 读点位,按点位类型喂入精心构造的寄存器值,
      断言 decode_signal 输出 = plc_val × scale + offset(还原成物理量)。
@@ -20,7 +20,7 @@ from pathlib import Path
 # 从 pathlib 导入 Path，供后续代码使用。
 # Path：来自 pathlib，pathlib 的文件路径类
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # 将本行提供的值插入列表或搜索路径的指定位置。
 # sys：Python 运行环境与退出状态接口；Path：pathlib 的文件路径类
 
@@ -31,9 +31,9 @@ from plc_collector import _read_csv, decode_signal, STATE_MAP
 # 从 plc_collector 导入 _read_csv, decode_signal, STATE_MAP，供后续代码使用。
 # _read_csv：来自 plc_collector，供本文件后续调用的对象；decode_signal：来自 plc_collector，供本文件后续调用的对象；STATE_MAP：来自 plc_collector，供本文件后续调用的对象
 
-MAPPING = Path(__file__).with_name("register-mapping.csv")
+MAPPING = Path(__file__).resolve().parent.parent / "register-mapping.csv"
 # 将字符串或父路径构造成可操作的文件路径对象，将结果保存或写入 MAPPING。
-# MAPPING：保存 Path(__file__).with_name('register-mapping.csv') 的结果；with_name：保留父目录，仅替换路径中的文件名；Path：pathlib 的文件路径类
+# MAPPING：保存 Path(__file__).resolve().parent.parent / 'register-mapping.csv' 的结果；with_name：保留父目录，仅替换路径中的文件名；Path：pathlib 的文件路径类
 
 
 # 模拟 PLC 寄存器快照(单位:PLC 端实际存储的值,已含 ×10 等缩放因子)
@@ -170,7 +170,7 @@ def test_decode(failures: list) -> None:
     # _read_csv() 只返回主循环读取点位(cmd.* 在模块加载时进 _cmd_signals)
     read_sigs = _read_csv(MAPPING)
     # 读取点位映射表，将可读信号与控制写点分开保存，将结果保存或写入 read_sigs。
-    # read_sigs：保存 _read_csv(MAPPING) 的结果；_read_csv：读取点位映射表，将可读信号与控制写点分开保存；MAPPING：保存 Path(__file__).with_name('register-mapping.csv') 的结果
+    # read_sigs：保存 _read_csv(MAPPING) 的结果；_read_csv：读取点位映射表，将可读信号与控制写点分开保存；MAPPING：保存 Path(__file__).resolve().parent.parent / 'register-mapping.csv' 的结果
     cmd_sigs = plc_collector._cmd_signals
     # 根据 plc_collector._cmd_signals 设置 cmd_sigs，供当前流程后续使用。
     # cmd_sigs：保存 plc_collector._cmd_signals 的结果；plc_collector：从 plc_collector 导入的模块，类型为 plc_collector
@@ -354,7 +354,7 @@ def test_io_points() -> None:
     # 本行结束上面最近一层已经介绍的表达式或代码块
     read_sigs = {s.name: s for s in _read_csv(MAPPING)}
     # 读取点位映射表，将可读信号与控制写点分开保存，将结果保存或写入 read_sigs。
-    # read_sigs：保存 {s.name: s for s in _read_csv(MAPPING)} 的结果；name：当前对象的名称字段；_read_csv：读取点位映射表，将可读信号与控制写点分开保存；MAPPING：保存 Path(__file__).with_name('register-mapping.csv') 的结果
+    # read_sigs：保存 {s.name: s for s in _read_csv(MAPPING)} 的结果；name：当前对象的名称字段；_read_csv：读取点位映射表，将可读信号与控制写点分开保存；MAPPING：保存 Path(__file__).resolve().parent.parent / 'register-mapping.csv' 的结果
     for name, want_addr in expect.items():
     # 循环处理name, want_addr in expect.items():，按判断结果进入对应的处理分支。
     # name：当前对象的名称字段；want_addr：逐项遍历 expect.items() 的当前元素；expect：保存 {'io.sensorIn': 11, 'io.sensorArrive': 12, 'io.sensorRetreat': 13, 'io… 的结果；items：取得字典的键值对迭代器
@@ -401,7 +401,7 @@ def test_io_payload() -> None:
     # 本行使用当前函数或配置段中已经定义的名称，具体取值由相邻的定义和数据契约确定
     signals = [s for s in _read_csv(MAPPING)]
     # 读取点位映射表，将可读信号与控制写点分开保存，将结果保存或写入 signals。
-    # signals：保存 [s for s in _read_csv(MAPPING)] 的结果；_read_csv：读取点位映射表，将可读信号与控制写点分开保存；MAPPING：保存 Path(__file__).with_name('register-mapping.csv') 的结果
+    # signals：保存 [s for s in _read_csv(MAPPING)] 的结果；_read_csv：读取点位映射表，将可读信号与控制写点分开保存；MAPPING：保存 Path(__file__).resolve().parent.parent / 'register-mapping.csv' 的结果
     values = {s.name: 1 for s in signals}
     # 根据 {s.name: 1 for s in signals} 设置 values，供当前流程后续使用。
     # values：取得字典或映射中的所有值；name：当前对象的名称字段；signals：保存 [s for s in _read_csv(MAPPING)] 的结果

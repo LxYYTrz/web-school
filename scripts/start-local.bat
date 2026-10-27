@@ -56,7 +56,7 @@ rem 根据 COLLECTOR 决定跑哪个采集器脚本
 if /i "%COLLECTOR%"=="mock" (
 rem 检查/i "％COLLECTOR％"=="mock" （，按判断结果进入对应的处理分支。
 rem COLLECTOR 是由批处理环境变量提供的当前配置或路径
-    set EDGE_SCRIPT=mock_collector.py
+    set EDGE_SCRIPT=test\mock_collector.py
     rem 根据 COLLECTOR 决定跑哪个采集器脚本。
     rem EDGE_SCRIPT 是该脚本设置的批处理环境变量
 ) else (

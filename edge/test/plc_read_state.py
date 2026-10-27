@@ -4,8 +4,8 @@
 本文件**只调用 read_holding_registers**,不存在任何写调用。
 
 用法:
-    python edge/plc_read_state.py
-    python edge/plc_read_state.py --host 192.168.10.31 --port 503 --unit 2
+    python edge/test/plc_read_state.py
+    python edge/test/plc_read_state.py --host 192.168.10.31 --port 503 --unit 2
 退出码:0=读成功;1=读失败
 """
 # 这一段负责读取并显示现场 PLC 的状态寄存器，为后续代码提供当前文件的处理入口。

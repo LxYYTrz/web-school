@@ -8,7 +8,7 @@
 
 ```powershell
 .\scripts\ipc-recover.ps1
-.\scripts\verify-line.ps1
+.\scripts\test\verify-line.ps1
 ```
 
 `ipc-recover.ps1` 检查基础服务，按需启动 SSH 隧道、后端和 PLC 采集器。基础服务由 Windows 服务管理；脚本不会安装或启动它们。

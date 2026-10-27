@@ -6,7 +6,7 @@ Mock 边缘采集器
 主题与报文格式严格遵守数据契约 docs/contract/README.md ——
 到现场后用真实采集器(如 plc_collector.py)替换本文件,云端/前端/数据库零改动。
 
-运行:  python mock_collector.py
+运行:  python edge/test/mock_collector.py
 配置:  环境变量 MQTT_HOST / MQTT_PORT / MQTT_USERNAME / MQTT_PASSWORD / LINE_ID / ROBOT_ID
 """
 # 这一段负责生成符合契约的模拟采集报文，为后续代码提供当前文件的处理入口。

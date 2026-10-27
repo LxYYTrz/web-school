@@ -2,10 +2,10 @@
 <!-- 声明当前文档使用 HTML5 标准解析模式。 -->
 <!-- DOCTYPE 是 HTML 文档类型声明；html 指定按 HTML5 标准解释后续页面元素 -->
 <!--
-  <!-- 这一段负责配置和实现 server/tools/ws-test.html 对应的项目模块，为后续代码提供当前文件的处理入口。 -->
+  <!-- 这一段负责配置和实现 server/test/ws-test.html 对应的项目模块，为后续代码提供当前文件的处理入口。 -->
   ============================================================================
   文件作用：WebSocket 联调测试页（独立于前端项目的最小测试工具）
-  所属模块：server/tools/
+  所属模块：server/test/
   ============================================================================
 
   【用途】
@@ -15,7 +15,7 @@
   【怎么用】
     1. 启动本机 MQTT、Redis、PostgreSQL 服务
     2. 启动后端（server/ → npm run start:dev）
-    3. 启动 mock 采集器（edge/ → python mock_collector.py）
+    3. 启动 mock 采集器（edge/ → python test/mock_collector.py）
     4. 浏览器直接打开这个文件（file:// 协议也行）
        → 页面里应看到 robot_state / line_status / event 持续滚动
 
@@ -142,4 +142,4 @@
 </html>
 <!-- 声明或结束一个 HTML 标签及其属性。 -->
 <!-- html 是当前使用的界面元素或组件 -->
-<!-- 这一段提供了配置和实现 server/tools/ws-test.html 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。 -->
+<!-- 这一段提供了配置和实现 server/test/ws-test.html 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。 -->
