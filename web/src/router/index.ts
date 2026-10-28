@@ -37,16 +37,16 @@ export const router = createRouter({
 // router：前端页面路由器实例；createRouter：Vue Router 创建路由器的函数
   // 使用 HTML5 History 模式
   history: createWebHistory(),
-  // 创建或使用Vue Router 创建浏览器 history 路由模式的函数。
-  // history：历史写入服务实例；createWebHistory：Vue Router 创建浏览器 history 路由模式的函数
+  // 为网页路由选择 HTML5 History 模式，使地址路径对应不同页面。
+  // 这里的 history 是 Vue Router 的浏览器导航配置；createWebHistory 来自 vue-router，与数据库历史记录服务无关。
   // 路由表
 
   // 路由表把访问路径对应到页面组件：/login 登录，/twin 机械臂，/io 点位展示，/users 用户管理。
   // 路由负责用户界面中进入哪个页面，组件再处理自己的数据和交互；页面进入条件与后端接口权限分别检查。
 
   routes: [
-  // 声明或设置 routes，用于当前对象或接口的对应数据。
-  // routes 是此处声明的字段，类型或取值约束为 [
+  // 列出访问路径与页面组件的对应关系，供已安装的 router 选择页面。
+  // routes 是 Vue Router 的路由表；每项的 path 表示地址路径，component 表示应显示的 Vue 页面组件。
     // 根路径重定向到孪生页（redirect 是字符串目标路径）
     { path: '/', redirect: '/twin' },
     // 开始对象字面量，并在这一行设置其中列出的字段。

@@ -223,8 +223,8 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
     // ---------- 校验 1：参数完整 + 类型在白名单内 ----------
     // 任一不满足就拒绝。**先校验再落库再下发**，绝不能"先发出去再说"
     if (!body?.deviceId || !body?.type || !ALLOWED_TYPES.has(body.type)) {
-    // 检查(!body?.deviceId || !body?.type || !ALLOWED_TYPES.has(body.type))，按判断结果进入对应的处理分支。
-    // body：当前 HTTP 请求或消息的正文；deviceId：设备标识，接口使用配置中的设备编码；type：当前报文、指令或对象的类别字段；ALLOWED_TYPES：从控制契约加载的合法指令类型集合；has：检查集合是否包含指定元素或映射是否存在指定键
+    // 先检查目标设备、指令类型是否齐全，并确认类型属于控制契约白名单。
+    // body 来自控制入口解析的业务请求；ALLOWED_TYPES 是依据项目控制契约构造的集合，has 是 JavaScript Set 方法；权限已通过也仍需通过这里的业务检查。
       return {
       // 开始组装当前函数要返回的对象，下方逐项给出结果字段。
       // 下方各属性共同组成返回对象，调用方按字段名读取结果
@@ -294,8 +294,8 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
     // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
     // 取回生成的 UUID 字符串
     const cmdId = String(r.rows[0].idempotency_key);
-    // 将输入转换为 JavaScript 文本值，将结果保存或写入 cmdId。
-    // cmdId：控制指令唯一编号，用于关联下发与回执；String：将值转换为文本的 JavaScript 构造函数；r：本处保存 await this.pool.query( `INSERT INTO control_commands (line_i… 的结果；rows：数据库查询结果中的记录数组；idempotency_key：r.rows[0] 对象上的字段或操作
+    // 取出刚创建的控制记录编号，供 MQTT 命令、网页等待和现场回执关联同一次操作。
+    // r 是 INSERT RETURNING 的数据库结果；idempotency_key 由数据库生成；cmdId 是项目用于串联请求与回执的字符串，不单独保证物理动作只执行一次。
 
     // 契约 §5 第 5 条:全流程落 audit_logs
     // detail 里带 operator —— 机器通道的 operator 是 'ai:feishu:ou_xxx' 这种,
@@ -330,8 +330,8 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
 
     // ---------- 通过 MQTT 下发到边缘 ----------
     this.mqtt.publishCommand(lineCode, body.deviceId, {
-    // 把已校验的控制报文发布到目标设备的 MQTT 指令主题。
-    // mqtt：Paho MQTT 客户端模块，用于发布上行帧并订阅下行指令；publishCommand：把已校验的控制报文发布到目标设备的 MQTT 指令主题；lineCode：对外使用的产线字符串编码；body：当前 HTTP 请求或消息的正文；deviceId：设备标识，接口使用配置中的设备编码
+    // 把通过检查并已建立编号的控制请求交给 MQTT 接入服务发布。
+    // mqtt 是项目注入的 MqttIngestService，publishCommand 是项目方法，内部使用 mqtt 库；参数包括产线编码、设备编码和下方组装的 cmdId、type、params 等字段。
       cmdId,
       // 把变量 cmdId 作为同名对象字段加入当前对象。
       // cmdId：控制指令唯一编号，用于关联下发与回执

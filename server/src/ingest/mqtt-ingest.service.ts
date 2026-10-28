@@ -383,24 +383,24 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
         // 这些调用不构成保证同时成功的事务，所以网页更新不能单独证明历史完整保存。
 
         this.state.setRobotFrame(lineId, deviceId, msg);
-        // 把指定机器人的最新遥测帧存入 Redis 并设置有效期。
-        // state：当前状态值或实时状态服务实例，以所在对象为准；setRobotFrame：把指定机器人的最新遥测帧存入 Redis 并设置有效期；lineId：产线标识，接口通常使用 line-01 等编码；deviceId：设备标识，接口使用配置中的设备编码；msg：当前收到的消息或提示文字
+        // 把本帧交给实时状态服务保存最新快照，供稍后打开或重连的网页读取。
+        // state 是项目注入的 LineStateService；setRobotFrame 内部通过 ioredis 写 Redis 并设置 60 秒有效期；lineId、deviceId 是业务编码，msg 是收到的整帧，不在这一行保存历史或推送网页。
         // 第 2 路：放进历史缓冲队列（每秒批量写 TimescaleDB）
 
         // 把同一条机器人消息交给历史缓冲；这个方法只负责入队，后续定时批量写 PostgreSQL。
         // deviceId 在接入层是设备业务编码，HistoryWriter 会通过 CatalogService 找到数据库内部设备 id。
 
         this.history.bufferRobotFrame(deviceId, msg);
-        // 将机器人遥测帧加入内存批量写入队列。
-        // history：历史写入服务实例；bufferRobotFrame：将机器人遥测帧加入内存批量写入队列；deviceId：设备标识，接口使用配置中的设备编码；msg：当前收到的消息或提示文字
+        // 把同一帧交给历史服务整理并入队，后续由定时批处理写入数据库。
+        // history 是项目注入的 HistoryWriterService；此处 deviceId 是设备业务编码，方法内部会用 CatalogService 查数据库内部编号；入队不等于已经落库。
         // 第 3 路：WebSocket 推送给订阅了该产线房间的浏览器
 
         // 将这帧机器人消息推送给正在订阅对应产线的网页，事件名为 robot_state。
         // 网页收到后更新 useLineData 的 robot，TwinView 再把 joints 交给模型。
 
         this.gateway.broadcastRobot(lineId, msg);
-        // 向产线房间广播机器人最新遥测。
-        // gateway：当前方法接收的参数，类型为 TelemetryGateway；broadcastRobot：向产线房间广播机器人最新遥测；lineId：产线标识，接口通常使用 line-01 等编码；msg：当前收到的消息或提示文字
+        // 把同一帧交给实时网关，发送给订阅当前产线的在线网页。
+        // gateway 是项目注入的 TelemetryGateway；broadcastRobot 内部使用 Socket.IO 房间发送 robot_state，网页收到后更新共享状态；这条路径与 Redis、历史写入分别处理。
       } else if (kind === 'telemetry/io') {
       // 结束当前函数、分支或对象配置，返回上一层处理流程。
       // kind：本处保存 seg.slice(3).join('/') 的结果

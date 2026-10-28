@@ -53,18 +53,18 @@ export class AuthController {
   // 定义方法 login；括号中声明参数，花括号内实现逻辑。
   // login：校验登录请求并将认证结果写入当前 Cookie 会话；Body：NestJS 从请求体提取参数的装饰器；dto：当前方法接收的参数，类型为 LoginDto；LoginDto：从 ./dto/login.dto 导入的对象，用于本文件的调用或类型约束；Req：NestJS 注入当前 HTTP 请求对象的装饰器；req：当前 HTTP 请求对象；Request：从 express 导入的对象，用于本文件的调用或类型约束
     const user = await this.auth.verifyCredentials(dto.username, dto.password);
-    // 查询账号并校验口令摘要，返回可写入登录会话的用户信息，将结果保存或写入 user。
-    // user 来自账号验证结果；auth 是 NestJS 注入的 AuthService，verifyCredentials() 查询账号并验证输入密码；dto 是登录请求体。
+    // 先把本次登录请求的用户名和密码交给账号服务校验，校验通过后才继续写入会话。
+    // dto 来自请求正文；auth 是 NestJS 注入的项目 AuthService；verifyCredentials 是项目方法，内部查询数据库并调用 bcrypt.compare；失败会抛出登录异常。
 
     // user 来自密码校验的返回结果，所以这里记录的是已验证身份，而不是请求正文任意提交的 level。
     // cookie-session 会把该对象放入客户端签名 Cookie；签名检查篡改，内容本身并未因此加密。
 
     req.session = { username: user.username, level: user.level, loginAt: Date.now() };
-    // 把右侧表达式的结果写入 req.session。
-    // req：当前 HTTP 请求对象；session：HTTP 登录会话对象；username：账号用户名；user：当前会话或调用方的用户信息；level：用户操作级别或事件严重级别，依据当前接口结构区分；Date：JavaScript 日期与当前时间 API；now：取得当前时间戳；Date.now 使用毫秒
+    // 把已验证的用户名、级别和登录时间写入本次请求的会话，交给 cookie-session 生成签名 Cookie。
+    // user 来自上一步校验结果；req.session 由 cookie-session 中间件提供；loginAt 使用毫秒时间戳；这里没有把账号密码写入会话。
     return { success: true, username: user.username, level: user.level };
-    // 把{ success: true, username: user.username, level: user.level }作为当前函数的结果返回。
-    // username：账号用户名；user：当前会话或调用方的用户信息；level：用户操作级别或事件严重级别，依据当前接口结构区分
+    // 向网页返回登录成功及已验证的用户名、级别，让网页继续更新显示或跳转。
+    // 这是接口响应正文；签名 Cookie 由中间件通过响应头处理，返回这个对象本身不等于创建 Cookie。
   }
   // 结束当前函数、分支或对象配置，返回上一层处理流程。
   // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束

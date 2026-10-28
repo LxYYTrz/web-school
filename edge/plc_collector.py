@@ -686,8 +686,8 @@ class Plc:
                     # 本行使用当前函数或配置段中已经定义的名称，具体取值由相邻的定义和数据契约确定
                 # 正常读到 → 解码成物理量
                 values[s.name] = decode_signal(rr.registers, s)
-                # 把 decode_signal(rr.registers, s) 的结果赋给 values[s.name]。
-                # values：取得字典或映射中的所有值；name：当前对象的名称字段；decode_signal：按点位类型、偏移和缩放系数把原始寄存器转换为物理量；registers：Modbus 读取响应中按地址顺序排列的 16 位寄存器数值列表；s：保存 decode_signal(rr.registers, s) 的结果；rr：本次 read_holding_registers 调用返回的 Modbus 响应，包含错误标记与寄存器数组
+                # 把本次读回的寄存器按该点位的类型、偏移和缩放解码，保存到本轮采集结果字典。
+                # values 是本轮的“信号名称 → 已解码值”字典；s 是当前点表配置；rr.registers 来自 pymodbus 读取响应；decode_signal 是本项目定义的方法。
         except Exception as exc:
         # 接收并处理上一段操作产生的异常。
         # 本行使用当前函数或配置段中已经定义的名称，具体取值由相邻的定义和数据契约确定
@@ -962,8 +962,8 @@ def publish(c: mqtt.Client, topic: str, payload: dict, qos=0, retain=False):
 # 将 payload 编码为 JSON 文本，交给已连接 Broker 的客户端向 topic 发布。
 # c 是 paho-mqtt 客户端；topic 是消息主题；qos 和 retain 来自本次调用参数，决定这次消息的投递选项。
     c.publish(topic, json.dumps(payload, ensure_ascii=False), qos=qos, retain=retain)
-    # 把消息发布到指定主题或频道。
-    # publish：向 MQTT 主题或 Redis 频道发布消息，以客户端类型为准；topic：MQTT 发布或订阅使用的主题路径；qos：MQTT 消息投递质量等级，本次传入 qos；retain：MQTT 是否保留主题的最后一条消息，本次传入 retain；c：方法输入参数，类型为 mqtt.Client；dumps：把 Python 对象编码成 JSON 文本；payload：消息或事件携带的数据内容；json：Python JSON 编解码库
+    # 把已组装的业务报文编码成 JSON，交给 MQTT 客户端向 Broker 发布。
+    # c 是 paho-mqtt 客户端，publish 是库方法；topic、payload、qos、retain 由调用方提供；Broker 接收消息不等于数据库保存或设备动作完成。
     # 这一段实现了将契约报文编码为 JSON 并发布到指定 MQTT 主题；返回值或异常由调用方按当前分支处理。
 
 
@@ -1189,14 +1189,14 @@ def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
             # 随后检查 rr.isError() 决定返回成功或失败；这一步没有等待独立的现场动作完成信号。
 
             rr = plc.cli.write_register(address=address, value=value, device_id=plc.unit)
-            # 向 PLC 写入指定寄存器，将结果保存或写入 rr。
-            # rr：本次 read_holding_registers 调用返回的 Modbus 响应，包含错误标记与寄存器数组；write_register：向一个 Modbus 保持寄存器写入指定值，返回写入响应；address：Modbus 寄存器起始地址，使用从 0 开始的编号，本次传入 address；value：当前字段或点位的实际取值，本次传入 value；device_id：pymodbus 当前接口的目标设备站号参数，本次传入 plc.unit；cli：在本文件创建的 Modbus TCP 通信客户端，用于连接 PLC 并发送寄存器请求；unit：设备站号或点位物理单位，依据所在对象区分；plc：方法输入参数，类型为 Plc
+            # 按映射得到的寄存器地址和数值发起 Modbus 写请求，保存 PLC 返回的写响应。
+            # plc.cli 是 pymodbus 客户端，write_register 是库方法；address、value 来自已选定的控制点位与动作；plc.unit 是目标站号；这里的 rr 是写响应，不是之前的读取响应。
         if rr.isError():
-        # 检查本次 Modbus 响应是否报错；若报错则进入读取失败分支。
-        # rr：本次 read_holding_registers 调用返回的 Modbus 响应，包含错误标记与寄存器数组；isError：判断 Modbus 响应是否携带协议错误
+        # 检查本次 Modbus 写响应是否报错；报错时返回本次寄存器写入失败。
+        # rr 是本次 write_register 的写响应，isError() 用于检查协议错误，不是设备物理动作完成信号；isError：判断 Modbus 响应是否携带协议错误
             return False, f'PLC 写寄存器失败: {rr}'
             # 把False, f'PLC 写寄存器失败: {rr}'作为当前函数的结果返回。
-            # rr：本次 read_holding_registers 调用返回的 Modbus 响应，包含错误标记与寄存器数组
+            # rr 是本次 write_register 的写响应，isError() 用于检查协议错误，不是设备物理动作完成信号
         return True, ''
         # 把True, ''作为当前函数的结果返回。
         # 返回值或异常使用上方流程得到的数据，由当前函数的调用方处理

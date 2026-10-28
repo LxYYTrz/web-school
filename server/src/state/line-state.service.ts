@@ -91,8 +91,8 @@ export class LineStateService {
     // 读取 this.redis，作为下一行链式方法调用的接收对象。
     // redis：注入或创建的 Redis 客户端
       .set(`rt:${lineId}:robot:${deviceId}`, JSON.stringify(frame), 'EX', 60)
-      // 把对象编码为 JSON 文本。
-      // set：按键写入当前映射、缓存或对象的值；lineId：产线标识，接口通常使用 line-01 等编码；deviceId：设备标识，接口使用配置中的设备编码；JSON：JavaScript 原生 JSON 编解码 API；stringify：把对象编码为 JSON 文本；frame：当前方法接收的参数，类型为 unknown
+      // 把机器人整帧写入该设备固定的 Redis key，覆盖旧值，并从本次成功写入重新计算 60 秒有效期。
+      // set 是 ioredis 客户端方法；key 由产线和设备编码组成；JSON.stringify 是 JavaScript 自带的对象编码方法；EX 的单位是秒；它不比较 frame.ts，也不主动清空网页已有状态。
       .catch((e: Error) => this.logger.error(`写机器人快照失败: ${e.message}`));
       // 为前面的异步操作添加失败处理；出错时由回调记录原因或更新状态。
       // catch：本处声明的字段或类型，类型为 Promise<T | TResult>；e：当前方法接收的参数，类型为 Error；Error：标准错误对象类型；logger：当前模块的日志记录器；error：记录错误日志或显示失败提示，以接收对象为准；message：消息正文或用于展示的结果说明

@@ -500,36 +500,36 @@ export class RobotArm {
     // 按这一行指定的集合或范围逐个执行循环体。
     // i：本处保存 0 的结果
       const d = deg[i];
-      // 根据 deg[i] 设置 d，供当前流程后续使用。
-      // d：本处保存 deg[i] 的结果；deg：当前方法接收的参数，类型为 number[]；i：本处保存 0 的结果
+      // 从这帧六轴角度中取出当前关节的物理角度。
+      // deg 是按 J1～J6 排列的度数数组；i 是当前关节下标；d 已经过采集器点表缩放，不应再乘一次 0.1。
       // 非法值（非数字 / NaN / undefined）跳过，保留上一帧姿态而不是跳成 0
       if (typeof d !== 'number' || !Number.isFinite(d)) continue;
-      // 检查(typeof d !== 'number' || !Number.isFinite(d)) continue;，按判断结果进入对应的处理分支。
-      // d：本处保存 deg[i] 的结果；Number：将值转换为数字的 JavaScript 构造函数；isFinite：本处声明的字段或类型，类型为 boolean
+      // 角度不是有限数字时跳过本关节，保留模型先前姿态。
+      // typeof 与 Number.isFinite 是 JavaScript 的类型和值检查；continue 只跳过这轮循环，不会把无效角度替换成 0。
       const pivot = this.joints[i];
-      // 根据 this.joints[i] 设置 pivot，供当前流程后续使用。
-      // pivot：本处保存 this.joints[i] 的结果；joints：按 J1 到 J6 排列的六个关节角度，遥测契约中单位为度；i：本处保存 0 的结果
+      // 找到当前角度对应的模型关节节点，准备修改它的旋转。
+      // 这里的 this.joints 是模型中六个 Three.js 节点的数组，与遥测报文中的数值数组 joints 含义不同；i 让二者按关节顺序对应。
       const axis = JOINT_AXES[i];
-      // 根据 JOINT_AXES[i] 设置 axis，供当前流程后续使用。
-      // axis：本处保存 JOINT_AXES[i] 的结果；JOINT_AXES：本处保存 ['y', 'z', 'z', 'y', 'z', 'y'] 的结果，类型为 Axis[]；i：本处保存 0 的结果
+      // 取出这个模型关节应使用的局部旋转轴。
+      // JOINT_AXES 是本项目的六轴配置，依次为 y、z、z、y、z、y；axis 决定下方写 rotation 的哪个分量。
       // 度 → 弧度（Three.js 用弧度）
 
       // d 已经是采集器换算后的物理角度，例子中是 25 度；这里将它换成 Three.js rotation 使用的弧度。
       // 采集器的“原始整数乘 0.1”和本行“度转弧度”目的不同，不能重复缩放一次现场数据。
 
       const rad = THREE.MathUtils.degToRad(d);
-      // 把角度值换算为 Three.js 使用的弧度，将结果保存或写入 rad。
-      // rad：本处保存 THREE.MathUtils.degToRad(d) 的结果；THREE：从 three 导入的三维 API 命名空间；MathUtils：THREE 对象上的字段或操作；degToRad：把角度值换算为 Three.js 使用的弧度；d：本处保存 deg[i] 的结果
+      // 将已经得到的物理角度从度换算成模型 rotation 使用的弧度。
+      // THREE 来自 three 库；MathUtils.degToRad 是该库的单位换算方法；d 是本关节度数，rad 是换算结果，例如 180 度对应 π 弧度。
       // 按轴设置旋转角度
       if (axis === 'x') pivot.rotation.x = rad;
-      // 检查(axis === 'x') pivot.rotation.x = rad;，按判断结果进入对应的处理分支。
-      // axis：本处保存 JOINT_AXES[i] 的结果；pivot：本处保存 this.joints[i] 的结果；rotation：三维物体绕各轴的旋转，Three.js 使用弧度；x：本处声明的字段或类型，类型为 number；rad：本处保存 THREE.MathUtils.degToRad(d) 的结果
+      // 模型关节配置为 x 轴时，把本帧弧度写到该关节的 x 旋转分量。
+      // pivot 是当前关节节点；rotation 是 Three.js 节点的旋转属性，分量单位为弧度；这里修改网页模型，不会向现场发送控制指令。
       else if (axis === 'y') pivot.rotation.y = rad;
-      // 前一条件不成立时，改为执行这一分支。
-      // axis：本处保存 JOINT_AXES[i] 的结果；pivot：本处保存 this.joints[i] 的结果；rotation：三维物体绕各轴的旋转，Three.js 使用弧度；y：本处声明的字段或类型，类型为 number；rad：本处保存 THREE.MathUtils.degToRad(d) 的结果
+      // 否则，模型关节配置为 y 轴时更新该关节的 y 旋转分量。
+      // axis 来自本项目 JOINT_AXES；rad 是刚才转换的弧度；父节点的变换仍会作用于后续子关节。
       else pivot.rotation.z = rad;
-      // 前一条件不成立时，改为执行这一分支。
-      // pivot：本处保存 this.joints[i] 的结果；rotation：三维物体绕各轴的旋转，Three.js 使用弧度；z：Zod 校验 API 命名空间，用于声明 MCP 工具入参约束；rad：本处保存 THREE.MathUtils.degToRad(d) 的结果
+      // 其余配置使用 z 轴，将本帧弧度应用到该模型关节。
+      // z 在这里是 Three.js rotation 的旋转轴分量，与 MCP 参数校验库 Zod 无关；设置完成后，场景后续绘制显示新姿态。
     }
     // 结束当前函数、分支或对象配置，返回上一层处理流程。
     // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束

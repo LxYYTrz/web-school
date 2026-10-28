@@ -87,8 +87,8 @@ export class UsersBootstrapService implements OnApplicationBootstrap {
       // 这段处于账号初始化分支，不表示每次启动都无条件覆盖已有账号或重设密码。
 
       const hash = await bcrypt.hash(initialPwd, 10);
-      // 使用 bcrypt 为口令生成摘要，将结果保存或写入 hash。
-      // hash：本处保存 await bcrypt.hash(initialPwd, 10) 的结果；bcrypt：从 bcryptjs 导入的口令摘要与验证 API；initialPwd：本处保存 config.app.adminPassword 的结果
+      // 为初始管理员密码生成摘要，再由后续 SQL 保存到账号表，供登录时 bcrypt.compare 比对。
+      // initialPwd 来自项目初始管理员密码配置；hash 是 bcryptjs 的库方法；10 是工作因子；数据库保存的是生成结果 hash。
       await this.pool.query(
       // 通过数据库连接池执行参数化查询。
       // pool：注入或创建的 PostgreSQL 连接池；query：通过 PostgreSQL 连接池执行参数化 SQL，返回 rows 与 rowCount 等结果

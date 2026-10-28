@@ -249,8 +249,8 @@ function createLineData(lineId: string) {
   // lastEventAt：本处保存 ref(0) 的结果；ref：Vue 创建可通过 .value 读写的响应式引用
   // 快照和实时推送并行到达时，不能用较早的快照覆盖已收到的新帧。
   const liveSeen = { robot: false, status: false, io: false, edge: false, event: false };
-  // 根据 { robot: false, status: false, io: false, edge: false, event: false } 设置 liveSeen，供当前流程后续使用。
-  // liveSeen：本处保存 { robot: false, status: false, io: false, edge: false, event… 的结果；status：当前连接、产线、请求或指令的状态字段；io：现场 IO 信号对象或当前 IO 状态帧
+  // 分别记录各类数据是否已经收到实时事件，用于处理快照响应与实时消息的先后顺序。
+  // liveSeen 是本次共享数据实例中的标记对象；robot、status、io 等是数据类别；初始 false 表示对应类别尚未接到实时事件。
 
   // ---------- 快照预载(首屏立即有数据,不等下一帧) ----------
   /**
@@ -292,8 +292,8 @@ function createLineData(lineId: string) {
       // 按前面声明的列顺序提供 SQL 插入值，参数占位符由查询调用传入。
       // first：本处保存 Object.values(snap.robots ?? {})[0] 的结果；Object：JavaScript 对象辅助 API；values：取得字典或映射中的所有值；snap：本处保存 (await fetchSnapshot(lineId)) as LineSnapshot 的结果；robots：按设备编码索引的机器人最新遥测集合
       if (first && !liveSeen.robot) robot.value = first;
-      // 检查(first && !liveSeen.robot) robot.value = first;，按判断结果进入对应的处理分支。
-      // first：本处保存 Object.values(snap.robots ?? {})[0] 的结果；liveSeen：本处保存 { robot: false, status: false, io: false, edge: false, event… 的结果；robot：liveSeen 对象上的字段或操作；value：当前字段或点位的实际取值
+      // 仅在快照有机器人帧且尚未收到实时机器人数据时，用快照补充首屏。
+      // first 是本次快照中的首台机器人帧；liveSeen.robot 防止较晚返回的旧快照覆盖已经收到的新帧；robot.value 是网页保存的响应式机器人状态。
     } catch (e) {
     // 捕获上方异步或同步操作抛出的异常，并进入错误处理分支。
     // e：本处保存的局部数据

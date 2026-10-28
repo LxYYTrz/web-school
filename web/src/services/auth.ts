@@ -34,8 +34,8 @@ async function http<T>(method: string, path: string, body?: unknown): Promise<T>
     // 后端 cookie-session 才能从后续请求读取签名会话。这个选项不会自行创建登录身份，也不会替代浏览器的 Cookie 与跨域规则。
 
     credentials: 'include',  // cookie-session 必须
-    // 声明或设置 credentials，用于浏览器请求是否携带登录 Cookie 的配置。
-    // credentials：浏览器请求是否携带登录 Cookie 的配置
+    // 让这个请求按浏览器规则携带适用的登录 Cookie，使后端能关联之前的登录会话。
+    // credentials 是浏览器 fetch 的选项，include 表示包含凭据；它不绕过 Cookie、跨域或 SameSite 规则，也不自行生成登录身份。
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     // 声明或设置 headers，用于HTTP 请求头集合。
     // headers：HTTP 请求头集合；body：当前 HTTP 请求或消息的正文
@@ -104,8 +104,8 @@ export function apiLogin(username: string, password: string): Promise<AuthUser> 
 // 通过统一 HTTP 请求函数向后端提交用户名和密码，取得验证后的用户信息。
 // username、password 来自登录表单；http() 处理 JSON 与适用 Cookie；AuthUser 描述成功返回的 username 和 level。
   return http<AuthUser>('POST', '/api/auth/login', { username, password });
-  // 把http<AuthUser>('POST', '/api/auth/login', { username, password })作为当前函数的结果返回。
-  // http：发送携带登录 Cookie 的 JSON 请求并统一处理 HTTP 错误；AuthUser：从 ../stores/auth 导入的对象，用于本文件的调用或类型约束；username：账号用户名；password：登录口令或数据库保存的口令摘要，具体取决于所在对象
+  // 把用户输入的用户名和密码提交给后端登录接口，并返回后端响应的用户信息。
+  // apiLogin 调用项目自己的 http 封装；http 内部使用浏览器 fetch，接口为 POST /api/auth/login；AuthUser 是前端返回值的类型约束。
 }
 // 结束当前函数、分支或对象配置，返回上一层处理流程。
 // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束

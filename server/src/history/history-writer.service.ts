@@ -178,19 +178,19 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
   // deviceCode 是外部编码，catalog.deviceId() 查内部 id；msg 提供采集时间、joints 等字段，robotBuffer 保存本进程尚待落库的数据。
     // ① 翻译 code → id。查不到就直接丢弃这条（返回 undefined）
     const deviceId = this.catalog.deviceId(deviceCode);
-    // 从目录缓存读取设备编码对应的数据库主键，将结果保存或写入 deviceId。
-    // deviceId：设备标识，接口使用配置中的设备编码；catalog：产线设备目录服务实例；deviceCode：对外使用的设备字符串编码
+    // 将消息中的设备业务编码转换成历史表使用的内部设备编号。
+    // catalog 是项目的基础目录服务，deviceCode 例如 robot-01；此处 deviceId 是数据库 devices.id，而非消息里的编码字符串。
     if (deviceId === undefined) return;
-    // 检查(deviceId === undefined) return;，按判断结果进入对应的处理分支。
-    // deviceId：设备标识，接口使用配置中的设备编码
-    // ② 背压保护：缓冲超过 10000 行说明数据库长时间不可用（写库一直在失败）。
+    // 目录中没有该设备时，结束这一帧的历史入队处理。
+    // undefined 表示编码没有匹配的内部编号；这里只跳过历史缓冲路径，不代表其他独立的快照和实时推送也已停止。
+    // ② 背压保护：缓冲达到 10000 行时限制队列长度；仅凭队列长度不能断定数据库故障。
     //    此时丢弃**最老**的一帧（shift），保留最新状态。
-    //    为什么保新弃旧？因为最新状态信息量最大（实时快照在 Redis 里也还在）。
+    //    这项保护会舍弃较早的待保存记录；Redis 快照由另一条独立路径写入，成功情况需分别判断。
     //    没有这层保护，缓冲会无限增长直到 OOM 把进程拖死。
     if (this.robotBuffer.length >= 10000) {
     // 检查(this.robotBuffer.length >= 10000)，按判断结果进入对应的处理分支。
     // robotBuffer：本处声明的字段或类型，类型为 RobotRow[]；length：本处声明的字段或类型，类型为 number
-      // DB 长时间不可用时的兜底:丢最老的帧防内存暴涨(最新状态仍在 Redis)
+      // 队列达到上限时移除最老一帧，限制当前进程用于历史缓冲的内存占用。
       this.robotBuffer.shift();
       // 取出并移除数组第一个元素。
       // robotBuffer：本处声明的字段或类型，类型为 RobotRow[]；shift：取出并移除数组第一个元素
@@ -199,8 +199,8 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
     // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
     // ③ 组装成一行，push 进缓冲
     this.robotBuffer.push({
-    // 向数组末尾追加元素。
-    // robotBuffer：本处声明的字段或类型，类型为 RobotRow[]；push：向数组末尾追加元素
+    // 把时间、内部设备编号和关节等字段组成一条待保存记录，加入当前后端进程的内存队列。
+    // robotBuffer 是 HistoryWriterService 的数组；push 是 JavaScript 数组追加方法；msg 提供本帧现场数据，后面的 flushRobots 才执行数据库 INSERT。
       time: toTime(msg),
       // 将报文时间戳转换为数据库可用的时间值。
       // time：Python 时间与暂停接口；toTime：将报文时间戳转换为数据库可用的时间值；msg：当前收到的消息或提示文字
@@ -250,8 +250,8 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
     //    注意：必须在取出的瞬间清空，这样新到的帧会进入新的缓冲，
     //    不会和正在写入的这批混淆（避免写入期间数据丢失）
     const rows = this.robotBuffer.splice(0, this.robotBuffer.length);
-    // 从数组指定位置删除或插入元素，将结果保存或写入 rows。
-    // rows：数据库查询结果中的记录数组；robotBuffer：本处声明的字段或类型，类型为 RobotRow[]；splice：从数组指定位置删除或插入元素；length：本处声明的字段或类型，类型为 number
+    // 一次取出当前积累的待保存帧，并从内存缓冲中移除，供下面组装批量 INSERT。
+    // splice 是 JavaScript 数组方法，rows 保存本批数据；此时尚未确认数据库写入成功，后续失败分支会记录错误并丢弃该批。
     // 没有数据就直接返回（不发空 SQL）
     if (rows.length === 0) return;
     // 检查(rows.length === 0) return;，按判断结果进入对应的处理分支。

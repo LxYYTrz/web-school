@@ -96,14 +96,14 @@ async function bootstrap() {
   // 将 cookie-session 注册为 NestJS/Express 的 HTTP 中间件，使后续接口能读取和写入 req.session。
   // app：本处保存 await NestFactory.create<NestExpressApplication>(AppModule) 的结果；use：本处声明的字段或类型，类型为 this
     cookieSession({
-    // 执行 cookieSession 对应的本地处理，使用本行提供的数据。
-    // cookieSession：从 cookie-session 导入的对象，用于本文件的基于签名 Cookie 的登录会话中间件
+    // 创建 cookie-session 中间件，由外层 app.use 安装，使登录响应能保存会话、后续请求能验证并读取会话。
+    // cookieSession 来自 cookie-session 库；项目在登录控制器写 req.session，中间件负责处理签名 Cookie，不需要控制器自己拼接 Cookie。
       name: 'lt_sess',
       // 声明或设置 name，用于当前对象的名称字段。
       // name：当前对象的名称字段
       keys: [config.http.sessionSecret],
-      // 声明或设置 keys，用于当前对象或接口的对应数据。
-      // config：configuration 模块导出的统一配置对象，读取环境变量并提供默认值；http：发送携带登录 Cookie 的 JSON 请求并统一处理 HTTP 错误；sessionSecret：登录 Cookie 签名密钥
+      // 配置登录 Cookie 的签名密钥，供中间件签名和检查内容是否被篡改。
+      // keys 是 cookie-session 的配置项；config.http.sessionSecret 来自项目配置；签名用于校验完整性，不等于加密会话内容。
       httpOnly: true,
       // 声明或设置 httpOnly，用于当前对象或接口的对应数据。
       // httpOnly 是此处声明的字段，类型或取值约束为 true
@@ -114,8 +114,8 @@ async function bootstrap() {
       // 声明或设置 secure，用于当前对象或接口的对应数据。
       // secure 是此处声明的字段，类型或取值约束为 false
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天
-      // 声明或设置 maxAge，用于当前对象或接口的对应数据。
-      // maxAge 是此处声明的字段，类型或取值约束为 7 * 24 * 60 * 60 * 1000
+      // 把登录 Cookie 的最长有效期配置为 7 天，供浏览器按 Cookie 规则保存和发送。
+      // maxAge 的单位是毫秒；7 × 24 × 60 × 60 × 1000 将 7 天换算成毫秒，与 Redis 快照的 60 秒有效期是不同配置。
     }),
     // 结束当前回调或对象，并完成外层函数调用，供当前处理流程继续使用。
     // 本行完成上面一层已说明的函数、分支或对象配置

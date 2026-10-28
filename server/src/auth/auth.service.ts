@@ -45,8 +45,8 @@ export class AuthService {
     // 结束当前函数、分支或对象配置，返回上一层处理流程。
     // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
     const { rows } = await this.pool.query(
-    // 通过数据库连接池执行参数化查询。
-    // rows：数据库查询结果中的记录数组；pool：注入或创建的 PostgreSQL 连接池；query：通过 PostgreSQL 连接池执行参数化 SQL，返回 rows 与 rowCount 等结果
+    // 按本次输入的用户名查询登录账号，取回密码摘要和级别，为下一步比对准备数据。
+    // pool 是注入的 PostgreSQL 连接池；query 来自数据库客户端；rows 是查询结果数组，参数 username 通过下方 $1 占位符传入。
       'SELECT password, level FROM app.app_users WHERE username = $1 LIMIT 1',
       // 提供 SQL 语句，读取表 app.app_users 中的数据；实际参数由外层查询调用传入。
       // app.app_users 是保存应用登录账号的数据表，FROM 指定本次读取的数据来源；$1 是数据库参数占位符，实际值由查询调用另外传入；WHERE 只处理满足本行或后续条件的记录
@@ -57,17 +57,17 @@ export class AuthService {
     // 结束当前函数、分支或对象配置，返回上一层处理流程。
     // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
     if (rows.length === 0) throw new BadCredentials();
-    // 条件 (rows.length === 0) throw new BadCredentials(); 成立时按本行给出的错误终止处理。
-    // rows：数据库查询结果中的记录数组；length：本处声明的字段或类型，类型为 number；BadCredentials：本文件定义的登录失败异常，向调用方返回 HTTP 401
+    // 没有查到账号就终止登录，不继续读取摘要或建立会话。
+    // rows.length 是匹配的账号记录数；BadCredentials 是项目定义的 HTTP 401 异常。
     const ok = await bcrypt.compare(password, rows[0].password as string);
-    // 比对明文口令和数据库摘要，将结果保存或写入 ok。
-    // ok：操作是否成功的布尔结果；bcrypt：从 bcryptjs 导入的口令摘要与验证 API；compare：使用 bcrypt 验证明文口令与已保存摘要是否匹配；password：登录口令或数据库保存的口令摘要，具体取决于所在对象；rows：数据库查询结果中的记录数组
+    // 比较用户本次输入的密码与数据库保存的摘要，把匹配结果保存到 ok。
+    // bcrypt 从 bcryptjs 导入，compare 是库方法；password 是本次输入，rows[0].password 是数据库摘要；as string 仅是 TypeScript 类型声明，不会解密或还原密码。
     if (!ok) throw new BadCredentials();
-    // 条件 (!ok) throw new BadCredentials(); 成立时按本行给出的错误终止处理。
-    // ok：操作是否成功的布尔结果；BadCredentials：本文件定义的登录失败异常，向调用方返回 HTTP 401
+    // 密码比对不通过就终止登录，与账号不存在一样返回登录失败。
+    // ok 是 bcrypt.compare 返回的布尔结果；只有它为 true，才会走到后面返回用户名与级别的语句。
     return { username, level: rows[0].level as number };
-    // 把{ username, level: rows[0].level as number }作为当前函数的结果返回。
-    // username：账号用户名；level：用户操作级别或事件严重级别，依据当前接口结构区分；rows：数据库查询结果中的记录数组
+    // 把通过校验的用户名和数据库级别返回登录控制器，供它写入会话。
+    // username 对应刚才查询的账号；level 来自数据库；返回值不含原始密码或密码摘要。
   }
   // 结束当前函数、分支或对象配置，返回上一层处理流程。
   // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束

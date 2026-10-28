@@ -67,21 +67,21 @@ import './styles.css';
 // 挂载完成只是网页程序就绪，现场状态还需要通过快照接口和实时连接取得。
 
 const app = createApp(App);
-// 创建或使用Vue 创建应用实例的函数，将结果保存或写入 app。
-// app：本处保存 createApp(App) 的结果；createApp：Vue 创建应用实例的函数；App：从 ./App.vue 导入的对象，用于本文件的调用或类型约束
+// 创建网页应用，以 App.vue 作为公共外框；接下来依次安装共享状态、路由和界面组件。
+// app 是当前 Vue 应用实例；createApp 来自 Vue；App 是项目导入的根组件，创建应用不等于现场数据已经到达。
 app.use(createPinia());
-// 向应用实例注册状态管理、路由或界面组件插件。
-// app：本处保存 createApp(App) 的结果；use：本处声明的字段或类型，类型为 this；createPinia：Pinia 创建全局状态管理实例的函数
+// 安装 Pinia，让登录等共享状态能被不同页面使用。
+// createPinia 来自 pinia 库，返回状态管理实例；use 是 Vue 应用安装插件的方法。
 // 装上路由插件（让 <router-view> 和 <router-link> 可用）
 app.use(router);
-// 向应用实例注册状态管理、路由或界面组件插件。
-// app：本处保存 createApp(App) 的结果；use：本处声明的字段或类型，类型为 this；router：从 ./router 导入的对象，用于本文件的调用或类型约束
+// 安装项目配置好的路由器，由访问路径决定公共外框里显示哪个页面。
+// router 来自本项目的 ./router；use 是 Vue 的插件安装方法，具体路径与组件对应关系在 router/index.ts 中。
 // 装上 Element Plus，并指定中文语言包
 app.use(ElementPlus, { locale: zhCn });
-// 向应用实例注册状态管理、路由或界面组件插件。
-// app：本处保存 createApp(App) 的结果；use：本处声明的字段或类型，类型为 this；ElementPlus：从 element-plus 导入的对象，用于本文件的Element Plus 界面组件与提示 API；zhCn：从 element-plus/es/locale/lang/zh-cn 导入的对象，用于本文件的调用或类型约束
+// 安装 Element Plus 界面组件，并使用中文语言配置。
+// ElementPlus 来自 element-plus，zhCn 来自其中文语言包；这一步准备页面组件，不负责连接 PLC。
 // 挂载到 index.html 中的 #app 容器
 app.mount('#app');
-// 将 Vue 应用挂载到指定页面容器。
-// app：本处保存 createApp(App) 的结果；mount：本处声明的字段或类型，类型为 ComponentPublicInstance
+// 把已经装好插件的网页应用挂载到 HTML 的 #app 容器，开始显示公共外框和当前路由页面。
+// mount 是 Vue 应用的方法；#app 是页面容器选择器；之后组件再按各自逻辑请求快照或建立实时连接。
 // 这一段提供了配置和实现 web/src/main.ts 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。
