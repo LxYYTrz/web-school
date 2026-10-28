@@ -1,53 +1,26 @@
-// 这一段负责后端控制权限守卫，限制可下发指令的操作级别，为后续代码提供当前文件的处理入口。
+/**
+ * 网页控制的级别守卫，通常排在 AuthGuard 后执行。
+ * 从 req.session 取得 level，非数字或低于 2 返回 403；通过后还需命令服务检查目标、类型与参数。
+ */
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
-// 从 @nestjs/common 导入这一行列出的符号，供本文件调用。
-// CanActivate：NestJS 权限守卫接口；ExecutionContext：NestJS 当前请求上下文类型，用于获取 HTTP 请求或消息连接；ForbiddenException：NestJS 表示操作权限不足的 HTTP 403 异常；Injectable：NestJS 把类注册为可注入服务的装饰器
 import type { Request } from 'express';
-// 从 express 导入这一行列出的符号，供本文件调用。
-// Request：从 express 导入的对象，用于本文件的调用或类型约束
 
 // 控制指令权限守卫:level >= 2 才能下发(对齐用户决策 2026-10-15)
 // 依赖 AuthGuard:AuthGuard 先保证 session.username + level 存在,本守卫只校验级别。
-// 这一段声明 CommandGuard，用于后端控制权限守卫，限制可下发指令的操作级别。
 @Injectable()
-// 装饰器 Injectable：标记为可由 NestJS 依赖注入的服务。
-// Injectable：NestJS 把类注册为可注入服务的装饰器
 export class CommandGuard implements CanActivate {
-// 定义 CommandGuard，约束或实现本模块涉及的数据和行为。
-// CommandGuard：后端控制权限守卫，限制可下发指令的操作级别；CanActivate：NestJS 权限守卫接口
-  // 这一段定义 canActivate，用于检查当前请求是否满足本守卫的登录、级别或令牌要求。
   canActivate(context: ExecutionContext): boolean {
-  // 定义方法 canActivate；括号中声明参数，花括号内实现逻辑。
-  // canActivate：检查当前请求是否满足本守卫的登录、级别或令牌要求；context：当前方法接收的参数，类型为 ExecutionContext；ExecutionContext：NestJS 当前请求上下文类型，用于获取 HTTP 请求或消息连接
     const req = context.switchToHttp().getRequest<Request>();
-    // 切换到 HTTP 接口继续获取实时数据，将结果保存或写入 req。
-    // req：当前 HTTP 请求对象；context：当前方法接收的参数，类型为 ExecutionContext；switchToHttp：本处声明的字段或类型，类型为 HttpArgumentsHost；getRequest：本处声明的字段或类型，类型为 T；Request：从 express 导入的对象，用于本文件的调用或类型约束
 
     // 网页控制在通过登录守卫后，还需通过这里的级别检查。
     // level 取自 req.session；不是 number 或小于 2 时抛 403，通过后仍需 CommandService 检查设备、类型和参数。
     // 因此登录成功、页面按钮可用和一次指令真正通过后端业务检查，是三个需要分开理解的环节。
 
     const level = req.session?.level;
-    // 根据 req.session?.level 设置 level，用于用户操作级别或事件严重级别，依据当前接口结构区分。
-    // level：用户操作级别或事件严重级别，依据当前接口结构区分；req：当前 HTTP 请求对象；session：HTTP 登录会话对象
     if (typeof level !== 'number' || level < 2) {
-    // 检查(typeof level !== 'number' || level < 2)，按判断结果进入对应的处理分支。
-    // level：用户操作级别或事件严重级别，依据当前接口结构区分
       throw new ForbiddenException({ code: 403, msg: '需 level >= 2 才能下发控制指令' });
-      // 按本行指定的错误类型或信息终止当前处理并交给上层处理。
-      // ForbiddenException：NestJS 表示操作权限不足的 HTTP 403 异常；code：业务编码、状态码或数据库查询字段，结合所在报文解释；msg：当前收到的消息或提示文字
     }
-    // 结束当前函数、分支或对象配置，返回上一层处理流程。
-    // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
     return true;
-    // 把true作为当前函数的结果返回。
     // 布尔结果由当前函数的调用方用于决定是否允许继续执行
   }
-  // 结束当前函数、分支或对象配置，返回上一层处理流程。
-  // 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
-  // 这一段提供了检查当前请求是否满足本守卫的登录、级别或令牌要求的实现；实际结果由运行时输入和执行分支决定。
 }
-// 结束当前函数、分支或对象配置，返回上一层处理流程。
-// 这一行收束紧邻的对象、函数或调用参数，使外层语句可以继续或结束
-// 这一段提供了后端控制权限守卫，限制可下发指令的操作级别所需的定义和处理逻辑，结果交由调用方或运行环境使用。
-// 这一段定义了 CommandGuard 的字段或服务能力，供项目其他模块使用。

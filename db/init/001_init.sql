@@ -1,3 +1,6 @@
+-- 数据库基础初始化：建立产线、设备、历史、事件、控制与审计等结构，按表和约束分段阅读。
+-- SQL 定义结构、约束或迁移；应用运行时的具体查询和写入在 server/，不要把存在一张表当作界面已经提供对应功能。
+
 -- ============================================================================
 -- 001_init.sql —— 主 DDL：把整个数据库从零建出来
 -- 所属目录：db/init/（产线数字孪生平台 · 数据层）
@@ -59,7 +62,6 @@
 --   UUID              128 位唯一标识
 --   JSONB             二进制 JSON（可建索引、不保留键顺序、重复键只留最后一个）
 --   INET              PostgreSQL 的 IP 地址类型（写不进非法 IP）
---   PRIMARY KEY       主键：唯一 + 非空 + 自动建索引
 --   NOT NULL          不允许为 NULL
 --   UNIQUE            全表唯一（自动建唯一索引）
 --   DEFAULT           插入时若不指定就取这个值
@@ -83,17 +85,12 @@
 -- 0. 扩展：先给数据库装两个"能力"
 -- ---------------------------------------------------------------------------
 -- CREATE EXTENSION = 装插件。IF NOT EXISTS = 已装过就跳过，不报错。
--- TimescaleDB 扩展：提供 hypertable（按时间自动分区）、列压缩、连续聚合等能力。
 -- 机器人遥测 10Hz，一天一台就是 86.4 万行；不自动分区，时间一长查历史会拖垮库。
--- 这一段负责配置和实现 db/init/001_init.sql 对应的项目模块，为后续代码提供当前文件的处理入口。
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 -- 创建数据库扩展 timescaledb。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
--- pgcrypto 扩展：提供 gen_random_uuid()（指令幂等键）与 crypt()/gen_salt()（口令散列）。
 -- 口令只存散列、绝不存明文：种子账号用 crypt('明文', gen_salt('bf')) 生成（见文件末尾）。
 CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- 用于种子账号的口令散列
 -- 创建数据库扩展 pgcrypto。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- ===========================================================================
 -- ① 权限与组织（6 张）
@@ -119,7 +116,6 @@ CREATE TABLE users (
 -- users 是保存早期用户数据的数据表
   id            BIGSERIAL PRIMARY KEY,
   -- 定义数据库字段 id 的类型、默认值或约束。
-  -- PRIMARY KEY 要求主键唯一并用于定位该表记录
                  -- BIGSERIAL = BIGINT + 自增序列 + 默认 nextval → 插入时不用管主键
                  -- PRIMARY KEY = 主键：唯一 + 非空 + 自动建索引
   username      TEXT NOT NULL UNIQUE,
@@ -146,10 +142,7 @@ CREATE TABLE users (
   -- 定义字段 status 的类型及约束。
   -- status 是当前连接、产线、请求或指令的状态字段；TEXT 指定此列的数据类型
                  CHECK (status IN ('active','disabled')),
-                 -- 执行 CHECK 对应的本地处理，使用本行提供的数据。
-                 -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
                  -- TEXT = 账号状态
-                 -- NOT NULL = 必填
                  -- DEFAULT 'active' = 插入时不指定就取 active
                  -- CHECK (status IN (...)) = 行级校验，只允许这两个值
                  --   （停用而不是删人，历史审计才不会断）
@@ -161,12 +154,9 @@ CREATE TABLE users (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
   -- 定义字段 created_at 的类型及约束。
   -- created_at 是当前记录中的业务字段；TIMESTAMPTZ 指定此列的数据类型
-                 -- NOT NULL = 必填
                  -- DEFAULT now() = 插入时自动取数据库当前时间
                  --   （取库的时间，不依赖应用服务器时钟）
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成users表的定义，后续查询和写入依赖这些字段与约束。
 
 -- 角色表：角色的字典。角色是"岗位"，权限点是"能力"，两者解耦。
@@ -178,23 +168,18 @@ CREATE TABLE roles (
 -- roles 是保存操作角色的数据表
   id   BIGSERIAL PRIMARY KEY,
   -- 定义数据库字段 id 的类型、默认值或约束。
-  -- PRIMARY KEY 要求主键唯一并用于定位该表记录
        -- BIGSERIAL = 自增大整数（插入时自动赋值）
        -- PRIMARY KEY = 主键
   code TEXT NOT NULL UNIQUE,
   -- 定义字段 code 的类型及约束。
   -- code 是业务编码、状态码或数据库查询字段，结合所在报文解释；TEXT 指定此列的数据类型
        -- TEXT = 角色编码
-       -- NOT NULL = 必填
        -- UNIQUE = 全表唯一：同一个角色编码只能有一条
   name TEXT NOT NULL
   -- 定义字段 name 的类型及约束。
   -- name 是当前对象的名称字段；TEXT 指定此列的数据类型
        -- TEXT = 中文名（页面上给人看的）
-       -- NOT NULL = 必填
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成roles表的定义，后续查询和写入依赖这些字段与约束。
 
 -- 权限点表：能力的字典。type 决定这条权限作用在哪一层（RBAC 三级控制的基础）：
@@ -209,7 +194,6 @@ CREATE TABLE permissions (
 -- permissions 是保存操作权限的数据表
   id   BIGSERIAL PRIMARY KEY,
   -- 定义数据库字段 id 的类型、默认值或约束。
-  -- PRIMARY KEY 要求主键唯一并用于定位该表记录
        -- BIGSERIAL = 自增大整数
   code TEXT NOT NULL UNIQUE,
   -- 定义字段 code 的类型及约束。
@@ -226,12 +210,9 @@ CREATE TABLE permissions (
   -- name 是当前对象的名称字段；TEXT 指定此列的数据类型
        -- TEXT = 中文名（页面上给人看的）
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成permissions表的定义，后续查询和写入依赖这些字段与约束。
 
 -- 用户↔角色 关联表（多对多）：一个人可以同时是"操作员"和"数据分析员"。
---   ON DELETE CASCADE：删用户时自动清掉他的角色绑定，不留悬空引用。
 -- 这一段建立用户与角色关联表，声明它保存的字段和约束。
 CREATE TABLE user_roles (
 -- 创建数据库表 user_roles。
@@ -248,12 +229,8 @@ CREATE TABLE user_roles (
   -- roles 是保存操作角色的数据表；role_id 是当前记录中的业务字段；BIGINT 指定此列的数据类型；REFERENCES 为该列设置对目标表主键的外键约束
        -- 同上，外键指向 roles.id
   PRIMARY KEY (user_id, role_id)
-  -- 执行 KEY 对应的本地处理，使用本行提供的数据。
-  -- PRIMARY KEY 要求主键唯一并用于定位该表记录
        -- 复合主键 = 同一个人同一个角色只能绑一次（重复绑定会报错）
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成user_roles表的定义，后续查询和写入依赖这些字段与约束。
 
 -- 角色↔权限 关联表（多对多）：一个角色能拿哪些权限。
@@ -271,12 +248,8 @@ CREATE TABLE role_permissions (
   -- permissions 是保存操作权限的数据表；permission_id 是当前记录中的业务字段；BIGINT 指定此列的数据类型；REFERENCES 为该列设置对目标表主键的外键约束
        -- BIGINT + NOT NULL + REFERENCES permissions(id) ON DELETE CASCADE = 同上
   PRIMARY KEY (role_id, permission_id)
-  -- 执行 KEY 对应的本地处理，使用本行提供的数据。
-  -- PRIMARY KEY 要求主键唯一并用于定位该表记录
        -- 复合主键 = 同一个角色同一条权限只灌一次（灌重复会报错）
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成role_permissions表的定义，后续查询和写入依赖这些字段与约束。
 
 -- ===========================================================================
@@ -299,7 +272,6 @@ CREATE TABLE production_lines (
 -- production_lines 是保存产线目录的数据表
   id       BIGSERIAL PRIMARY KEY,
   -- 定义数据库字段 id 的类型、默认值或约束。
-  -- PRIMARY KEY 要求主键唯一并用于定位该表记录
            -- BIGSERIAL = 自增大整数（插入时自动赋值）
            -- PRIMARY KEY = 主键：唯一 + 非空
   code     TEXT NOT NULL UNIQUE,
@@ -320,16 +292,11 @@ CREATE TABLE production_lines (
   -- 定义字段 status 的类型及约束。
   -- status 是当前连接、产线、请求或指令的状态字段；TEXT 指定此列的数据类型
            CHECK (status IN ('running','idle','alarm','offline'))
-           -- 执行 CHECK 对应的本地处理，使用本行提供的数据。
-           -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
-           -- NOT NULL = 必填
            -- DEFAULT 'idle' = 新建产线默认空闲
            -- CHECK = 只允许这 4 个值。原 4 态；
            --   现场的 10 种工序状态由 004_line_state_stages.sql
            --   以"只增不改"的方式追加（详见那份脚本）
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成production_lines表的定义，后续查询和写入依赖这些字段与约束。
 
 -- 数据权限表：用户可见哪些产线。
@@ -353,12 +320,8 @@ CREATE TABLE user_line_scope (
   -- production_lines 是保存产线目录的数据表；line_id 是当前记录中的业务字段；BIGINT 指定此列的数据类型；REFERENCES 为该列设置对目标表主键的外键约束
        -- BIGINT + NOT NULL + REFERENCES production_lines(id) ON DELETE CASCADE = 同上
   PRIMARY KEY (user_id, line_id)
-  -- 执行 KEY 对应的本地处理，使用本行提供的数据。
-  -- PRIMARY KEY 要求主键唯一并用于定位该表记录
        -- 复合主键 = 同一个用户同一条产线只授权一次
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成user_line_scope表的定义，后续查询和写入依赖这些字段与约束。
 
 -- 设备表：这条产线上挂了哪些设备。
@@ -378,7 +341,6 @@ CREATE TABLE devices (
 -- devices 是保存设备目录的数据表
   id       BIGSERIAL PRIMARY KEY,
   -- 定义数据库字段 id 的类型、默认值或约束。
-  -- PRIMARY KEY 要求主键唯一并用于定位该表记录
            -- BIGSERIAL = 自增大整数
   line_id  BIGINT NOT NULL REFERENCES production_lines(id),
   -- 定义字段 line_id 的类型及约束。
@@ -397,7 +359,6 @@ CREATE TABLE devices (
   -- 定义字段 code 的类型及约束。
   -- code 是业务编码、状态码或数据库查询字段，结合所在报文解释；TEXT 指定此列的数据类型
            -- TEXT = 设备编码
-           -- NOT NULL = 必填
            -- UNIQUE = 全表唯一：MQTT 主题里的 {deviceId} 靠它唯一定位
   name     TEXT NOT NULL,
   -- 定义字段 name 的类型及约束。
@@ -419,12 +380,9 @@ CREATE TABLE devices (
   -- 定义字段 status 的类型及约束。
   -- status 是当前连接、产线、请求或指令的状态字段；TEXT 指定此列的数据类型
            -- TEXT = 设备状态
-           -- NOT NULL = 必填
            -- DEFAULT 'unknown' = 默认"未知"而不是"正常"——
            --   刚登记还没上报数据时，不该假装它是在线的
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成devices表的定义，后续查询和写入依赖这些字段与约束。
 
 -- ===========================================================================
@@ -463,20 +421,17 @@ CREATE TABLE robot_joint_states (
              --   翻译成 id 后才写进这里
   joints     DOUBLE PRECISION[] NOT NULL,
   -- 定义字段 joints 的类型及约束。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
              -- DOUBLE PRECISION = 双精度浮点（8 字节）
              -- [] = 数组类型，存 [j1..j6]
              -- NOT NULL = 六轴角度必填（缺一轴画不出机械臂）
              -- 内容：单位 deg
   tcp_pose   DOUBLE PRECISION[],
   -- 定义字段 tcp_pose 的类型及约束。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
              -- DOUBLE PRECISION[] = 6 个浮点的数组
              -- 可空 = 采集端不一定有位姿数据
              -- 内容：[x,y,z,rx,ry,rz]
   speed_pct  REAL,
   -- 定义字段 speed_pct 的类型及约束。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
              -- REAL = 单精度浮点（4 字节，存百分比绰绰有余）
              -- 可空 = 采集端没报速度时为 NULL
   mode       TEXT,
@@ -493,26 +448,20 @@ CREATE TABLE robot_joint_states (
   -- 定义字段 alarm_code 的类型及约束。
   -- alarm_code 是当前记录中的业务字段；INTEGER 指定此列的数据类型
              -- INTEGER = 32 位整数
-             -- NOT NULL = 必填
              -- DEFAULT 0 = 没报警也写 0
              -- ★ NOT NULL DEFAULT 0 的意义：没有报警也必须显式写 0，
              --   否则"没报警"和"没采到"就分不清了
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成robot_joint_states表的定义，后续查询和写入依赖这些字段与约束。
 -- 转成 hypertable：按 "time" 列自动分区。
 --   不做自动分区的话，几年之后查任何一段历史都要全表扫。
 --   create_hypertable(表名, 分区键列名) = TimescaleDB 的建时序表函数
 SELECT create_hypertable('robot_joint_states', 'time');
--- 执行 create_hypertable 对应的本地处理，使用本行提供的数据。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 索引：最常见的查询是"查某台设备最近 N 条" → (device_id, time DESC)。
 --   CREATE INDEX = 建普通索引
 --   device_id 在前是因为查询总是先按设备过滤；time DESC 因为最新数据读得最多。
 CREATE INDEX idx_rjs_device_time ON robot_joint_states (device_id, "time" DESC);
 -- 创建数据库索引 idx_rjs_device_time。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- 产线状态历史（快照序列，1Hz）：产线每次进入新状态就记一笔，用来画趋势曲线。
 --   【谁写】history-writer.service.ts 收到状态报文即时写入（频率低，不缓冲）。
@@ -535,10 +484,7 @@ CREATE TABLE line_status_history (
   -- 定义字段 state 的类型及约束。
   -- state 是当前状态值或实时状态服务实例，以所在对象为准；TEXT 指定此列的数据类型
                CHECK (state IN ('running','idle','alarm','offline')),
-               -- 执行 CHECK 对应的本地处理，使用本行提供的数据。
-               -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
                -- TEXT = 状态值
-               -- NOT NULL = 必填
                -- CHECK = 只允许这 4 个值；10 种工序状态由 004 追加（只增不改）
   product_code TEXT,
   -- 定义字段 product_code 的类型及约束。
@@ -559,17 +505,12 @@ CREATE TABLE line_status_history (
                -- INTEGER = 节拍（毫秒/件）
                -- 可空 = 采集端没报节拍
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成line_status_history表的定义，后续查询和写入依赖这些字段与约束。
 -- create_hypertable = 按 "time" 自动分区
 SELECT create_hypertable('line_status_history', 'time');
--- 执行 create_hypertable 对应的本地处理，使用本行提供的数据。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- CREATE INDEX = 常用查询"某产线最近 N 条状态" → (line_id, time DESC)
 CREATE INDEX idx_lsh_line_time ON line_status_history (line_id, "time" DESC);
 -- 创建数据库索引 idx_lsh_line_time。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- 事件/报警流水：启动、停止、报警、单件完成、换型都往这里记，按时间顺序只写不改。
 --   【与 line_status_history 的区别】状态流水记的是"现在处于什么状态"，
@@ -596,16 +537,12 @@ CREATE TABLE production_events (
   -- 定义字段 type 的类型及约束。
   -- type 是当前报文、指令或对象的类别字段；TEXT 指定此列的数据类型
             -- TEXT = 事件类型
-            -- NOT NULL = 必填
             -- 取值：start / stop / alarm / piece_done / changeover / custom
             -- ★ 这里不用 CHECK：事件类型随需求增长，加一种就要改约束；
             --   用 TEXT + 应用层校验更灵活
   level     TEXT NOT NULL DEFAULT 'info'
   -- 定义字段 level 的类型及约束。
-  -- level 是用户操作级别或事件严重级别，依据当前接口结构区分；TEXT 指定此列的数据类型
             CHECK (level IN ('info','warning','critical')),
-            -- 执行 CHECK 对应的本地处理，使用本行提供的数据。
-            -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
             -- TEXT = 事件级别
             -- NOT NULL + DEFAULT 'info' = 默认最普通的一档
             -- CHECK = 只允许三档，页面上按严重程度筛就靠它
@@ -626,17 +563,12 @@ CREATE TABLE production_events (
             -- 内容：事件附带的原始报文快照。JSONB 是为了事件类型不设上限——
             --   不同厂商的附加字段结构不一样，写死列会很别扭
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成production_events表的定义，后续查询和写入依赖这些字段与约束。
 -- create_hypertable = 按 "time" 自动分区
 SELECT create_hypertable('production_events', 'time');
--- 执行 create_hypertable 对应的本地处理，使用本行提供的数据。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- CREATE INDEX = 常用查询"某产线最近 N 条事件" → (line_id, time DESC)
 CREATE INDEX idx_pe_line_time ON production_events (line_id, "time" DESC);
 -- 创建数据库索引 idx_pe_line_time。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- ===========================================================================
 -- ④ 业务与审计（3 张）
@@ -669,7 +601,6 @@ CREATE TABLE line_current_status (
   -- 定义字段 state 的类型及约束。
   -- state 是当前状态值或实时状态服务实例，以所在对象为准；TEXT 指定此列的数据类型
                -- TEXT = 当前状态
-               -- NOT NULL = 必填
                -- DEFAULT 'offline' = 没有数据时先按离线算
                -- ★ 本表在 001 里**没有** CHECK 约束，
                --   004_line_state_stages.sql 会补上（与 line_status_history 保持一致）
@@ -696,8 +627,6 @@ CREATE TABLE line_current_status (
                -- DEFAULT now() = 每次覆盖写入时自动刷新
                -- 前端用它判断"这份状态是不是已经过期了"
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成line_current_status表的定义，后续查询和写入依赖这些字段与约束。
 
 -- 控制指令（全生命周期审计；type 为白名单，不开放任意写寄存器）。
@@ -718,13 +647,11 @@ CREATE TABLE control_commands (
 -- control_commands 是保存控制指令审计记录的数据表
   id              BIGSERIAL PRIMARY KEY,
   -- 定义数据库字段 id 的类型、默认值或约束。
-  -- PRIMARY KEY 要求主键唯一并用于定位该表记录
                  -- BIGSERIAL = 自增大整数
   idempotency_key UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
   -- 定义字段 idempotency_key 的类型及约束。
   -- idempotency_key 是当前记录中的业务字段；UUID 指定此列的数据类型
                  -- UUID = 128 位唯一标识（16 字节）
-                 -- NOT NULL = 必填
                  -- UNIQUE = 全表唯一：这是幂等的根据——同一条指令不会被写两遍
                  -- DEFAULT gen_random_uuid() = 由 pgcrypto 生成，不用应用层造
                  -- ★ 这个 UUID 就是 MQTT 报文里的 cmdId：
@@ -747,10 +674,7 @@ CREATE TABLE control_commands (
   -- 定义字段 type 的类型及约束。
   -- type 是当前报文、指令或对象的类别字段；TEXT 指定此列的数据类型
                  CHECK (type IN ('start','stop','reset','changeover')),
-                 -- 执行 CHECK 对应的本地处理，使用本行提供的数据。
-                 -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
                  -- TEXT = 指令类型
-                 -- NOT NULL = 必填
                  -- CHECK = 白名单，不在清单里的类型写不进库
                  --   原 4 项；003 追加 mode_set/alarm_clear，005 再追加 conveyor
   params          JSONB NOT NULL DEFAULT '{}',
@@ -765,10 +689,7 @@ CREATE TABLE control_commands (
   -- 定义字段 status 的类型及约束。
   -- status 是当前连接、产线、请求或指令的状态字段；TEXT 指定此列的数据类型
                  CHECK (status IN ('pending','sent','acked','rejected','failed','timeout')),
-                 -- 执行 CHECK 对应的本地处理，使用本行提供的数据。
-                 -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
                  -- TEXT = 指令状态
-                 -- NOT NULL = 必填
                  -- DEFAULT 'pending' = 落库时先记 pending，再往下走
                  -- CHECK = 状态机只允许这 6 个值
                  -- 状态机：pending → sent → acked / rejected / failed / timeout
@@ -796,15 +717,12 @@ CREATE TABLE control_commands (
                  -- 可空 = 还没收到回执
                  -- 与 issued_at 相减 = 指令实际耗时（做性能监控用）
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成control_commands表的定义，后续查询和写入依赖这些字段与约束。
 -- 索引：按操作人 + 时间查（"张三今天下了哪些指令"）。
 --   CREATE INDEX = 普通索引；user_id 在前，因为这类查询一定先按人过滤，
 --   再按时间倒序取。
 CREATE INDEX idx_cc_user_time ON control_commands (user_id, issued_at DESC);
 -- 创建数据库索引 idx_cc_user_time。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- 操作审计：所有敏感操作都往这里写一条。
 --   ★ 审计必须**独立于**业务表：即使业务表被误改、被误删，审计表还在。
@@ -821,7 +739,6 @@ CREATE TABLE audit_logs (
 -- audit_logs 是保存用户操作审计日志的数据表
   id         BIGSERIAL PRIMARY KEY,
   -- 定义数据库字段 id 的类型、默认值或约束。
-  -- PRIMARY KEY 要求主键唯一并用于定位该表记录
              -- BIGSERIAL = 自增大整数
   user_id    BIGINT REFERENCES users(id),
   -- 定义字段 user_id 的类型及约束。
@@ -848,7 +765,6 @@ CREATE TABLE audit_logs (
              --   不必为每种操作改表结构
   ip         INET,
   -- 内容：细节快照（cmdId、参数等）。JSONB 便于事后按需加字段，。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
              -- INET = PostgreSQL 的 IP 地址类型（比 TEXT 严谨：写不进非法 IP）
              -- 可空 = 非网页操作可以没有 IP
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -857,8 +773,6 @@ CREATE TABLE audit_logs (
              -- TIMESTAMPTZ + NOT NULL = 必填
              -- DEFAULT now() = 插入时自动取当前时间
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成audit_logs表的定义，后续查询和写入依赖这些字段与约束。
 
 -- ===========================================================================
@@ -873,7 +787,6 @@ INSERT INTO roles (code, name) VALUES
 -- roles 是保存操作角色的数据表；INSERT 是当前记录中的业务字段；INT 指定此列的数据类型；VALUES 按前面 INSERT 列出的字段顺序提供要写入的数据，$n 占位符由查询参数数组填入
   ('admin','管理员'), ('operator','产线操作员'), ('customer','客户'), ('analyst','数据分析员');
   -- INSERT INTO 表 (列...) VALUES (值...),(值...) = 一次插多行。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- 权限点清单：菜单 4 条 + 接口 1 条 + 数据 1 条。
 --   code 用 "类型:名字" 的冒号约定，和 permissions.type 呼应。
@@ -882,22 +795,11 @@ INSERT INTO permissions (code, type, name) VALUES
 -- permissions 是保存操作权限的数据表；INSERT 是当前记录中的业务字段；INT 指定此列的数据类型；VALUES 按前面 INSERT 列出的字段顺序提供要写入的数据，$n 占位符由查询参数数组填入
   ('menu:dashboard','menu','产线总览'),
   -- code 用 "类型:名字" 的冒号约定，和 permissions.type 呼应。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   ('menu:twin','menu','数字孪生'),
-  -- 开始当前表达式的分组或数组内容，供当前处理流程继续使用。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   ('menu:analysis','menu','数据分析'),
-  -- 开始当前表达式的分组或数组内容，供当前处理流程继续使用。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   ('menu:admin','menu','系统管理'),
-  -- 开始当前表达式的分组或数组内容，供当前处理流程继续使用。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   ('api:command:execute','api','下发控制指令'),
-  -- 开始当前表达式的分组或数组内容，供当前处理流程继续使用。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   ('data:telemetry:detail','data','查看详细遥测数据');
-  -- 开始当前表达式的分组或数组内容，供当前处理流程继续使用。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- 权限矩阵：谁 → 拿哪些权限。这四段 INSERT 拼起来就是完整的角色权限矩阵。
 --   用 SELECT ... FROM roles JOIN permissions 生成笛卡尔积，
@@ -924,11 +826,8 @@ INSERT INTO role_permissions (role_id, permission_id)
   -- WHERE r.code = 'admin' = 只取管理员这一行角色。
   -- roles 是保存操作角色的数据表，FROM 指定本次读取的数据来源
   WHERE r.code = 'operator' AND p.code IN
-  -- 限定处理范围，供当前处理流程继续使用。
   -- WHERE 只处理满足本行或后续条件的记录
     ('menu:dashboard','menu:twin','api:command:execute');
-    -- 开始当前表达式的分组或数组内容，供当前处理流程继续使用。
-    -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 逗号连接 FROM a, b = 隐式 CROSS JOIN（笛卡尔积）
 -- IN (...) = 权限编码白名单
 INSERT INTO role_permissions (role_id, permission_id)
@@ -938,21 +837,16 @@ INSERT INTO role_permissions (role_id, permission_id)
   -- IN (...) = 权限编码白名单。
   -- roles 是保存操作角色的数据表，FROM 指定本次读取的数据来源
   WHERE r.code = 'customer' AND p.code IN ('menu:dashboard','menu:twin');
-  -- 执行 IN 对应的本地处理，使用本行提供的数据。
   -- WHERE 只处理满足本行或后续条件的记录
 -- 客户只给两个只读菜单
 INSERT INTO role_permissions (role_id, permission_id)
 -- insert into 角色与权限关联相关的数据结构或记录。
 -- role_permissions 是保存角色与权限关联的数据表；INSERT 是当前记录中的业务字段；INT 指定此列的数据类型
   SELECT r.id, p.id FROM roles r, permissions p
-  -- 读取数据，供当前处理流程继续使用。
   -- roles 是保存操作角色的数据表，FROM 指定本次读取的数据来源
   WHERE r.code = 'analyst' AND p.code IN
-  -- 限定处理范围，供当前处理流程继续使用。
   -- WHERE 只处理满足本行或后续条件的记录
     ('menu:dashboard','menu:analysis','data:telemetry:detail');
-    -- 开始当前表达式的分组或数组内容，供当前处理流程继续使用。
-    -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 分析员给总览 + 分析 + 详细数据（没有 api:command:execute，所以不能控制产线）
 
 -- 初始管理员：admin / Admin@123  ★首次登录后必须修改
@@ -991,21 +885,14 @@ INSERT INTO devices (line_id, type, code, name, protocol)
 -- devices 是保存设备目录的数据表；INSERT 是当前记录中的业务字段；INT 指定此列的数据类型
   SELECT l.id, d.type, d.code, d.name, d.protocol
   -- 不用再写一条 INSERT。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   FROM production_lines l,
-  -- 指定读取来源表，供当前处理流程继续使用。
   -- production_lines 是保存产线目录的数据表，FROM 指定本次读取的数据来源
        (VALUES ('plc',   'plc-01',    '主控 PLC',   'modbus_tcp'),
        -- 按前面声明的列顺序提供 SQL 插入值，参数占位符由查询调用传入。
        -- VALUES 按前面 INSERT 列出的字段顺序提供要写入的数据，$n 占位符由查询参数数组填入
                ('robot', 'robot-01',  '六轴机器人', 'via_plc')
-               -- 开始当前表达式的分组或数组内容，供当前处理流程继续使用。
-               -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
        ) AS d(type, code, name, protocol)
-       -- 执行 d 对应的本地处理，使用本行提供的数据。
-       -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   WHERE l.code = 'line-01';
-  -- 限定处理范围，供当前处理流程继续使用。
   -- WHERE 只处理满足本行或后续条件的记录
 -- VALUES (...) AS d(列名...) = 构造一张只有两行的临时表，并给它起别名和列名
 -- CROSS JOIN = 与 production_lines 笛卡尔积（这里只有 1 条产线，正好 1×2=2 行）
@@ -1015,7 +902,6 @@ INSERT INTO line_current_status (line_id)
   SELECT id FROM production_lines WHERE code = 'line-01';
   -- CROSS JOIN = 与 production_lines 笛卡尔积（这里只有 1 条产线，正好 1×2=2 行）。
   -- production_lines 是保存产线目录的数据表，FROM 指定本次读取的数据来源；WHERE 只处理满足本行或后续条件的记录
-  -- 这一段提供了配置和实现 db/init/001_init.sql 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。
 -- 插入示例产线的初始状态行（line_id 是主键，所以只能有一行）
 -- 不预先插这一行的话，前端首屏第一次读会拿到空。
 

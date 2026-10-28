@@ -1,7 +1,7 @@
-rem 这一段负责按所选采集器启动本地后端、边缘进程与前端开发服务，为后续代码提供当前文件的处理入口。
 @echo off
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
-rem 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
+rem 本机开发启动入口，定位项目目录后启动构建后的后端、选定采集器与前端开发服务。
+rem ROOT 是仓库根目录，COLLECTOR 选择模拟或真实采集入口；基础数据库、Redis、Broker 需另行就绪。
+rem 后端运行 server/dist，源码更新后需重新构建；这份脚本不代表工控机恢复配置。
 rem ============================================================================
 rem 文件作用：本地闭环一键启动脚本（后端 + 采集器 + 前端 dev）
 rem 所属模块：scripts/
@@ -23,7 +23,6 @@ rem       set COLLECTOR=mock && scripts\start-local.bat
 rem   两者实现的是同一套数据契约，云端/前端/数据库零改动。
 rem
 rem 【前置条件】
-rem   Windows 上已装好并启动：Mosquitto(1883) / Memurai(6379) / PostgreSQL+TimescaleDB(5432)
 rem   且数据库已按手册 3.2 节初始化（001_init.sql 执行过）。
 rem   server\.env 已预置正确配置。
 rem   web\node_modules 与 server\dist 已存在（开发机打好的部署包自带）。
@@ -46,7 +45,6 @@ rem ROOT 是该脚本设置的批处理环境变量
 
 rem ---- 采集器选择：读环境变量 COLLECTOR，默认为 plc ----
 set COLLECTOR=%COLLECTOR%
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
 rem COLLECTOR 是由批处理环境变量提供的当前配置或路径；COLLECTOR 是该脚本设置的批处理环境变量
 if "%COLLECTOR%"=="" set COLLECTOR=plc
 rem 检查"％COLLECTOR％"=="" set COLLECTOR=plc，按判断结果进入对应的处理分支。
@@ -60,20 +58,13 @@ rem COLLECTOR 是由批处理环境变量提供的当前配置或路径
     rem 根据 COLLECTOR 决定跑哪个采集器脚本。
     rem EDGE_SCRIPT 是该脚本设置的批处理环境变量
 ) else (
-rem 执行 else 对应的本地处理，使用本行提供的数据。
-rem 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
     set EDGE_SCRIPT=plc_collector.py
-    rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
     rem EDGE_SCRIPT 是该脚本设置的批处理环境变量
 )
-rem 结束当前函数、分支或对象配置，返回上一层处理流程。
-rem 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
 
 echo Starting line-twin local loop from %ROOT%
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
 rem ROOT 是由批处理环境变量提供的当前配置或路径
 echo Edge collector: %EDGE_SCRIPT%  (COLLECTOR=%COLLECTOR%)
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
 rem EDGE_SCRIPT 是由批处理环境变量提供的当前配置或路径；COLLECTOR 是由批处理环境变量提供的当前配置或路径
 
 rem ---- ① 启动后端（3000 端口）----
@@ -84,36 +75,22 @@ rem ROOT 是项目根目录；后续还会启动采集器等程序。修改 src 
 rem 本脚本启动应用进程，不负责自动安装全部数据库、Redis 和 Broker 基础设施。
 
 start "lt-server" cmd /k "cd /d %ROOT%\server && node dist\main.js"
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
 rem ROOT 是由批处理环境变量提供的当前配置或路径
 
 rem ---- 等待 3 秒，避免采集器比后端先发数据 ----
 timeout /t 3 /nobreak >nul
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
-rem 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
 
 rem ---- ② 启动采集器（plc 或 mock）----
 start "lt-edge"   cmd /k "cd /d %ROOT%\edge && py -3 %EDGE_SCRIPT%"
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
 rem ROOT 是由批处理环境变量提供的当前配置或路径；EDGE_SCRIPT 是由批处理环境变量提供的当前配置或路径
 
 rem ---- ③ 启动前端 dev server（5173 端口）----
 rem npm run dev 启动 Vite；/api 与 /socket.io 由 vite.config.ts 代理到 3000
 start "lt-web"    cmd /k "cd /d %ROOT%\web && npm run dev"
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
 rem ROOT 是由批处理环境变量提供的当前配置或路径
 
 rem ---- 完成提示 ----
 echo.
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
-rem 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
 echo Wait 5-10 seconds, then open http://localhost:5173 in browser.
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
-rem 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
 echo Keep all 3 windows open. Close them to stop.
-rem 执行脚本命令、设置变量或控制执行流程，供当前处理流程继续使用。
-rem 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
 echo To switch back to mock (no PLC needed):  set COLLECTOR=mock ^&^& scripts\start-local.bat
-rem 执行 mock 对应的本地处理，使用本行提供的数据。
-rem 这一行使用的名称来自当前脚本的参数、前面设置的变量或运行环境
-rem 这一段提供了按所选采集器启动本地后端、边缘进程与前端开发服务所需的定义和处理逻辑，结果交由调用方或运行环境使用。

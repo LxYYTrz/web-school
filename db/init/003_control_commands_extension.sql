@@ -1,3 +1,6 @@
+-- 更新 control_commands.type 的检查约束，补充 mode_set、alarm_clear 等业务类型；其他约束和现场写点分别定义。
+-- SQL 定义结构、约束或迁移；应用运行时的具体查询和写入在 server/，不要把存在一张表当作界面已经提供对应功能。
+
 -- ============================================================================
 -- 003_control_commands_extension.sql
 --   契约 v1.1 扩展：control_commands.type 白名单追加 mode_set / alarm_clear
@@ -77,13 +80,11 @@
 --    约束名 control_commands_type_check：PostgreSQL 给内联 CHECK 自动起的名字，
 --    规则是 <表名>_<列名>_check。
 --    ★ 这里刻意不加 IF EXISTS：约束名对不上时要报错停下来，而不是静默跳过。
--- 这一段负责配置和实现 db/init/003_control_commands_extension.sql 对应的项目模块，为后续代码提供当前文件的处理入口。
 ALTER TABLE control_commands
 -- alter table 控制指令审计记录相关的数据结构或记录。
 -- control_commands 是保存控制指令审计记录的数据表
   DROP CONSTRAINT control_commands_type_check;
   -- ★ 这里刻意不加 IF EXISTS：约束名对不上时要报错停下来，而不是静默跳过。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 
 -- ② 再加回新约束（6 项白名单）。
 --    ADD CONSTRAINT = 加一条约束；CHECK = 行级校验条件。
@@ -99,8 +100,4 @@ ALTER TABLE control_commands
 -- control_commands 是保存控制指令审计记录的数据表
   ADD CONSTRAINT control_commands_type_check
   -- · alarm_clear = 清除报警（现场暂未开放对应寄存器，edge 会回 rejected）。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   CHECK (type IN ('start','stop','reset','changeover','mode_set','alarm_clear'));
-  -- 执行 CHECK 对应的本地处理，使用本行提供的数据。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
-  -- 这一段提供了配置和实现 db/init/003_control_commands_extension.sql 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。

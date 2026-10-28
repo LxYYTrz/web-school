@@ -1,3 +1,6 @@
+-- 建立 app.app_users 登录账号结构，与基础 users 表分别存在；口令保存摘要，运行时由 AuthService 验证。
+-- SQL 定义结构、约束或迁移；应用运行时的具体查询和写入在 server/，不要把存在一张表当作界面已经提供对应功能。
+
 -- ============================================================================
 -- 002_app_users.sql —— 应用层账号表（app.app_users）：能登录这个系统的人
 -- 所属目录：db/init/（产线数字孪生平台 · 数据层）
@@ -44,7 +47,6 @@
 --   不是设计缺陷 —— 讲解时如被问到，可以如实说明。
 --
 -- 【三级权限规则】
---   level 严格对照 origin/1.0.1 的 userServer/main.py：
 --     1 = 普通用户  2 = 二级用户  3 = 管理员
 --   规则要点（代码见 server/src/users/users.service.ts）：
 --     · 只有 level=3 能建号、删号、改别人的等级
@@ -58,7 +60,6 @@
 --   TEXT            变长字符串
 --   SMALLINT        16 位整数（-32768~32767，三级权限够用）
 --   TIMESTAMPTZ     带时区的时间戳
---   PRIMARY KEY     主键：唯一 + 非空 + 自动建索引
 --   NOT NULL        不允许为 NULL
 --   DEFAULT         插入时若不指定就取这个值
 --   CHECK           行级校验，写不进表
@@ -109,9 +110,7 @@ CREATE TABLE IF NOT EXISTS app.app_users (
              --   不是同一种格式——那张表是给 public.users 用的，两套不要混用。
   level      SMALLINT NOT NULL CHECK (level IN (1, 2, 3)),
   -- 定义数据库字段 level 的类型、默认值或约束。
-  -- level 是用户操作级别或事件严重级别，依据当前接口结构区分；SMALLINT 指定此列的数据类型
              -- SMALLINT = 16 位整数（够放 1/2/3，还省内存）
-             -- NOT NULL = 必填
              -- CHECK = 权限等级写死在数据库层：代码里万一漏了校验，
              --   也写不进第 4 种等级
              -- 取值：1 = 普通用户，2 = 二级用户，3 = 管理员
@@ -119,13 +118,10 @@ CREATE TABLE IF NOT EXISTS app.app_users (
   -- 定义字段 created_at 的类型及约束。
   -- created_at 是当前记录中的业务字段；TIMESTAMPTZ 指定此列的数据类型
              -- TIMESTAMPTZ = 带时区的时间戳
-             -- NOT NULL = 必填
              -- DEFAULT now() = 插入时自动取数据库当前时间
              --   （取库的时间，不依赖应用服务器时钟）
              -- 用途：查"这个账号什么时候建的"
 );
--- 结束当前函数、分支或对象配置，返回上一层处理流程。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
 -- 这一段完成app.app_users表的定义，后续查询和写入依赖这些字段与约束。
 
 -- 索引：按等级排序查（用户管理页默认按 level DESC, username 排）。
@@ -136,11 +132,7 @@ CREATE TABLE IF NOT EXISTS app.app_users (
 --   "列出所有管理员"这类查询不必走全表扫。
 CREATE INDEX IF NOT EXISTS app_users_level_idx
 -- 创建数据库索引 app_users_level_idx。
--- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
   ON app.app_users(level);
-  -- 执行 app_users 对应的本地处理，使用本行提供的数据。
-  -- 这一行继续约束当前数据库对象或语句的字段、条件与处理方式
-  -- 这一段提供了配置和实现 db/init/002_app_users.sql 对应的项目模块所需的定义和处理逻辑，结果交由调用方或运行环境使用。
 
 -- ★ 不预置任何默认账号。
 --   001 里那个 admin/Admin@123 是给 public.users 用的，**不是**给登录用的。
