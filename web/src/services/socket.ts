@@ -26,6 +26,11 @@ export function getSocket(): Socket {
   // 还没创建过 → 创建
   if (!socket) {
     socket = io(BASE ?? '/', {
+    // 1. io 从 socket.io-client 导入，在浏览器创建一个实时通信客户端。
+    // 2. BASE 有配置时使用指定入口；否则使用当前网站根路径，由部署中的 Nginx 转发。
+    // 3. transports 只选择 websocket；下方三个重连参数控制重试次数与间隔，不控制 PLC 采样周期。
+    // 4. 这里仅建立连接；订阅 line:line-01 房间还要由 useLineData 发 subscribe 事件。
+    // 5. 模块变量 socket 保存这个对象，其他页面和回执监听复用同一客户端。
       transports: ['websocket'],
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -43,7 +48,10 @@ export async function fetchSnapshot(lineId: string) {
   const base = BASE ?? '';
   // 发 GET 请求
   const res = await fetch(`${base}/api/lines/${lineId}/snapshot`);
-  // 非 2xx 就抛错，调用方（useLineData.preload）会 catch 并静默降级
+  // 1. fetch 是浏览器内置 HTTP 请求方法，这里未指定 method，所以发 GET。
+  // 2. lineId 例如 line-01，组成后端的产线快照接口地址。
+  // 3. res 是 HTTP 响应对象，下面先判断状态，再调用 res.json() 解析正文。
+  // 4. 接口由后端读取 Redis 组装；浏览器没有直接连接 Redis，也没有在此订阅 MQTT。
   if (!res.ok) throw new Error(`snapshot ${res.status}`);
   // 解析 JSON 并返回
   return res.json();

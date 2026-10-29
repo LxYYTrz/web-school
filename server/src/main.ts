@@ -27,6 +27,10 @@ async function bootstrap() {
   // app 是后端 NestExpressApplication，与浏览器 main.ts 中 Vue 的 app 是不同对象；后面的 app.use() 注册 HTTP 中间件。
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // 1. NestFactory 来自 NestJS；AppModule 是项目根模块，列出需要装配的功能模块。
+  // 2. create() 返回创建应用的异步结果，await 后才能继续安装中间件和监听端口。
+  // 3. NestExpressApplication 是 TypeScript 类型约定，表明这里使用 Express 适配的后端应用。
+  // 4. 这与浏览器 web/src/main.ts 的 Vue createApp 是两个进程、两套入口。
 
   // 登录会话:HttpOnly + SameSite=Lax;prod 上 HTTPS 后把 secure 改 true
 
@@ -37,8 +41,11 @@ async function bootstrap() {
   app.use(
   // 将 cookie-session 注册为 NestJS/Express 的 HTTP 中间件，使后续接口能读取和写入 req.session。
     cookieSession({
-    // 创建 cookie-session 中间件，由外层 app.use 安装，使登录响应能保存会话、后续请求能验证并读取会话。
-    // cookieSession 来自 cookie-session 库；项目在登录控制器写 req.session，中间件负责处理签名 Cookie，不需要控制器自己拼接 Cookie。
+    // 1. cookieSession 是第三方中间件工厂，外层 app.use() 将它装入 HTTP 请求处理链。
+    // 2. name 决定 Cookie 名称，keys 提供签名密钥；username、level 等内容由登录控制器写 req.session。
+    // 3. httpOnly 限制浏览器脚本读取；sameSite=lax 影响跨站发送规则；maxAge 使用毫秒。
+    // 4. 当前 secure=false 不强制只经 HTTPS 发送。签名检查篡改，不等于把会话内容加密。
+    // 5. 本项目不是只给浏览器一个编号、再到 Redis 查询用户会话的实现。
       name: 'lt_sess',
       keys: [config.http.sessionSecret],
       // 配置登录 Cookie 的签名密钥，供中间件签名和检查内容是否被篡改。
@@ -56,6 +63,9 @@ async function bootstrap() {
   const raw = config.http.corsOrigin;
   const origins = raw === '*' ? true : raw.split(',').map((s) => s.trim());
   app.enableCors({ origin: origins, credentials: true });
+  // 1. origins 由当前跨域配置解析而来，credentials=true 允许该跨域响应按规则使用凭据。
+  // 2. 它与前端 fetch 的 credentials: include 配合，但都不能绕过浏览器 Cookie、SameSite 或来源检查。
+  // 3. 同一个网站入口经 Nginx 转发接口时，浏览器看到的访问来源还要按实际部署地址判断。
 
   // 7) 优雅关闭钩子：进程退出时调用各模块的 onModuleDestroy
   app.enableShutdownHooks();
@@ -65,8 +75,9 @@ async function bootstrap() {
   // 本地开发代理和公网 SSH 转发最终都要找到这个后端服务；进程开始监听本身不证明 PLC、数据库或实时数据已经全部可用。
 
   await app.listen(config.http.port);
-  // 让后端 HTTP 服务在配置的端口开始接收请求。
-  // 9) 启动成功日志：部署人员看到这行即代表后端已就绪（对应 CLAUDE.md §6 验收标准）
+  // 1. 使用统一配置指定的端口接收 HTTP 和项目实时服务请求，默认值在 configuration.ts 中定义。
+  // 2. 监听成功只说明后端入口已开始接收连接；Redis、数据库、Broker 和 PLC 是否正常要沿各自链路观察。
+  // 3. 公网部署中，SSH 在工控机一侧最终连接的就是这个本机后端入口。
   console.log(`[server] HTTP/WebSocket listening on :${config.http.port}`);
 }
 

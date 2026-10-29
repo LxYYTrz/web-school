@@ -74,16 +74,17 @@ function createLineData(lineId: string) {
   const connected = ref(false);
   // 边缘采集器是否在线。null = 未知（还没收到任何消息）
   const edgeOnline = ref<boolean | null>(null);
-  // 机器人最新一帧（10Hz 覆盖写）
+  // 机器人最新一帧（收到新帧后覆盖）
 
   // robot、status、io 分别保存机器人角度帧、工序状态和 IO 帧，供不同界面读取。
   // ref 的值变化会通知依赖它的页面与 watch；同一对象的实时事件更新它自己的分支，不把关节角依次转换成工序和 IO。
   // 初始 null 表示没有对应现场帧；收到过帧后，这份浏览器内存与后端 Redis 的有效期分别管理。
 
   const robot = ref<RobotState | null>(null);
-  // 为机器人这一分支保存当前帧，初始 null 表示还没有收到对应数据。
-  // robot 是 Vue 的响应式 ref，类型为 RobotState 或 null；快照和 robot_state 回调写入它，TwinView 的 watch 读取它。
-  // 产线当前状态（1Hz 覆盖写）
+  // 1. ref 从 Vue 导入，创建响应式容器；脚本用 robot.value 读写其中内容。
+  // 2. RobotState 是项目定义的数据类型，null 表示这份浏览器状态还没有有效帧。
+  // 3. preload 和 robot_state 回调是后面两个赋值入口；TwinView 等组件共享这个容器。
+  // 4. 赋新帧会通知依赖它的界面和 watch，不会由 ref 自动请求 PLC 或写数据库。
   const status = ref<LineStatus | null>(null);
   const io = ref<IoState | null>(null);
   // 事件滚动列表（最新在前，因为用 unshift）
@@ -107,10 +108,15 @@ function createLineData(lineId: string) {
       // 当前前端只驱动一台机器人，所以取第一个（Object.values[0]）用即可。
       // 当前只驱动一台机器人；支持多机器人时需要按 deviceId 分发到多个视图。
       const first = Object.values(snap.robots ?? {})[0];
-      // 按前面声明的列顺序提供 SQL 插入值，参数占位符由查询调用传入。
+      // 1. snap 来自刚完成的 HTTP 快照请求，robots 是“设备编码 → 整帧”的对象。
+      // 2. Object.values() 是 JavaScript 方法，把这个对象的值取成数组；[0] 只选其中首台机器人。
+      // 3. ?? {} 在 robots 缺失时提供空对象，此时 first 为 undefined。
+      // 4. 当前界面按单台机器人使用，没有在这里根据 deviceId 同时驱动多个模型。
       if (first && !liveSeen.robot) robot.value = first;
-      // 仅在快照有机器人帧且尚未收到实时机器人数据时，用快照补充首屏。
-      // first 是本次快照中的首台机器人帧；liveSeen.robot 防止较晚返回的旧快照覆盖已经收到的新帧；robot.value 是网页保存的响应式机器人状态。
+      // 1. first 有帧并且实时分支还没见过机器人消息时，才用快照填充首屏。
+      // 2. liveSeen.robot 初始为 false，robot_state 回调收到帧后将它设为 true。
+      // 3. 例如先收到新实时帧，再收到较早快照：这里跳过快照，避免覆盖新帧。
+      // 4. 这只是两条前端到达路径之间的保护，没有逐帧比较 ts，也不负责 Redis 的 60 秒过期。
     } catch (e) {
       // 后端没起或网络异常:静默,等待 socket 实时数据
       console.warn('[lineData] snapshot 预载失败', e);
@@ -132,7 +138,9 @@ function createLineData(lineId: string) {
    */
   function subscribe() {
     socket.emit('subscribe', { lineId });
-    // 向订阅方发送指定实时事件。
+    // 1. emit 是 Socket.IO 客户端方法；subscribe 是本项目约定的业务事件名。
+    // 2. 对象带上当前产线编码，后端网关接收后调用 join() 加入对应产线房间。
+    // 3. 它不是 MQTT SUBSCRIBE：浏览器与后端之间使用 Socket.IO，采集器与 Broker 才使用 MQTT。
   }
 
   // 连接建立
@@ -144,7 +152,10 @@ function createLineData(lineId: string) {
   socket.on('disconnect', () => {
     connected.value = false;
   });
-  // 机器人六轴帧（10Hz）—— 覆盖写，只保留最新一帧
+  // 1. on 注册回调，定义时不会立刻执行回调体；以后收到 robot_state 事件才进入。
+  // 2. msg 是后端广播的整帧，RobotState 只为 TypeScript 提供类型描述。
+  // 3. 先把 liveSeen.robot 标成 true，再将 msg 覆盖给共享 robot.value。
+  // 4. 顶栏、模型页和其他使用同一数据层的组件因此能读取本轮结果；这里不会累积关节历史。
   socket.on('robot_state', (msg: RobotState) => {
     liveSeen.robot = true;
     robot.value = msg;
@@ -204,19 +215,13 @@ function createLineData(lineId: string) {
   return {
     connected,
     edgeOnline,
-    // edgeOnline 是上方取得或计算的同名局部值，在此作为返回对象的 edgeOnline 属性
     edgeText,
-    // edgeText 是上方取得或计算的同名局部值，在此作为返回对象的 edgeText 属性
     robot,
-    // robot 是上方取得或计算的同名局部值，在此作为返回对象的 robot 属性
     status,
     io,
     events,
-    // events 是上方取得或计算的同名局部值，在此作为返回对象的 events 属性
     alarmText,
-    // alarmText 是上方取得或计算的同名局部值，在此作为返回对象的 alarmText 属性
     lastEventAt,
-    // lastEventAt 是上方取得或计算的同名局部值，在此作为返回对象的 lastEventAt 属性
   };
 }
 
@@ -228,8 +233,10 @@ function createLineData(lineId: string) {
 
 let shared: ReturnType<typeof createLineData> | null = null;
 
-// 页面和公共外框调用这里取得共享实例；首次调用才创建，后续复用模块级 shared。
-// 当前实现不是按不同 lineId 自动建立多份实例，本方法也没有组件卸载时的引用计数或 dispose。
+// 1. 组件通过这个项目函数取得共享数据，不是每调用一次就另开一条采集链。
+// 2. shared 在模块作用域；第一次创建 createLineData(lineId)，后续返回相同实例。
+// 3. 传入第二个产线编码不会自动重建或切换实例；当前实现按首个实例服务。
+// 4. 这里没有引用计数或 dispose，不能把其他三维组件的卸载清理当成此数据层也已经清理。
 export function useLineData(lineId = 'line-01') {
   // 还没有实例 → 创建
   if (!shared) shared = createLineData(lineId);

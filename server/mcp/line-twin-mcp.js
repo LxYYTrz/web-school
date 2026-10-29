@@ -69,7 +69,6 @@ const PROPOSAL_TTL_SEC = 900;
 const PROPOSAL_CHANNEL = 'ai:proposal';
 
 function log(...args) {
-// 定义 log，用于把 MCP 运行日志写入标准错误，避免污染协议标准输出。
   // 只走 stderr —— stdout 是 MCP 传输通道
   process.stderr.write('[line-twin-mcp] ' + args.join(' ') + '\n');
   // 把本行提供的内容写到已打开的文件或通信目标。
@@ -238,7 +237,10 @@ async function proposeAction(lineId, deviceId, type, params, reason) {
   };
 
   await redis.set(`ai:proposal:${proposal.id}`, JSON.stringify(proposal), 'EX', PROPOSAL_TTL_SEC);
-  // 通知 NestJS 推送成 UI 卡片。pubsub 断线不影响提案本身 —— 它已经在 Redis 里了
+  // 1. 先保存完整待确认建议：key 含 proposal.id，value 是 JSON 文本。
+  // 2. PROPOSAL_TTL_SEC 当前为 900，按秒设置 15 分钟的 key 有效期。
+  // 3. 下一行 publish 另向 ai:proposal 频道发通知，由 NestJS 推给网页；保存和通知是两个动作。
+  // 4. 此分支没有调用 machineIssue，也没有写 PLC，返回给 AI 的是 proposalId。
   await redis.publish(PROPOSAL_CHANNEL, JSON.stringify(proposal));
 
   return {
@@ -286,7 +288,6 @@ async function machineIssue({ lineId, deviceId, type, params, operator }) {
     return { ok: false, error: '机器通道未启用(MCP 侧没有 MACHINE_COMMAND_TOKEN)' };
   }
   let res;
-  // 声明可重新赋值的变量 res，稍后再赋值。
   try {
 
     // 将这次工具操作提交给后端机器通道，API_BASE 是后端地址配置，x-machine-token 携带配置的机器令牌。
@@ -294,6 +295,10 @@ async function machineIssue({ lineId, deviceId, type, params, operator }) {
     // operator 是此通道传入的操作者标识，不能把机器令牌检查和网页 cookie-session 登录验证混为一谈。
 
     res = await fetch(`${API_BASE}/api/machine/commands`, {
+    // 1. 这是 Node.js 的 HTTP 请求，把工具参数交给本机后端机器入口。
+    // 2. API_BASE 来自配置；请求头 x-machine-token 携带机器通道凭据，不使用网页登录 Cookie。
+    // 3. JSON 正文包含产线、设备、指令类型、参数与 operator，后端守卫通过后才进入共用 CommandService。
+    // 4. 本文件没有在这里直接写 Modbus，HTTP 成功返回 cmdId 后仍要单独等待回执。
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-machine-token': MACHINE_TOKEN },
       body: JSON.stringify({ lineId, deviceId, type, params: params || {}, operator }),
@@ -317,7 +322,6 @@ async function waitAck(cmdId, timeoutMs = ACK_WAIT_MS) {
 // 在超时时间内查询并等待指定指令的最终回执。
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-  // 持续检查(Date.now() < deadline)，按判断结果进入对应的处理分支。
     const { rows } = await pool.query(
       `SELECT status, ack_payload, acked_at FROM control_commands WHERE idempotency_key = $1`,
       // control_commands 是保存控制指令审计记录的数据表，FROM 指定本次读取的数据来源；$1 是数据库参数占位符，实际值由查询调用另外传入；WHERE 只处理满足本行或后续条件的记录
@@ -332,7 +336,9 @@ async function waitAck(cmdId, timeoutMs = ACK_WAIT_MS) {
       };
     }
     await sleep(400);
-    // 暂停当前线程指定秒数。
+    // 1. sleep 是本文件用 Promise 与 setTimeout 封装的异步等待，单位为毫秒。
+    // 2. await 让本次轮询隔 400ms 再查数据库，不会阻塞 Node.js 主线程去忙等。
+    // 3. 这里读取的是控制记录状态，不会因轮询而重复向 PLC 下发原命令。
   }
   return { status: 'timeout', message: `${Math.round(timeoutMs / 1000)}s 内没有回执`, ackedAt: null };
 }
@@ -356,11 +362,10 @@ async function waitState(lineId, wanted, timeoutMs = STATE_WAIT_MS) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < deadline) {
-  // 持续检查(Date.now() < deadline)，按判断结果进入对应的处理分支。
     last = await currentState(lineId);
     if (last && list.includes(last)) return { reached: true, state: last };
     await sleep(500);
-    // 暂停当前线程指定秒数。
+    // 异步等待 400 毫秒后继续轮询，不阻塞 Node.js 主线程。
   }
   return { reached: false, state: last };
 }
@@ -407,6 +412,10 @@ async function execStep({ lineId, deviceId, type, params, operator, waitFor, ski
     return { type, params: params || {}, ok: false, status: 'failed', message: issued.error, stateBefore: before };
   }
   const ack = await waitAck(issued.cmdId);
+  // 1. issued 来自 machineIssue 的 HTTP 结果，cmdId 对应 control_commands.idempotency_key。
+  // 2. waitAck 查数据库直到状态离开 pending/sent，或达到本工具等待期限。
+  // 3. 得到 acked 说明采集器报告正常写响应；如果本步骤还要求工序变化，下面继续 waitState。
+  // 4. 因此“接口受理”“写入回执”“上报工序符合预期”在代码中是先后不同阶段。
   const step = {
     type,
     params: params || {},
@@ -547,7 +556,6 @@ async function runOperation(op, { lineId, deviceId, operator, dryRun }) {
     stateAfter: await currentState(lineId),
     // 读取产线最新工序状态。
     steps,
-    // steps 是上方取得或计算的同名局部值，在此作为返回对象的 steps 属性
     summary: steps.map((s) => `${s.type}${s.params?.action ? ':' + s.params.action : ''} → ${s.status}`).join(' , '),
     // 将集合中的每个元素转换为新值，返回新的数组或迭代结果。
   };
@@ -573,6 +581,10 @@ server.registerTool(
       '读取产线当前实时状态:产线状态机、边缘网关在线情况、各机器人关节角。' +
       '注意 status/edge/robots 中出现 null 表示该数据超过 TTL 未刷新(空闲产线正常),不代表设备故障。',
     inputSchema: { lineId: z.string().describe('产线编码,例如 line-01') },
+    // 1. z 来自 zod，这里声明工具输入 lineId 必须是字符串，并附上供调用方理解的说明。
+    // 2. 这是 get_line_snapshot 工具注册配置的一部分；registerTool 来自 MCP SDK。
+    // 3. 后面的 async 回调取得 lineId，再调用项目 getLineSnapshot 查询 Redis 并包装成 content 文本。
+    // 4. 注册时不会立刻执行一次现场查询；真正工具请求到达后才运行回调。
     annotations: READ_ONLY,
   },
   async ({ lineId }) => ({ content: [{ type: 'text', text: JSON.stringify(await getLineSnapshot(lineId)) }] }),
@@ -775,6 +787,9 @@ server.registerTool(
 // 标准输入输出承载协议数据；诊断日志用 stderr，不把此传输解释为另一个 TCP 服务。
 async function main() {
   const transport = new StdioServerTransport();
+  // 1. StdioServerTransport 从 MCP SDK 导入，用当前进程的标准输入和标准输出收发协议消息。
+  // 2. Hermes 启动并连接此工具进程后，通过进程管道调用已注册工具；这段没有监听一个 TCP 端口。
+  // 3. 普通调试日志写 stderr，避免把非协议文字混入 stdout。
   await server.connect(transport);
   // 把 MCP 服务连接到标准输入输出管道，供启动本进程的 Hermes 调用工具；这里不建立 TCP 服务端口。
   log(`已启动;proposal 频道=${PROPOSAL_CHANNEL},ttl=${PROPOSAL_TTL_SEC}s`);

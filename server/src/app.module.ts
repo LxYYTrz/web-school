@@ -33,6 +33,10 @@ import { AiModule } from './ai/ai.module';
   // 功能模块中的 Controller 接收入口请求，Service 完成具体业务；模块依赖与注入配置让它们取得需要的服务实例。
 
   imports: [
+  // 1. imports 是 NestJS 模块元数据，列出根模块需要装配的功能模块。
+  // 2. InfraModule 提供连接与目录；State/History/Realtime/Ingest 分别承接快照、历史、推送和 MQTT。
+  // 3. Command、Auth、Users、Ai 提供控制、登录、账号管理与聊天入口。
+  // 4. 这份列表描述依赖装配，不是一次请求顺序经过所有模块的流水线。
     InfraModule,
     StateModule,
     HistoryModule,

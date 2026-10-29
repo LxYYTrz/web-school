@@ -25,7 +25,9 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmin = computed(() => user.value?.level === 3);
   // 可发控制指令的等级:admin(3) + 二级(2)
   const canCommand = computed(() => (user.value?.level ?? 0) >= 2);
-  // 可进用户管理页:admin(3) only
+  // 1. user 保存当前登录结果；可选链在未登录时得到 undefined，?? 0 将它按无权限级别处理。
+  // 2. computed 随 user 更新而重新求值，level 为 2 或 3 时供页面启用控制交互。
+  // 3. 它只是前端展示判断，后端 CommandGuard 仍独立检查请求会话。
   const canManageUsers = computed(() => user.value?.level === 3);
 
   // 调用 /api/auth/me 恢复浏览器已有会话对应的用户，成功或失败后都标记首次确认已完成。

@@ -31,8 +31,13 @@ export class LineStateService {
 
     this.redis
       .set(`rt:${lineId}:robot:${deviceId}`, JSON.stringify(frame), 'EX', 60)
-      // 把机器人整帧写入该设备固定的 Redis key，覆盖旧值，并从本次成功写入重新计算 60 秒有效期。
-      // set 是 ioredis 客户端方法；key 由产线和设备编码组成；JSON.stringify 是 JavaScript 自带的对象编码方法；EX 的单位是秒；它不比较 frame.ts，也不主动清空网页已有状态。
+      // 1. 这行把机器人整帧交给 Redis，set() 来自 ioredis 客户端库。
+      // 2. 参数 1 是 key：产线和设备编码组合成固定存储名称。
+      // 3. 示例 line-01、robot-01 对应 rt:line-01:robot:robot-01；下一帧使用同一名称，因此覆盖旧整帧。
+      // 4. 参数 2 是 value：frame 是对象，JSON.stringify(frame) 将其编码成文本。
+      // 5. 参数 3、4 合起来设置有效期：EX 表示按秒，60 表示本次成功 SET 后 60 秒过期。
+      // 6. 每次成功写入重新计时，不先比较 frame.ts；角度相同也可以刷新有效期。
+      // 7. key 过期影响后续快照读取，不会删除 PostgreSQL 历史，也不会主动清空浏览器已有画面。
       .catch((e: Error) => this.logger.error(`写机器人快照失败: ${e.message}`));
   }
 
@@ -41,6 +46,9 @@ export class LineStateService {
   setIoFrame(lineId: string, frame: unknown) {
     this.redis
       .set(`rt:${lineId}:io`, JSON.stringify(frame), 'EX', 60)
+      // 1. IO 每条产线使用一个固定 key，value 保存本次 IO 整帧 JSON。
+      // 2. EX 60 是 Redis key 有效期；IoView 的 5 秒停滞判断使用帧 ts，属于另一个位置。
+      // 3. 例如最后一帧还显示在网页里，后端 key 可以后来过期，两处状态不会因此自动同时清空。
       .catch((e: Error) => this.logger.error(`写 IO 快照失败: ${e.message}`));
   }
 
@@ -65,7 +73,10 @@ export class LineStateService {
   async getLineSnapshot(lineId: string) {
     try {
       const [status, edge, io] = await this.redis.mget(
-      // 一次读取多个 Redis 字符串键。
+      // 1. mget 是 ioredis 的批量字符串读取方法，按下面 key 的顺序返回值数组。
+      // 2. 左侧解构把第 1、2、3 个结果分别保存为 status、edge、io。
+      // 3. 每个值仍是保存时的 JSON 文本或空值，返回前要分别 JSON.parse。
+      // 4. await 等待这次 I/O 的结果再继续组装快照，不会让当前线程同步忙等 Redis。
         `rt:${lineId}:status`,
         `rt:${lineId}:edge`,
         `rt:${lineId}:io`,
@@ -74,7 +85,10 @@ export class LineStateService {
       //    注意：Redis 的 KEYS 是 O(N) 全库扫描，产线多、实例多时是性能隐患，
       //    未来可改用 SCAN 或维护一个 Set 索引（当前单产线场景可接受）
       const keys = await this.redis.keys(`rt:${lineId}:robot:*`);
-      // ③ 批量取出所有值（有 key 才查，避免空数组报错）
+      // 1. 查找本产线所有机器人快照的存储名称，星号用于 Redis 的 key 模式匹配。
+      // 2. 这里是 Redis KEYS，不是 JavaScript Object.keys，也不是 MQTT 主题订阅。
+      // 3. 之后 mget 读取这些 key 的值，按设备编码组织成 robots；过期 key 不会提供原来的帧。
+      // 4. KEYS 会遍历数据库中的键，当前实现没有在这里改成 SCAN 或额外设备索引。
       const frames = keys.length ? await this.redis.mget(keys) : [];
       // ④ 拼装成 { deviceId: frame } 的字典
       const robots: Record<string, unknown> = {};
@@ -84,7 +98,9 @@ export class LineStateService {
         const deviceId = k.split(':').pop() as string;
         const raw = frames[i];
         robots[deviceId] = raw ? JSON.parse(raw) : null;
-        // 将 raw ? JSON.parse(raw) : null 的结果写入 robots[deviceId]。
+        // 1. deviceId 来自该 key 最后一个冒号后的字符串，raw 是同下标读取到的内容。
+        // 2. 有文本才解析成对象，否则本项设为 null。
+        // 3. 这使 robots 可以按 robot-01 等编码访问；它保存已有状态，不是临时重新读取 PLC。
       });
       // ⑤ 组装最终快照。ts 是本次快照的生成时刻（不是数据时刻）
       return {
@@ -92,11 +108,8 @@ export class LineStateService {
         ts: Date.now(),
         // 取得当前时间戳；Date.now 使用毫秒。
         status: status ? JSON.parse(status) : null,
-        // 把 JSON 文本解析为数据对象。
         edge: edge ? JSON.parse(edge) : null,
-        // 把 JSON 文本解析为数据对象。
         io: io ? JSON.parse(io) : null,
-        // 把 JSON 文本解析为数据对象。
         robots,
       };
     } catch (e) {

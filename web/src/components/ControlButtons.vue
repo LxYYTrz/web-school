@@ -128,34 +128,21 @@ const initError = computed(() => lineState.value === S_INIT_ERROR);
 // 按当前连接、用户控制级别、指令等待状态和工序判断某个按钮是否可用。
 // 这是前端交互门槛，参数检查与权限仍会在后端重复验证。
 function can(type: CmdType, action?: string): boolean {
-// 定义 can，用于结合登录级别、连接和当前状态判断按钮是否可用。
   if (initError.value) return false;
   switch (type) {
   // 根据括号中的指令或状态值选择下面匹配的处理分支。
     case 'stop':
-    // 当待判断的值等于 'stop' 时执行下面的对应分支。
-    // 'stop' 是此分支匹配的指令或状态值，匹配后执行紧随其后的语句
       return true;
-      // 布尔结果由当前函数的调用方用于决定是否允许继续执行
     case 'start':
-    // 当待判断的值等于 'start' 时执行下面的对应分支。
-    // 'start' 是此分支匹配的指令或状态值，匹配后执行紧随其后的语句
       // 手动模式里不让启动:必须先释放手动回到停止状态
       return lineState.value !== S_MANUAL;
     case 'mode_set':
-    // 当待判断的值等于 'mode_set' 时执行下面的对应分支。
-    // 'mode_set' 是此分支匹配的指令或状态值，匹配后执行紧随其后的语句
       return action === 'release' ? lineState.value === S_MANUAL
                                   : lineState.value === S_STOPPED;
     case 'conveyor':
-    // 当待判断的值等于 'conveyor' 时执行下面的对应分支。
-    // 'conveyor' 是此分支匹配的指令或状态值，匹配后执行紧随其后的语句
       return lineState.value === S_MANUAL;
     default:
-    // 前面的分支条件都不匹配时执行默认处理。
-    // 前面的 case 均不匹配时执行默认分支
       return false;
-      // 布尔结果由当前函数的调用方用于决定是否允许继续执行
   }
 }
 
@@ -196,6 +183,9 @@ onMounted(() => {
 
   offAck = onCommandAck((ack: CommandAck) => {
     if (ack.cmdId !== currentCmdId.value) return;
+    // 1. ack 来自共享 Socket.IO 的 command_ack，可能属于其他页面或更早的操作。
+    // 2. currentCmdId 保存本组件此次正在等待的编号，不相等就结束这个回调。
+    // 3. 匹配只解决“这是哪次操作的回复”，不是 PLC 去重，也不能拦截已经执行的现场写入。
     if (ack.status === 'acked') {
       state.value = 'acked'; stateMsg.value = '已执行 ✓';
       // 传送带是电平型,成功后同步按钮显示
@@ -256,6 +246,10 @@ async function confirm(type: CmdType, params?: Record<string, unknown>) {
   stateMsg.value = '下发中…';
   try {
     const r = await apiSendCommand(lineId, { deviceId: deviceId.value, type, params });
+    // 1. apiSendCommand 是 services/control.ts 的项目函数，内部使用 fetch 发 HTTP 请求。
+    // 2. lineId 放进 URL；deviceId、type、params 作为 JSON 正文交给后端。
+    // 3. await 等待的是 HTTP 接口结果，不会顺便等待 Modbus 写响应或机械动作完成。
+    // 4. 后面必须检查 r.ok/r.cmdId，再保存编号并进入 sent，另由实时回执改变结果。
     if (!r.ok || !r.cmdId) {
       state.value = 'failed';
       stateMsg.value = `服务端拒绝:${r.error || '未知错误'}`;
@@ -264,6 +258,8 @@ async function confirm(type: CmdType, params?: Record<string, unknown>) {
       return;
     }
     currentCmdId.value = r.cmdId;
+    // 1. 保存后端返回的这次控制编号，后续回执与超时定时器都靠它识别当前等待。
+    // 2. 编号保存发生在 HTTP 成功返回之后；它不是传感器值，也不是权限等级。
     lastSentAt.value = Date.now();
     state.value = 'sent';
     stateMsg.value = `已发送(${r.cmdId.slice(0, 8)}…)`;
@@ -285,6 +281,9 @@ async function confirm(type: CmdType, params?: Record<string, unknown>) {
 
     setTimeout(() => {
       if (currentCmdId.value === r.cmdId && state.value === 'sent') {
+      // 1. 定时器晚些时候执行，先确认仍在等待同一个编号，避免旧定时器误改新请求。
+      // 2. sent 说明当前网页还没有处理为成功、拒绝等其他状态。
+      // 3. 满足条件时只更新 UI 为 timeout；没有向 PLC 发取消，也不能判断是未写入还是回执丢失。
         state.value = 'timeout';
         stateMsg.value = '超时(15s 无回执)';
         scheduleReset();

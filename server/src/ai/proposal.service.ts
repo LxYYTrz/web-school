@@ -57,6 +57,9 @@ export class ProposalService implements OnModuleInit, OnModuleDestroy {
   // duplicate 复用配置但创建另一连接，避免订阅模式占用普通 GET/SET 使用的客户端。
   onModuleInit() {
     this.sub = this.redis.duplicate();
+    // 1. redis 是注入的 ioredis 普通命令客户端；duplicate() 复用连接配置另开客户端。
+    // 2. sub 后面进入订阅模式，专门接收 ai:proposal；普通 GET/SET 仍使用 redis。
+    // 3. 收到的是建议通知，并非 MQTT 控制回执；通知到达才执行 onProposalMessage。
     this.sub.on('error', (e) => this.logger.error(`pubsub 连接错误: ${e.message}`));
     this.sub.subscribe(PROPOSAL_CHANNEL, (err) => {
       if (err) return this.logger.error(`订阅 ${PROPOSAL_CHANNEL} 失败: ${err.message}`);
@@ -77,7 +80,6 @@ export class ProposalService implements OnModuleInit, OnModuleDestroy {
   // 本段只接入建议，未调用 CommandService，也未向 MQTT 控制主题发布命令。
   private async onProposalMessage(raw: string) {
     let p: AiProposal;
-    // 声明变量 p，类型为 AiProposal；其值稍后赋入。
     try {
       p = JSON.parse(raw) as AiProposal;
     } catch (e) {
@@ -112,6 +114,11 @@ export class ProposalService implements OnModuleInit, OnModuleDestroy {
   // eval 执行本文件 CLAIM_LUA；GET 与 DEL 同次脚本完成，重复领取得到空值，不等于 PLC 命令已去重。
   async claim(id: string): Promise<AiProposal | null> {
     const raw = (await this.redis.eval(CLAIM_LUA, 1, keyOf(id))) as string | null;
+    // 1. eval() 在 Redis 端执行本文件的 Lua 脚本，第二个参数 1 表示随后提供一个 key。
+    // 2. keyOf(id) 组成 ai:proposal:建议编号，在脚本里作为 KEYS[1] 使用。
+    // 3. 脚本连续完成 GET 与 DEL，两个确认请求竞争同一建议时，后取者得到空值。
+    // 4. raw 仍是 JSON 文本，后面才解析为 AiProposal；as 只是类型提示，不会转换或校验 JSON。
+    // 5. 它控制的是建议领取，不是现场 Modbus 命令按 cmdId 去重。
     if (!raw) return null;
     try {
       return JSON.parse(raw) as AiProposal;
@@ -130,6 +137,5 @@ export class ProposalService implements OnModuleInit, OnModuleDestroy {
   get ttlSec() {
   // 读取建议缓存剩余有效秒数。
     return 900;
-    // 本行数值是当前计算或配置的结果，由调用方按照所在函数的单位使用
   }
 }

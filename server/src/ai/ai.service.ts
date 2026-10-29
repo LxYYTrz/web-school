@@ -59,6 +59,9 @@ export class AiService {
   stream(body: ChatBody, user: SessionUser): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber: Subscriber<MessageEvent>) => {
       const ac = new AbortController();
+      // 1. AbortController 是运行时提供的取消控制器，为这一轮聊天独立创建。
+      // 2. 下方 fetch 使用 ac.signal；Observable 被取消订阅时，清理回调调用 ac.abort()。
+      // 3. 中断的是此 HTTP 流读取，不会撤回已经由工具下发的控制命令。
       let cancelled = false;
       // 每次流独立的去重集合。AiService 是单例,放实例字段上会跨请求累积,
       // 导致第二次提问时第一个工具不再上报。
@@ -77,6 +80,11 @@ export class AiService {
           // 后端继续解析并转发事件给网页；配置中的 hermes-agent 是 API 模型标识，不能单凭它确定底层实际使用哪一个模型。
 
           const res = await fetch(`${config.ai.baseUrl}/chat/completions`, {
+          // 1. fetch 从后端向配置中的 Hermes HTTP 服务提交本次聊天。
+          // 2. Authorization 使用后端配置凭据；X-Hermes-Session-Id 按登录用户名组成会话标识。
+          // 3. body 中 model 是 API 模型标识，messages 带当前产线提示与用户输入。
+          // 4. stream: true 请求分段返回；拿到 res 后还要通过 parseSse 拆出完整事件。
+          // 5. 这里调用的是 Hermes 接口，具体工具执行继续经过其 MCP 连接，不在此直接写 PLC。
             method: 'POST',
             signal: ac.signal,
             headers: {
@@ -138,18 +146,20 @@ export class AiService {
     let buf = '';
     try {
       for (;;) {
-      // 此循环没有固定结束条件，循环体在读完数据或遇到错误时主动 break 或 return
         const { done, value } = await reader.read();
         // 读取下一块流数据或当前资源内容。
         if (done) break;
         // done 是上方读取器给出的结束标记；为真时跳出当前读取循环
         buf += decoder.decode(value, { stream: true });
-        // SSE 以空行分帧;残留半帧留在 buf 里等下一块
+        // 1. value 是 reader.read() 返回的字节块，一块网络数据不一定恰好是一条事件。
+        // 2. TextDecoder 把 UTF-8 字节转成文本；stream: true 允许跨字节块补齐字符。
+        // 3. buf 保存未消费文本，随后按空行找完整 SSE 帧；半帧留到下一次读取再拼。
         let idx: number;
-        // 声明变量 idx，类型为 number；其值稍后赋入。
         while ((idx = buf.indexOf('\n\n')) >= 0) {
-        // 持续检查((idx = buf.indexOf('\n\n')) >= 0)，按判断结果进入对应的处理分支。
           const frame = buf.slice(0, idx);
+          // 1. idx 是前面找到的两个换行符位置，slice(0, idx) 取出分隔符前的一整帧文本。
+          // 2. 下一行 slice(idx + 2) 保留尚未处理的尾部，所以同一个网络块可拆出多帧。
+          // 3. 帧内再找 data: 行解析 JSON；不是简单把每次 read 的内容直接显示。
           buf = buf.slice(idx + 2);
           for (const line of frame.split('\n')) {
             if (!line.startsWith('data:')) continue;         // event:/id:/注释行一律忽略
@@ -157,7 +167,6 @@ export class AiService {
             if (!data || data === '[DONE]') continue;
             try {
               yield JSON.parse(data);
-              // 把 JSON 文本解析为数据对象。
             } catch {
               /* 非 JSON 帧:跳过 */
             }
@@ -189,6 +198,9 @@ export class AiService {
     // 注意 delta.reasoning_content 是模型的思考过程,故意不转发 ——
     // 那是内部推理链,混进回答里会让人以为 AI 在自言自语。
     const text = c?.choices?.[0]?.delta?.content;
+    // 1. c 是 parseSse 产出的对象，可选链在某层缺失时得到 undefined。
+    // 2. choices[0].delta.content 是正文增量位置，不一定是完整的一次回答。
+    // 3. 下面只在 text 是非空字符串时推送 delta；工具提示走前面的 tool 分支。
     if (typeof text === 'string' && text) {
       push({ type: 'delta', text });
     }

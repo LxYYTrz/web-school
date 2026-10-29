@@ -24,6 +24,9 @@ export const PARAM_ENUMS: Record<string, Record<string, number>> = contract.para
 export function validateParams(type: string, params: Record<string, unknown> | undefined):
   { ok: true } | { ok: false; error: string } {
   const enumMap = PARAM_ENUMS[type];
+  // 1. PARAM_ENUMS 从同目录严格 JSON 契约导出，按指令类型查询允许的 action 值。
+  // 2. 例如 mode_set 对应 acquire/release；没有枚举约束的指令在下一行通过本层。
+  // 3. 后面从 params.action 取字符串，检查它是不是 enumMap 的键；这里不执行寄存器写入。
   if (!enumMap) return { ok: true };               // 无参数约束的指令
   const act = (params ?? {}).action;
   if (typeof act !== 'string' || !(act in enumMap)) {

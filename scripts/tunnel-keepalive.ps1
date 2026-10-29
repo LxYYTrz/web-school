@@ -82,7 +82,10 @@ function Start-Tunnel {
         '-o', 'StrictHostKeyChecking=accept-new',
         '-i', $KeyPath,
         '-R', "${RemoteBind}:127.0.0.1:${LocalBackendPort}",
-        # ★ 数据库只走本地(2026-10-23 云端库下线),不再建立 -L 5432 的数据库方向转发
+        # 1. -R 是 ssh.exe 的远程转发参数，后一个字符串按“远端监听:本地目标地址:本地目标端口”解释。
+        # 2. RemoteBind 配置为云端回环地址与 3300；后半段 127.0.0.1 指运行 ssh 的工控机自身。
+        # 3. LocalBackendPort 默认目标是 3000，所以云端新连接沿 SSH 通道送回工控机后，再由 ssh 连接后端。
+        # 4. 上方 -N 不执行远端命令，-T 不申请终端；这条连接主要承载双向转发字节。
         "${CloudUser}@${CloudHost}"
     )
     Write-Log "拉起隧道: ssh $($args -join ' ')"
@@ -126,7 +129,6 @@ if ($UninstallTask) { Uninstall-Task; exit 0 }
 Write-Log "看门狗启动: 云端=$CloudHost 绑定=$RemoteBind 本地后端=$LocalBackendPort 间隔=${IntervalSec}s"
 
 while ($true) {
-# 持续检查($true)，按判断结果进入对应的处理分支。
     $alive = Test-SshAlive
     if ($null -eq $alive) {
         Write-Log "隧道进程不存在 → 重连"

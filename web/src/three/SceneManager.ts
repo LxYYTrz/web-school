@@ -136,12 +136,17 @@ export class SceneManager {
       if (this.disposed) return;
       // 预约下一帧 —— 这一行让循环持续下去
       this.raf = requestAnimationFrame(loop);
-      // 更新控制器（处理阻尼惯性、边界限制）
+      // 1. requestAnimationFrame 是浏览器 API，申请下一次绘制机会再执行 loop。
+      // 2. 返回编号保存到 raf，dispose 时可以取消尚未执行的下一帧。
+      // 3. 它的刷新节奏由浏览器调度，与 PLC 200ms 的目标读取周期相互独立。
       this.controls.update();
       // 按本行数据更新当前状态或对象字段。
       // 真正把场景画到 canvas 上
       this.renderer.render(this.scene, this.camera);
-      // 使用指定相机绘制当前三维场景。
+      // 1. renderer 是构造时创建的 Three.js WebGLRenderer。
+      // 2. scene 提供当前物体、材质和变换，camera 决定从哪个位置看。
+      // 3. setJoints 只改变场景节点数据，本行才把此刻场景投影到网页 canvas。
+      // 4. 同一个现场姿态在两次采样之间可以被反复绘制，不代表每一渲染帧都收到新遥测。
     };
     // 启动第一帧
     loop();

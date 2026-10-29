@@ -29,8 +29,11 @@ export class AuthController {
     // cookie-session 会把该对象放入客户端签名 Cookie；签名检查篡改，内容本身并未因此加密。
 
     req.session = { username: user.username, level: user.level, loginAt: Date.now() };
-    // 把已验证的用户名、级别和登录时间写入本次请求的会话，交给 cookie-session 生成签名 Cookie。
-    // user 来自上一步校验结果；req.session 由 cookie-session 中间件提供；loginAt 使用毫秒时间戳；这里没有把账号密码写入会话。
+    // 1. user 来自上一步 verifyCredentials() 的校验结果，不是请求正文任意自报的级别。
+    // 2. username 记录已经验证的账号，level 记录数据库返回的操作级别。
+    // 3. loginAt 使用 Date.now() 的毫秒时间，表示这次建立登录会话的时刻。
+    // 4. req.session 由 cookie-session 中间件提供，响应时由中间件处理签名 Cookie。
+    // 5. 这里没有把原始密码或数据库摘要写进 Cookie。
     return { success: true, username: user.username, level: user.level };
     // 向网页返回登录成功及已验证的用户名、级别，让网页继续更新显示或跳转。
     // 这是接口响应正文；签名 Cookie 由中间件通过响应头处理，返回这个对象本身不等于创建 Cookie。

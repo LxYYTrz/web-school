@@ -37,9 +37,12 @@ export class UsersService {
       throw new BadRequestException({ code: 409, msg: '用户名已存在' });
     }
     const hash = await bcrypt.hash(dto.password, 10);
+    // 1. dto.password 是创建表单提交的新账号密码，hash() 来自 bcryptjs。
+    // 2. 第二个参数 10 是工作因子，影响摘要计算成本；返回的 hash 才写入账号表。
+    // 3. 将来 AuthService 用 compare() 匹配输入与摘要，不需要还原密码。
+    // 4. 管理员检查和重复账号检查已经在本方法前面执行，密码摘要不负责判断操作权限。
     await this.pool.query(
       'INSERT INTO app.app_users(username, password, level) VALUES ($1, $2, $3)',
-      // 按前面声明的列顺序提供 SQL 插入值，参数占位符由查询调用传入。
       // app.app_users 是保存应用登录账号的数据表；$1 是数据库参数占位符，实际值由查询调用另外传入；VALUES 按前面 INSERT 列出的字段顺序提供要写入的数据，$n 占位符由查询参数数组填入
       [dto.username, hash, dto.level],
     );
@@ -74,6 +77,10 @@ export class UsersService {
       args.push(dto.new_level);
     }
     args.push(targetUsername);
+    // 1. sets 已收集要更新的列和占位符，args 已按相同顺序收集对应的新值。
+    // 2. 最后把目标用户名追加到 args，SQL 的最后一个占位符定位 WHERE username。
+    // 3. 例如只改密码：$1 是新摘要，$2 是目标用户名；同时改级别时占位序号随数组长度变化。
+    // 4. 参数值与 SQL 结构分别组织，不把用户名直接拼进 WHERE 文本。
     const { rowCount } = await this.pool.query(
       `UPDATE app.app_users SET ${sets.join(', ')} WHERE username = $${args.length}`,
       args,

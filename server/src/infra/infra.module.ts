@@ -25,10 +25,14 @@ import { PG_POOL, REDIS } from './tokens';
     // ① PostgreSQL 连接池：只创建一次，整个进程共享。
     //    connectionString 从配置读取，连接工控机本地 PostgreSQL
     { provide: PG_POOL, useFactory: () => new Pool({ connectionString: config.pg.connectionString }) },
-    // ② Redis 客户端：同样全局共享一个实例。
-    //    ioredis 自带断线重连，连接断开时命令会排队等待重连
+    // 1. provide 指定项目注入令牌 PG_POOL，业务服务用 @Inject(PG_POOL) 请求这个依赖。
+    // 2. useFactory 是 NestJS 调用的工厂，返回 pg 库的 Pool 对象。
+    // 3. connectionString 来自统一配置；业务服务调用 query 时再由连接池安排连接和查询。
+    // 4. 工厂注册不等于已经成功创建所有表或验证现场数据库内容。
     { provide: REDIS, useFactory: () => new Redis(config.redis.url) },
-    // ③ 编码映射服务：普通类，由 Nest 实例化并注入其依赖（内部需要 PG_POOL）
+    // 1. REDIS 是项目定义的依赖令牌，Redis 类来自 ioredis 库。
+    // 2. 工厂按 config.redis.url 创建客户端，后面的状态服务拿到的是这个客户端实例。
+    // 3. 连接目标在配置中，key 命名和有效期由具体业务方法决定，ioredis 不认识机器人或工序的业务含义。
     CatalogService,
   ],
   //   CatalogService 也被导出，是因为 ingest / history / command 都要用它把

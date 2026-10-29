@@ -61,17 +61,16 @@ export async function apiAiChat(
   let buf = '';
   try {
     for (;;) {
-    // 此循环没有固定结束条件，循环体在读完数据或遇到错误时主动 break 或 return
       const { done, value } = await reader.read();
       // 读取下一块流数据或当前资源内容。
       if (done) break;
       // done 是上方读取器给出的结束标记；为真时跳出当前读取循环
       buf += decoder.decode(value, { stream: true });
-      // SSE 以空行分帧;半帧留在 buf 等下一块
+      // 1. value 是后端 HTTP 响应的一段字节，TextDecoder 持续将它解成 UTF-8 文本。
+      // 2. stream: true 允许一个汉字的字节跨块到达；buf 同时保留未拼完的 SSE 事件。
+      // 3. 下面按空行截帧，再解析 data: JSON，最后用 onEvent 交给 AiDrawer 更新正文或工具提示。
       let idx: number;
-      // 声明变量 idx，类型为 number；其值稍后赋入。
       while ((idx = buf.indexOf('\n\n')) >= 0) {
-      // 持续检查((idx = buf.indexOf('\n\n')) >= 0)，按判断结果进入对应的处理分支。
         const frame = buf.slice(0, idx);
         buf = buf.slice(idx + 2);
         for (const line of frame.split('\n')) {
@@ -80,7 +79,6 @@ export async function apiAiChat(
           if (!payload) continue;
           try {
             onEvent(JSON.parse(payload) as AiStreamEvent);
-            // 把 JSON 文本解析为数据对象。
           } catch {
             /* 非 JSON 帧跳过 —— 一条脏帧不该掐断整段回答 */
           }
@@ -122,6 +120,9 @@ export async function apiConfirmAiProposal(
 export function onAiProposal(cb: (p: AiProposal) => void): () => void {
   const socket = getSocket();
   socket.on('ai_proposal', cb);
+  // 1. getSocket() 取得全局共用 Socket.IO 客户端，这里直接注册建议事件。
+  // 2. cb 由 AiDrawer 传入，收到建议后加入待确认卡片；它不是聊天 SSE 的 delta。
+  // 3. 返回的取消函数只移除此 cb，不关闭共享连接；人工确认另发 HTTP 请求。
   return () => {
   // 箭头函数是返回给调用方的清理回调，稍后执行其中的释放逻辑
     socket.off('ai_proposal', cb);

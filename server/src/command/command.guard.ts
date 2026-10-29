@@ -9,6 +9,9 @@ import type { Request } from 'express';
 // 依赖 AuthGuard:AuthGuard 先保证 session.username + level 存在,本守卫只校验级别。
 @Injectable()
 export class CommandGuard implements CanActivate {
+  // 1. 控制入口先通过登录守卫，再在这里检查 req.session.level。
+  // 2. level 不是数字或低于 2 就返回权限不足；达到门槛只允许继续进入命令业务检查。
+  // 3. 例如 level=2 通过此层，仍可能因为设备不存在、类型不允许或参数错误被后续拒绝。
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
 
@@ -21,6 +24,5 @@ export class CommandGuard implements CanActivate {
       throw new ForbiddenException({ code: 403, msg: '需 level >= 2 才能下发控制指令' });
     }
     return true;
-    // 布尔结果由当前函数的调用方用于决定是否允许继续执行
   }
 }

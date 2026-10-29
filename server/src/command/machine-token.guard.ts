@@ -44,6 +44,10 @@ export class MachineTokenGuard implements CanActivate {
       throw new ForbiddenException({ code: 403, msg: '机器通道仅允许本机调用' });
     }
     const provided = String(req.headers['x-machine-token'] ?? '');
+    // 1. 从机器请求头取得调用方提供的凭据，空缺时按空字符串处理。
+    // 2. 它与 config.machine.commandToken 比较，不是网页登录密码或 Cookie。
+    // 3. 后面的哈希与 timingSafeEqual 用于比较凭据；来源限制读取 socket.remoteAddress，不信任请求正文自报来源。
+    // 4. 注释只解释凭据从哪里来，不展示实际密钥内容。
     if (!provided) {
       throw new UnauthorizedException({ code: 401, msg: '缺少 x-machine-token' });
     }
@@ -56,6 +60,5 @@ export class MachineTokenGuard implements CanActivate {
       throw new UnauthorizedException({ code: 401, msg: '机器凭据无效' });
     }
     return true;
-    // 布尔结果由当前函数的调用方用于决定是否允许继续执行
   }
 }

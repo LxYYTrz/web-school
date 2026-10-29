@@ -20,8 +20,10 @@ export class AuthService {
       throw new BadCredentials();
     }
     const { rows } = await this.pool.query(
-    // 按本次输入的用户名查询登录账号，取回密码摘要和级别，为下一步比对准备数据。
-    // pool 是注入的 PostgreSQL 连接池；query 来自数据库客户端；rows 是查询结果数组，参数 username 通过下方 $1 占位符传入。
+    // 1. pool 是通过 PG_POOL 注入的 pg 连接池，query 是库提供的参数化查询方法。
+    // 2. SQL 选择 app.app_users 的 password 和 level，WHERE username=$1 限定这次输入的账号。
+    // 3. [username] 单独提供 $1 的值，不把输入直接拼进 SQL 文本。
+    // 4. 左侧 { rows } 从查询结果取记录数组，没有记录时后面按登录失败处理。
       'SELECT password, level FROM app.app_users WHERE username = $1 LIMIT 1',
       // app.app_users 是保存应用登录账号的数据表，FROM 指定本次读取的数据来源；$1 是数据库参数占位符，实际值由查询调用另外传入；WHERE 只处理满足本行或后续条件的记录
       [username],
@@ -30,8 +32,11 @@ export class AuthService {
     // 没有查到账号就终止登录，不继续读取摘要或建立会话。
     // rows.length 是匹配的账号记录数；BadCredentials 是项目定义的 HTTP 401 异常。
     const ok = await bcrypt.compare(password, rows[0].password as string);
-    // 比较用户本次输入的密码与数据库保存的摘要，把匹配结果保存到 ok。
-    // bcrypt 从 bcryptjs 导入，compare 是库方法；password 是本次输入，rows[0].password 是数据库摘要；as string 仅是 TypeScript 类型声明，不会解密或还原密码。
+    // 1. bcrypt 从 bcryptjs 导入；compare() 是专门的密码匹配方法。
+    // 2. 第一个参数 password 是用户这次输入，第二个参数是数据库已有的密码摘要。
+    // 3. 方法返回布尔结果，await 等它完成，再由下一条 if 决定是否拒绝登录。
+    // 4. as string 是编译期类型声明，不会解密数据库内容，也不会把任意值真正转换成字符串。
+    // 5. 项目不需要把摘要还原成原密码；成功后只返回用户名和级别。
     if (!ok) throw new BadCredentials();
     // 密码比对不通过就终止登录，与账号不存在一样返回登录失败。
     // ok 是 bcrypt.compare 返回的布尔结果；只有它为 true，才会走到后面返回用户名与级别的语句。

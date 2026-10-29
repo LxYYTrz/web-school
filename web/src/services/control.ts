@@ -34,6 +34,10 @@ export async function apiSendCommand(
   cmd: SendCommandParams,
 ): Promise<SendCommandResult> {
   const res = await fetch(`${BASE}/api/lines/${lineId}/commands`, {
+  // 1. fetch 是浏览器 HTTP API；BASE 与 lineId 拼出本次业务接口地址。
+  // 2. POST 表示提交控制请求，credentials: include 让浏览器按规则附带登录 Cookie。
+  // 3. Content-Type 告诉后端正文采用 JSON；JSON.stringify(cmd) 编码设备、类型和参数。
+  // 4. res 是 HTTP 响应，成功取得 cmdId 只进入等待回执阶段，不能在这里认定 PLC 已写入。
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -61,5 +65,8 @@ export function onCommandAck(cb: (ack: CommandAck) => void): () => void {
   const socket = getSocket();
   const handler = (msg: CommandAck) => cb(msg);
   socket.on('command_ack', handler);
+  // 1. 这是为当前组件注册业务回执回调，不是在这里发送控制命令。
+  // 2. handler 将每条 CommandAck 交给调用方；ControlButtons 再匹配当前 cmdId。
+  // 3. 本函数返回取消函数，组件卸载时调用 off() 移除这个 handler，不关闭全局共享连接。
   return () => { socket.off('command_ack', handler); };
 }

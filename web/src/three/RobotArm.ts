@@ -43,7 +43,6 @@ const MAT_RING = new THREE.MeshStandardMaterial({
 // 模型构造过程用几何和材质创建 Three.js Mesh，并设置相应阴影属性。
 // 返回的网格还需 add 到模型节点；创建网格不包含任何现场采集或控制操作。
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
-// 定义 mesh，用于将三维几何体和材质组合成带轮廓线的机械臂网格。
   const m = new THREE.Mesh(geo, mat);
   // 投射阴影
   m.castShadow = true;
@@ -136,6 +135,10 @@ export class RobotArm {
     // 将当前模型关节和独立光环登记到有序数组，供 setJoints/setAlarm 使用。
     // ★ 关键：j2 挂到 j1 上（不是挂到 group 上）→ 实现运动学继承
     j1.add(j2);
+    // 1. add 是 Three.js Object3D 的方法，这里把 J2 的 Group 挂在 J1 下面。
+    // 2. j2.position 是相对 J1 的局部位置；J1 转动会带着 J2 及后续子节点一起变换。
+    // 3. J2 仍有自己的局部旋转，两级变换组合后才得到画面中的姿态。
+    // 4. 这段建立的是网页模型层级，没有向真实机器人发送运动指令。
 
     // ---- J3:小臂俯仰(绕 Z) ----
     const j3 = new THREE.Group();
@@ -198,7 +201,10 @@ export class RobotArm {
     // 创建光环。MAT_RING.clone() —— 每个环需要独立材质，
     // 否则 setAlarm 改一个环的颜色会连带改掉所有环！
     const ring = jointRing(ringRadius, axis, MAT_RING.clone());
-    // 光环挂在关节 Group 上 → 跟着关节一起转
+    // 1. jointRing 是本文件的辅助函数，不是 Three.js 内置的业务关节方法。
+    // 2. ringRadius 决定光环大小，axis 决定环所在平面。
+    // 3. clone() 从模板材质复制出独立实例，后面改变一个环的发光色时不会共用同一材质对象。
+    // 4. 随后把 pivot 和 ring 按 J1～J6 的创建顺序登记到两个数组。
     pivot.add(ring);
     // 记录关节和光环
     this.joints.push(pivot);
@@ -211,30 +217,34 @@ export class RobotArm {
     // 遍历 6 个关节
     for (let i = 0; i < 6; i++) {
       const d = deg[i];
-      // 从这帧六轴角度中取出当前关节的物理角度。
-      // deg 是按 J1～J6 排列的度数数组；i 是当前关节下标；d 已经过采集器点表缩放，不应再乘一次 0.1。
-      // 非法值（非数字 / NaN / undefined）跳过，保留上一帧姿态而不是跳成 0
+      // 1. deg 由 TwinView 传入，是本帧按 J1～J6 排列的度数数组。
+      // 2. i 是 0～5 的下标，例如 i=0 取得 J1，d=25 表示 25 度。
+      // 3. 现场原始值的 0.1 缩放已由采集器做完，本方法不能再乘一次。
       if (typeof d !== 'number' || !Number.isFinite(d)) continue;
-      // 角度不是有限数字时跳过本关节，保留模型先前姿态。
-      // typeof 与 Number.isFinite 是 JavaScript 的类型和值检查；continue 只跳过这轮循环，不会把无效角度替换成 0。
+      // 1. typeof 排除 null、undefined 等非数值，Number.isFinite 再排除 NaN 和正负无穷。
+      // 2. continue 只跳过当前关节这一轮循环，其他关节仍继续处理。
+      // 3. 跳过时不写 rotation，因此该关节保留此前姿态；不会把无效值当作 0 度。
       const pivot = this.joints[i];
-      // 找到当前角度对应的模型关节节点，准备修改它的旋转。
-      // 这里的 this.joints 是模型中六个 Three.js 节点的数组，与遥测报文中的数值数组 joints 含义不同；i 让二者按关节顺序对应。
+      // 1. this.joints 是 constructor/register 建立的六个模型 Group 数组。
+      // 2. 它与消息中同名 joints 数值数组不同；共同的下标 i 将 J1 角度对到 J1 节点。
+      // 3. pivot 是节点引用，后面修改它的 rotation，渲染循环绘制时就会使用新值。
       const axis = JOINT_AXES[i];
-      // 取出这个模型关节应使用的局部旋转轴。
-      // JOINT_AXES 是本项目的六轴配置，依次为 y、z、z、y、z、y；axis 决定下方写 rotation 的哪个分量。
-      // 度 → 弧度（Three.js 用弧度）
+      // 1. JOINT_AXES 是本项目配置的六个局部旋转轴，顺序为 y、z、z、y、z、y。
+      // 2. 例如 J1 使用 y，J2 使用 z；不是让所有关节都围绕同一个轴转。
 
       // d 已经是采集器换算后的物理角度，例子中是 25 度；这里将它换成 Three.js rotation 使用的弧度。
       // 采集器的“原始整数乘 0.1”和本行“度转弧度”目的不同，不能重复缩放一次现场数据。
 
       const rad = THREE.MathUtils.degToRad(d);
-      // 将已经得到的物理角度从度换算成模型 rotation 使用的弧度。
-      // THREE 来自 three 库；MathUtils.degToRad 是该库的单位换算方法；d 是本关节度数，rad 是换算结果，例如 180 度对应 π 弧度。
-      // 按轴设置旋转角度
+      // 1. THREE 来自 three 库；MathUtils.degToRad 是库提供的单位换算方法。
+      // 2. 输入 d 的单位为度，输出 rad 的单位为弧度，数学关系是 d × π / 180。
+      // 3. 例如 d=25 时约为 0.4363 弧度，d=180 时为 π；这一步没有改现场测量值的含义。
+      // 4. 它与采集器“250 × 0.1 = 25 度”是前后两个不同目的的换算。
       if (axis === 'x') pivot.rotation.x = rad;
-      // 模型关节配置为 x 轴时，把本帧弧度写到该关节的 x 旋转分量。
-      // pivot 是当前关节节点；rotation 是 Three.js 节点的旋转属性，分量单位为弧度；这里修改网页模型，不会向现场发送控制指令。
+      // 1. rotation 是 Three.js 节点的局部旋转属性，x/y/z 分量使用弧度。
+      // 2. 这里与下面 else if/else 是同一组分支，只为当前关节写入配置所选的一个轴。
+      // 3. JOINT_AXES 当前没有 x 轴关节，保留此分支是现有模型接口的处理方式。
+      // 4. 写的是浏览器模型属性，SceneManager.render 才把更新后的场景画到画布。
       else if (axis === 'y') pivot.rotation.y = rad;
       // 否则，模型关节配置为 y 轴时更新该关节的 y 旋转分量。
       // axis 来自本项目 JOINT_AXES；rad 是刚才转换的弧度；父节点的变换仍会作用于后续子关节。

@@ -57,9 +57,10 @@ PLC_PORT        = int(os.getenv("PLC_PORT", "503"))
 PLC_UNIT_ID     = int(os.getenv("PLC_UNIT_ID", "2"))
 # 轮询周期（毫秒）。200ms → 5Hz，符合契约要求的 5~10Hz
 PLC_POLL_MS     = int(os.getenv("PLC_POLL_MS", "200"))
-# 32 位类型(INT32/UINT32/DINT/FLOAT32)的字序。
-# 默认 BIG = Modbus 标准(高字在前),TIA 大端与此一致;
-# 西门子 DINT 在内存里是低字在前,跟 Modbus 冲突,读出来值异常时改 LITTLE。
+# 1. 先从进程环境读取 PLC_POLL_MS；没有提供时使用字符串 "200"。
+# 2. int() 把字符串转成整数，单位是毫秒，供主循环计算剩余等待时间。
+# 3. 例如目标 200ms、本轮读取耗时 80ms，后面约等待 120ms；读取超过目标时不会再额外等满 200ms。
+# 4. 这是目标周期，不代表 PLC、MQTT、网页渲染都按同一个固定频率执行。
 PLC_WORD_ORDER  = os.getenv("PLC_WORD_ORDER", "BIG").upper()
 # MQTT Broker 地址与端口
 MQTT_HOST       = os.getenv("MQTT_HOST", "localhost")
@@ -120,12 +121,10 @@ def acquire_single_instance_lock(path: Path):
         return None
     try:
         if os.name == "nt":
-        # 检查os.name == "nt":，按判断结果进入对应的处理分支。
             import msvcrt
             fh.seek(0)
             # 把文件读写位置移动到指定偏移处。
             if fh.tell() == 0:
-            # 检查fh.tell() == 0:，按判断结果进入对应的处理分支。
                 fh.write(b"0")
                 # 把本行提供的内容写到已打开的文件或通信目标。
                 fh.flush()
@@ -162,7 +161,6 @@ def _read_csv(path: Path) -> list[Signal]:
     # 清空集合、映射或缓存中的现有条目。
     # 点位表不存在 → 致命（没有点位就什么都采不了）
     if not path.exists():
-    # 检查not path.exists():，按判断结果进入对应的处理分支。
         LOG.error("点位表不存在: %s", path)
         return sigs
     # 跳过以 # 开头的注释行(以及空行),保留真正的表头和数据
@@ -170,12 +168,10 @@ def _read_csv(path: Path) -> list[Signal]:
     # 按指定模式打开文件。
         lines = [ln for ln in f
                  if ln.strip() and not ln.lstrip().startswith("#")]
-                 # 检查ln.strip() and not ln.lstrip().startswith("#")]，按判断结果进入对应的处理分支。
     reader = csv.DictReader(lines)
     # 必需的列。缺了就无法解析，直接退出
     required = {"name", "address", "type"}
     if not required.issubset(reader.fieldnames or []):
-    # 检查not required.issubset(reader.fieldnames or []):，按判断结果进入对应的处理分支。
         LOG.error("点位表缺少必需列(需要 %s),实际: %s",
                   sorted(required), reader.fieldnames)
                   # 把当前集合按指定规则排序并返回新列表。
@@ -196,7 +192,6 @@ def _read_csv(path: Path) -> list[Signal]:
             cnt = size_map.get(t)
             # 未知类型 → 跳过这一行（不致命，其它点位照常工作）
             if cnt is None:
-            # 检查cnt is None:，按判断结果进入对应的处理分支。
                 LOG.warning("L%d 未知类型 %s,跳过", line_no, t)
                 # 记录本次异常或状态的警告日志。
                 continue
@@ -212,7 +207,6 @@ def _read_csv(path: Path) -> list[Signal]:
             )
             # 写命令点位走 _cmd_signals,不进主循环
             if name.startswith("cmd."):
-            # 检查name.startswith("cmd."):，按判断结果进入对应的处理分支。
                 _cmd_signals[name] = sig
             else:
                 sigs.append(sig)
@@ -227,10 +221,10 @@ def _read_csv(path: Path) -> list[Signal]:
 # word 顺序是解码约定，不是 MQTT 字段顺序；结果还要按当前信号类型继续解释。
 def _words_to_u32(regs: list[int]) -> int:
     """按 PLC_WORD_ORDER 把 2 个 word 合并成 32 位整数。
-    BIG   = 高字在前(Modbus 标准,TIA 大端与此一致,默认)
-    LITTLE = 低字在前(西门子 DINT 在内存里就是这个顺序)"""
+    BIG = 高 word 在前；LITTLE = 低 word 在前。
+    这里是跨寄存器的 word 顺序配置，应与设备映射约定核对；
+    不把单个 Modbus 寄存器的字节序与 32 位值的 word 排列混为一谈。"""
     if PLC_WORD_ORDER == "LITTLE":
-    # 检查PLC_WORD_ORDER == "LITTLE":，按判断结果进入对应的处理分支。
         regs = list(reversed(regs))
     return (regs[0] << 16) | regs[1]
 
@@ -239,48 +233,49 @@ def _words_to_u32(regs: list[int]) -> int:
 def decode_signal(regs: list[int], sig: Signal) -> Any:
 # 按点表规定的类型解释这次寄存器响应，再应用偏移和缩放，返回业务数值；没有读到值时保留 None。
 # regs 是这次 Modbus 响应的寄存器数组；sig 是本点位的 Signal 配置，提供 type、offset、scale 等解释规则。
-    """把 Modbus 寄存器值翻译成物理量。Modbus 协议是大端字序(高字在前);
-    S7 的 MB_SERVER 默认也是大端;若现场 PLC 用了小端,把 PLC_WORD_ORDER 改 LITTLE。"""
+    """按点表类型解释寄存器，再应用偏移与缩放得到物理量。
+    跨两个寄存器的值按 PLC_WORD_ORDER 配置排列 word；
+    这一顺序须与设备映射核对，不能单凭设备品牌或协议名称推定。"""
     # 没有读到寄存器 → 返回 None（表示本次读失败/无数据）
     if not regs:
-    # 检查not regs:，按判断结果进入对应的处理分支。
         # 未知类型 → None
         return None
     if sig.type in ("INT16", "INT"):
-    # 检查sig.type in ("INT16", "INT"):，按判断结果进入对应的处理分支。
 
         # regs[0] 是原始 16 位字，可能以 0～65535 表示；达到 0x8000 的值减去 0x10000 后才是对应有符号整数。
         # 例如原始 65526 在 INT 分支解释为 -10，再使用点表缩放系数，避免负角度被误读成很大的正数。
 
         raw = regs[0] if regs[0] < 0x8000 else regs[0] - 0x10000
+        # 1. 先把第一个 16 位 word 按有符号整数解释，再进行物理量换算。
+        # 2. 0x8000 是 32768：小于它时按非负值使用；达到它时减去 65536，解释补码负数。
+        # 3. 例如 regs[0]=65526，得到 raw=-10；若该点 scale=0.1，最终是 -1 度。
+        # 4. 这个分支只针对 INT/INT16；UINT 分支不会执行这一步减法。
         return (raw + sig.offset) * sig.scale
+        # 1. raw 是刚才按 INT 解释的数值；sig 来自当前 CSV 点表的一行。
+        # 2. 先加 offset，再乘 scale，顺序与本项目公式一致。
+        # 3. J1 示例：raw=250、offset=0、scale=0.1，返回 25.0 度。
+        # 4. 返回值交给 read_all() 保存到本轮 values，不在这里发布 MQTT 或绘制三维模型。
     if sig.type in ("UINT16", "UINT"):
-    # 检查sig.type in ("UINT16", "UINT"):，按判断结果进入对应的处理分支。
         return (regs[0] + sig.offset) * sig.scale
     # ---- 布尔 ----
     if sig.type == "BOOL":
-    # 检查sig.type == "BOOL":，按判断结果进入对应的处理分支。
         # 寄存器非 0 即为真
         return bool(regs[0])
     if sig.type in ("INT32", "DINT"):
-    # 检查sig.type in ("INT32", "DINT"):，按判断结果进入对应的处理分支。
         raw = _words_to_u32(regs)
         # 超过 0x80000000 说明是负数，转成有符号
         if raw >= 0x80000000:
-        # 检查raw >= 0x80000000:，按判断结果进入对应的处理分支。
             raw -= 0x100000000
             # 用 0x100000000 更新 raw；-= 表示先计算再赋回。
         return (raw + sig.offset) * sig.scale
     # ---- 32 位无符号整数 ----
     if sig.type == "UINT32":
-    # 检查sig.type == "UINT32":，按判断结果进入对应的处理分支。
         raw = _words_to_u32(regs)
         return (raw + sig.offset) * sig.scale
     # ---- 32 位浮点（占 2 个寄存器）----
     if sig.type == "FLOAT32":
-    # 检查sig.type == "FLOAT32":，按判断结果进入对应的处理分支。
         # pymodbus 3.x: 用 ModbusClientMixin.convert_from_registers
-        # word_order 控制 word 间的字节序(BIG=高字在前,默认;LITTLE=低字在前,西门子 REAL 反向)
+        # word_order 控制两个寄存器的排列顺序，由 PLC_WORD_ORDER 配置；不推定所有西门子 REAL 都需反转
         wo = "little" if PLC_WORD_ORDER == "LITTLE" else "big"
         v = ModbusClientMixin.convert_from_registers(
             regs, ModbusClientMixin.DATATYPE.FLOAT32, word_order=wo)
@@ -295,7 +290,6 @@ class Plc:
     # main 创建现场 PLC 客户端；host、port、unit 来自环境配置，pymodbus 实例负责网络请求。
     # 同一 Plc 的锁协调读取与下行写入，减少同一客户端被并发使用；创建对象还没有证明连接成功。
     def __init__(self, host, port, unit_id):
-    # 定义 __init__，用于保存 PLC 地址与站号，创建通信客户端和读写互斥锁。
         # PLC 地址信息
         self.host = host
         self.port = port
@@ -310,17 +304,14 @@ class Plc:
     # 主循环和写入路径按需尝试建立 PLC 连接，返回连接状态给调用者。
     # connect 是项目包装；内部客户端 connect 来自 pymodbus，失败由调用路径决定重试或拒绝。
     def connect(self):
-    # 定义 connect，用于在互斥锁保护下建立 PLC 连接并更新连接状态。
         with self.lock:
             if not self.cli.connect():
-            # 检查not self.cli.connect():，按判断结果进入对应的处理分支。
                 self.connected = False
                 return False
             self.connected = True
             return True
 
     def close(self):
-    # 定义 close，用于在互斥锁保护下关闭 PLC 连接并清除连接标记。
         with self.lock:
             self.cli.close()
             self.connected = False
@@ -333,9 +324,7 @@ class Plc:
         """逐个读取已配置点位，返回本轮采集结果。"""
         # 没连上 → 先尝试连接，失败就直接返回空字典（主循环会 sleep 后重试）
         if not self.connected:
-        # 检查not self.connected:，按判断结果进入对应的处理分支。
             if not self.connect():
-            # 检查not self.connect():，按判断结果进入对应的处理分支。
                 return {}
         # 按 address 排序,合并相邻段
         # 按 address 排序 —— 让同一段的寄存器尽量连续读，减少总线往返
@@ -354,6 +343,11 @@ class Plc:
                     # address、count 来自当前点表信号 s；device_id 使用 self.unit，三者共同确定本次向 PLC 读什么。
 
                     rr = self.cli.read_holding_registers(
+                    # 1. 这是项目调用 pymodbus 读取保持寄存器的位置，rr 将保存这一次响应对象。
+                    # 2. address=s.address：从点表取得的起始 word 地址，当前约定从 0 开始。
+                    # 3. count=s.count：按点位类型计算的连续寄存器数量；16 位一般为 1，32 位一般为 2。
+                    # 4. device_id=self.unit：本次 Modbus 请求的设备站号，来自客户端配置，不是 MQTT 的 robot-01。
+                    # 5. 响应要继续检查 isError()；成功后才把 rr.registers 交给 decode_signal()。
                         address=s.address, count=s.count, device_id=self.unit)
                 # isError() 表示 Modbus 异常码（地址越界等），不是 Python 异常
                 if rr.isError():
@@ -365,8 +359,10 @@ class Plc:
                     continue
                 # 正常读到 → 解码成物理量
                 values[s.name] = decode_signal(rr.registers, s)
-                # 把本次读回的寄存器按该点位的类型、偏移和缩放解码，保存到本轮采集结果字典。
-                # values 是本轮的“信号名称 → 已解码值”字典；s 是当前点表配置；rr.registers 来自 pymodbus 读取响应；decode_signal 是本项目定义的方法。
+                # 1. decode_signal 是本项目函数，不是 pymodbus 直接替项目完成的业务翻译。
+                # 2. rr.registers 是此次响应的原始 word 数组，s 提供类型、偏移和缩放规则。
+                # 3. s.name 例如 robot.joints[0]，作为 values 字典的键；返回数值保存为该点本轮结果。
+                # 4. 例如 values["robot.joints[0]"]=25.0，group_signals() 随后才将它归入 joints 数组。
         except Exception as exc:
             # 通信异常（断线、超时）→ 记错误并把连接标记为断开，下次循环会重连
             LOG.error("PLC 通信异常: %s", exc)
@@ -389,12 +385,10 @@ def group_signals(signals: list[Signal], values: dict[str, Any]) -> dict:
         ns, _, key = s.name.partition(".")
         # 没有 "." 的信号名无法归类，跳过
         if not key:
-        # 检查not key:，按判断结果进入对应的处理分支。
             continue
         # joints[0] 这种数组下标展开成 list
         # 带下标的键（joints[0]）要展开成数组
         if "[" in key and "]" in key:
-        # 检查"[" in key and "]" in key:，按判断结果进入对应的处理分支。
             base, _, idx = key.partition("[")
             idx = int(idx.rstrip("]"))
             grouped[ns].setdefault(base, [None] * 6)[idx] = v
@@ -404,14 +398,21 @@ def group_signals(signals: list[Signal], values: dict[str, Any]) -> dict:
 
     # 组装最终报文。ts 由采集器打（契约规定时间戳由产生方打）
     payload: dict[str, Any] = {"ts": now_ms(), "lineId": LINE_ID}
-    # 生成当前毫秒时间戳，作为上行报文的产生时间。
+    # 1. 这次创建的是一个上行业务对象，还没有通过网络发送。
+    # 2. ts 调 now_ms()，记录采集器所在机器产生该帧时的毫秒时间。
+    # 3. lineId 来自 LINE_ID 配置，用于说明当前产线；它不是数据库内部主键。
+    # 4. 后面的 deviceId、joints 等字段从本轮 grouped 结果补入，publish() 再负责 JSON 编码与 MQTT 发布。
 
     # 只有采到了 robot.* 的点位，才生成机器人报文
     if "robot" in grouped:
-    # 检查"robot" in grouped:，按判断结果进入对应的处理分支。
         r = grouped["robot"]
         payload["deviceId"] = ROBOT_ID
         payload["joints"] = r.get("joints", [None] * 6)
+        # 1. r 是从本轮读取值分组得到的 robot 字典，get() 是 Python 字典查值方法。
+        # 2. 找到 joints 时使用已组装的六轴数组；没有这个键时，默认生成六个 None。
+        # 3. 下标 0～5 依次对应 J1～J6，元素已经过点表解码，单位为度。
+        # 4. 示例原始 J1=250、scale=0.1，放进 joints 的是 25，不是 250；这里不再重复缩放。
+        # 5. None 表示没有有效值，JSON 编码后成为 null，不能把它讲成现场角度为 0。
         payload["tcp"]    = r.get("tcp", None)
         payload["speedPct"] = int(r.get("speedPct", 0) or 0)
         # PLC 里的模式是数字，契约要求字符串 → 这里做映射
@@ -434,7 +435,6 @@ def io_payload(signals: list[Signal], values: dict[str, Any]) -> dict | None:
           for s in signals if s.name.startswith("io.")}
           # 循环处理s in signals if s.name.startswith("io.")}，按判断结果进入对应的处理分支。
     if not io:
-    # 检查not io:，按判断结果进入对应的处理分支。
         return None
     return {"ts": now_ms(), "lineId": LINE_ID, "io": io}
 
@@ -459,7 +459,6 @@ def line_status_payload(values: dict[str, Any]) -> dict:
 # 为当前上行帧或回执生成毫秒时间戳，随报文一起传输。
 # 时间来自运行采集器这台机器；浏览器按帧时间判断停滞时会受两端时钟影响。
 def now_ms() -> int:
-# 定义 now_ms，用于生成当前毫秒时间戳，作为上行报文的产生时间。
     return int(time.time() * 1000)
 
 # main 在建立客户端前配置本进程日志，统一输出采集、连接与命令处理结果。
@@ -483,7 +482,6 @@ def make_mqtt() -> mqtt.Client:
                     client_id=f"plc-edge-{LINE_ID}-{os.getpid()}")
     # 需要认证才设置账号密码
     if MQTT_USERNAME:
-    # 检查MQTT_USERNAME:，按判断结果进入对应的处理分支。
         c.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
         # 设置 MQTT 登录用户名和密码。
     # ★ 遗嘱消息（LWT）：采集器异常掉线时，Broker 自动代发 offline
@@ -507,8 +505,11 @@ def publish(c: mqtt.Client, topic: str, payload: dict, qos=0, retain=False):
 # 将 payload 编码为 JSON 文本，交给已连接 Broker 的客户端向 topic 发布。
 # c 是 paho-mqtt 客户端；topic 是消息主题；qos 和 retain 来自本次调用参数，决定这次消息的投递选项。
     c.publish(topic, json.dumps(payload, ensure_ascii=False), qos=qos, retain=retain)
-    # 把已组装的业务报文编码成 JSON，交给 MQTT 客户端向 Broker 发布。
-    # c 是 paho-mqtt 客户端，publish 是库方法；topic、payload、qos、retain 由调用方提供；Broker 接收消息不等于数据库保存或设备动作完成。
+    # 1. c 是 make_mqtt() 创建的 paho-mqtt 客户端；publish 是库方法，连接和协议发送由库处理。
+    # 2. topic 由调用方选择：机器人遥测、IO、工序和 cmd_ack 使用不同栏目。
+    # 3. payload 是 Python 字典；json.dumps() 编码为 JSON 文本，ensure_ascii=False 保留中文字符表达。
+    # 4. qos 指定本次消息投递级别；retain 决定是否让 Broker 保存该主题最后一条保留消息。
+    # 5. 发布不等于后端已经存入历史，更不等于某个现场物理动作已完成。
 
 
 # ---------- 控制命令 ----------
@@ -565,35 +566,27 @@ def _dispatch_cmd(plc: Plc, cmd_type: str, params: dict) -> tuple[bool, str]:
     """返回 (success, message)。False → cmd_ack.status=rejected,True → acked。"""
     spec = CMD_DISPATCH.get(cmd_type)
     if spec is None:
-    # 检查spec is None:，按判断结果进入对应的处理分支。
         return False, f'未知指令类型: {cmd_type}'
     sig_name, kind = spec
     if sig_name is None:
-    # 检查sig_name is None:，按判断结果进入对应的处理分支。
         # 现场 PLC 点位表里没有这个点位的寄存器 → 明确拒绝,不能假 ack
         return False, f'现场 PLC 无 {cmd_type} 对应寄存器(register-mapping.csv 未开放该点),指令未下发'
     sig = _cmd_signals.get(sig_name)
     if sig is None:
-    # 检查sig is None:，按判断结果进入对应的处理分支。
         return False, f'点位 {sig_name} 未在 register-mapping.csv 配置'
     params = params or {}
 
     if kind == 'pulse':
-    # 检查kind == 'pulse':，按判断结果进入对应的处理分支。
         value = 1
     elif kind == 'mode_toggle':
-    # 检查kind == 'mode_toggle':，按判断结果进入对应的处理分支。
         act = params.get('action')
         if act not in MODE_TOGGLE_VALUE:
-        # 检查act not in MODE_TOGGLE_VALUE:，按判断结果进入对应的处理分支。
             return False, (f'mode_set.params.action 必须是 '
                            f'{list(MODE_TOGGLE_VALUE.keys())},收到 {act!r}')
         value = MODE_TOGGLE_VALUE[act]
     elif kind == 'conveyor':
-    # 检查kind == 'conveyor':，按判断结果进入对应的处理分支。
         act = params.get('action')
         if act not in CONVEYOR_VALUE:
-        # 检查act not in CONVEYOR_VALUE:，按判断结果进入对应的处理分支。
             return False, (f'conveyor.params.action 必须是 '
                            f'{list(CONVEYOR_VALUE.keys())},收到 {act!r}')
         value = CONVEYOR_VALUE[act]
@@ -619,7 +612,6 @@ def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
     try:
         with plc.lock:
             if not plc.connected:
-            # 检查not plc.connected:，按判断结果进入对应的处理分支。
                 LOG.error('PLC 未连接,拒绝下发 addr=%d,value=%d(不假 ack)', address, value)
                 return False, 'PLC 未连接,指令未下发'
 
@@ -627,8 +619,11 @@ def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
             # 随后检查 rr.isError() 决定返回成功或失败；这一步没有等待独立的现场动作完成信号。
 
             rr = plc.cli.write_register(address=address, value=value, device_id=plc.unit)
-            # 按映射得到的寄存器地址和数值发起 Modbus 写请求，保存 PLC 返回的写响应。
-            # plc.cli 是 pymodbus 客户端，write_register 是库方法；address、value 来自已选定的控制点位与动作；plc.unit 是目标站号；这里的 rr 是写响应，不是之前的读取响应。
+            # 1. write_register 是 pymodbus 方法，发送一次保持寄存器写请求。
+            # 2. address 是分发表和点表最终确定的 word 地址；start 的示例地址为 9。
+            # 3. value 是这次要写的整数；启动示例写 1，脉冲清零按当前现场约定由 PLC 处理。
+            # 4. device_id 是 Modbus 站号，来自 plc.unit，与外部业务设备编码不是同一种标识。
+            # 5. rr 是本次写响应。isError() 没报协议错误只说明取得正常写响应，没有等待独立的物理完成信号。
         if rr.isError():
         # 检查本次 Modbus 写响应是否报错；报错时返回本次寄存器写入失败。
         # rr 是本次 write_register 的写响应，isError() 用于检查协议错误，不是设备物理动作完成信号；isError：判断 Modbus 响应是否携带协议错误
@@ -647,20 +642,26 @@ def on_command(c: mqtt.Client, plc: Plc):
     cmdId 缺失 → 回 rejected;ack 始终回(契约 §3.7)。"""
     # 内部回调函数（paho 的签名：client, userdata, message）
     def _cb(_client, _userdata, msg):
-    # 定义 _cb，用于解析收到的控制消息，分派现场写入并组装回执。
         cmd_id, ack_status, ack_msg = '', 'failed', ''
         try:
             # 解析指令 JSON
             cmd = json.loads(msg.payload.decode("utf-8"))
             cmd_id = cmd.get('cmdId') or ''
+            # 1. cmd 是刚解析的这条控制消息对象；cmdId 是后端为本次业务操作生成的编号。
+            # 2. get() 取字段；缺失或空值按这里的回退变成空字符串。
+            # 3. 后面会把同一个 cmd_id 带入回执，让网页和数据库知道回复属于哪一次请求。
+            # 4. 当前这里没有查询“已经执行过的编号表”，所以有编号本身不等于现场已经去重。
             cmd_type = cmd.get('type')
             params = cmd.get('params') or {}
             LOG.info('收到指令 type=%s cmdId=%s topic=%s', cmd_type, cmd_id, msg.topic)
             if not cmd_id:
-            # 检查not cmd_id:，按判断结果进入对应的处理分支。
                 ack_status, ack_msg = 'rejected', 'cmdId 缺失'
             else:
                 ok, ack_msg = _dispatch_cmd(plc, cmd_type, params)
+                # 1. 这是项目自己的业务分发函数；输入是现场客户端、指令类型和参数。
+                # 2. start 等类型先对应 cmd.* 点名，再按点表取得地址和值，真正写入发生在 _write_cmd()。
+                # 3. ok 表示这一处理分支的成功标记，ack_msg 解释拒绝或失败原因。
+                # 4. 后面把结果转换成 acked/rejected 等回执状态，并带原 cmdId 发回 Broker。
                 ack_status = 'acked' if ok else 'rejected'
         except Exception as exc:
             LOG.error('处理指令异常: %s', exc)
@@ -668,7 +669,6 @@ def on_command(c: mqtt.Client, plc: Plc):
         finally:
         # 执行无论上面操作成功还是失败都需要的清理步骤。
             if cmd_id:
-            # 检查cmd_id:，按判断结果进入对应的处理分支。
                 # 回执：cmdId 必须原样带回，后端靠它更新 control_commands 状态
                 publish(c, T_ACK, {
                     'cmdId': cmd_id,
@@ -686,7 +686,6 @@ def on_command(c: mqtt.Client, plc: Plc):
 # 正式入口先取得单实例锁，再加载点表、创建 PLC/MQTT、注册命令回调，随后循环采集。
 # 每轮生成独立机器人、IO 与工序报文，并按目标周期扣除读取耗时后等待；Ctrl+C 等退出路径负责关闭连接。
 def main():
-# 定义 main，用于读取点位配置并循环采集 PLC，发布遥测、IO、工序与心跳报文。
     # 配置日志
     setup_logging()
     # 配置采集器日志格式和输出级别。
@@ -696,7 +695,6 @@ def main():
     #   更糟的是同 client_id 会在 Broker 上互踢,导致下行指令收不到。
     lock_fh = acquire_single_instance_lock(LOCK_FILE)
     if lock_fh is None:
-    # 检查lock_fh is None:，按判断结果进入对应的处理分支。
         LOG.error("已有采集器在运行(锁 %s 被占用),本进程退出。"
                   "重复起采集器会抢 PLC 连接并互踢 MQTT,不要再起第二个。", LOCK_FILE)
                   # 把重复启动采集器的错误提示和锁文件路径传给日志或异常。
@@ -711,7 +709,6 @@ def main():
     signals = _read_csv(MAPPING_FILE)
     # 一个点位都没有 → 没法采，直接退出（继续跑也没意义）
     if not signals:
-    # 检查not signals:，按判断结果进入对应的处理分支。
         LOG.error("无可用点位,退出。请编辑 %s 后重试。", MAPPING_FILE)
         sys.exit(1)
 
@@ -740,12 +737,10 @@ def main():
 
     try:
         while True:
-        # 持续检查True:，按判断结果进入对应的处理分支。
             # 记录本轮开始时间（用于精确控制轮询周期）
             t_loop = time.time()
             # 心跳放在 PLC 读取之前 —— PLC 断线时也要发,否则后端会以为 edge 掉线
             if t_loop - last_edge_pub >= EDGE_HEARTBEAT_S:
-            # 检查t_loop - last_edge_pub >= EDGE_HEARTBEAT_S:，按判断结果进入对应的处理分支。
                 last_edge_pub = t_loop
                 publish(mq, T_EDGE, {"ts": now_ms(), "lineId": LINE_ID, "status": "online"},
                         qos=1, retain=True)
@@ -758,11 +753,11 @@ def main():
             # 目标周期来自配置，读取耗时与重试影响实际间隔；机器人不动也可以持续上报新的同值帧。
 
             values = plc.read_all(signals)
-            # 执行这一轮 PLC 读取，将各信号的已解码值保存到 values，随后分别组装机器人、工序与 IO 消息。
-            # values 是本轮业务名称到数值的字典；signals 来自点表；plc.read_all() 不先判断角度是否变化，所以同值新帧也能继续上报。
-            # 一个值都没读到 → PLC 没响应，记警告并等 1 秒后重试
+            # 1. main 的循环每轮调用一次 read_all()，signals 是启动时读入的只读点位列表。
+            # 2. 返回 values 是“点名 → 本轮已解码值”，不是直接来自 Broker 的消息。
+            # 3. 随后分别调用机器人、IO、工序的组装方法；这三类数据不是同一个角度依次翻译出来的。
+            # 4. 当前没有先比较新旧角度是否相同；机器人不动也可以继续生成同值新帧。
             if not values:
-            # 检查not values:，按判断结果进入对应的处理分支。
                 LOG.warning("PLC 无响应,1s 后重试")
                 # 记录本次异常或状态的警告日志。
                 time.sleep(1.0)
@@ -775,20 +770,17 @@ def main():
             tele = group_signals(signals, values)
             # 有 deviceId 才说明采到了 robot.* 的点位
             if "deviceId" in tele:
-            # 检查"deviceId" in tele:，按判断结果进入对应的处理分支。
                 publish(mq, T_ROBOT, tele, qos=0)
 
             # 2) 产线 IO (跟随 poll;word 11..16,契约 §3.8)
             io_msg = io_payload(signals, values)
             if io_msg is not None:
-            # 检查io_msg is not None:，按判断结果进入对应的处理分支。
                 publish(mq, T_IO, io_msg, qos=0)
 
             # ---- 2) 产线状态 (1Hz, retained) ----
             now = time.time()
             # 距离上次发布已超过 1 秒才发
             if now - last_status_pub >= STATUS_PERIOD:
-            # 检查now - last_status_pub >= STATUS_PERIOD:，按判断结果进入对应的处理分支。
                 last_status_pub = now
                 publish(mq, T_STATUS, line_status_payload(values), qos=1, retain=True)
 
@@ -800,6 +792,9 @@ def main():
             dt = time.time() - t_loop
             # 目标周期 - 实际耗时 = 还要睡多久（不能为负）
             sleep_s = max(0.0, PLC_POLL_MS / 1000.0 - dt)
+            # 1. PLC_POLL_MS/1000 把目标毫秒周期换成秒；dt 是这一轮已经花掉的时间。
+            # 2. 相减得到剩余等待时间，max(0.0, ...) 防止出现负数等待。
+            # 3. 目标 0.2 秒、已经耗时 0.25 秒时，sleep_s=0，实际这一轮仍然已经超过目标周期。
             time.sleep(sleep_s)
             # 暂停当前线程指定秒数。
 
@@ -828,5 +823,4 @@ def main():
 
 # 程序的直接入口（被 import 时不执行）
 if __name__ == "__main__":
-# 检查__name__ == "__main__":，按判断结果进入对应的处理分支。
     main()

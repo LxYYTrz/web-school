@@ -45,5 +45,9 @@ export class CommandController {
   ) {
   // 上方参数列表在此结束，下面开始方法的具体处理逻辑
     return this.commands.issue(lineId, body, user);
+    // 1. commands 是注入的项目 CommandService；issue 是它的业务方法，不是 NestJS 自动写 PLC 的功能。
+    // 2. lineId 从路径取得产线编码，body 从 JSON 取得设备/类型/参数，user 从已检查会话取得操作者。
+    // 3. 前面两个守卫先检查登录与级别，进入 issue 后仍检查类型、目录编号和参数。
+    // 4. 返回值交给 NestJS 生成 HTTP 响应，MQTT 现场处理与后续业务回执继续独立进行。
   }
 }

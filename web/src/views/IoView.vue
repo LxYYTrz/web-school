@@ -136,9 +136,12 @@ const timer = setInterval(() => { now.value = Date.now(); }, 500);
 onUnmounted(() => clearInterval(timer));
 
 const stale = computed(() => !io.value || now.value - io.value.ts > STALE_MS);
+// 1. computed 来自 Vue，依赖当前帧与每 500ms 更新一次的 now。
+// 2. 没有 IO 帧，或当前浏览器时间减帧 ts 超过 5000ms，就判为停滞。
+// 3. 这个判断改变页面状态提示，没有在此删除旧 IO 数值。
+// 4. 它与 Redis 的 EX 60 不同：前者检查页面数据时间，后者决定后端 key 还能否读到。
 
 function val(p: IoPoint): number | null | undefined {
-// 定义 val，用于取得当前 IO 字段的值，缺失时按空值显示。
   return (io.value?.io as Record<IoField, number | null> | undefined)?.[p.field];
 }
 

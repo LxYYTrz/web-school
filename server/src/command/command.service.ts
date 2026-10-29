@@ -51,8 +51,10 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
 
-  // 将 issued_at 超过 15 秒且仍为 sent 的控制记录标为 timeout。
-  // UPDATE RETURNING id 返回本次被更新的记录编号，rowCount 用于日志；这里不创建 cmdId，也不向 PLC 发送撤销。
+  // 1. 此方法由启动时安排的定时器触发，每秒检查一次未按时收到回执的 sent 记录。
+  // 2. issued_at 是后端创建记录的时间，阈值 CMD_TIMEOUT_SEC 当前为 15 秒。
+  // 3. UPDATE 只改数据库状态，并通过 RETURNING id 返回这次匹配的既有记录。
+  // 4. 它不会向 PLC 发送撤销或停止；先写入、后丢失回执的命令也可能被标成 timeout。
   private async sweepTimeout() {
     try {
       // 扫描并更新超时记录；创建命令与审计的 INSERT 位于下面 issue() 中。
@@ -99,6 +101,10 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
 
     // params 值域校验(契约 §3.6):mode_set/conveyor 的 action 必须是枚举值
     const pv = validateParams(body.type, body.params);
+    // 1. validateParams 是项目从 command-contract.ts 导入的函数，不是 MQTT 或 NestJS 自动完成的检查。
+    // 2. body.type 选择对应指令的参数枚举，body.params 提供本次动作参数。
+    // 3. 例如 conveyor 的 action 必须属于契约允许的值；当前没有枚举约束的类型按该函数分支通过。
+    // 4. 返回 pv.ok=false 时直接结束，不创建后面的控制记录，也不发布命令。
     if (!pv.ok) return { ok: false, error: pv.error };
 
     // operator 从 session 取(契约 §5 第 2 条:严禁信客户端)
@@ -113,14 +119,15 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
     const r = await this.pool.query(
       `INSERT INTO control_commands (line_id, device_id, user_id, type, params, status)
        VALUES ($1,$2,$3,$4,$5,'sent') RETURNING idempotency_key`,
-       // 按前面声明的列顺序提供 SQL 插入值，参数占位符由查询调用传入。
        // RETURNING id 让 PostgreSQL 返回本次写入记录的主键，供后续审计或关联使用
       [lineId, deviceId, userId, body.type, JSON.stringify(body.params ?? {})],
     );
     // 取回生成的 UUID 字符串
     const cmdId = String(r.rows[0].idempotency_key);
-    // 取出刚创建的控制记录编号，供 MQTT 命令、网页等待和现场回执关联同一次操作。
-    // r 是 INSERT RETURNING 的数据库结果；idempotency_key 由数据库生成；cmdId 是项目用于串联请求与回执的字符串，不单独保证物理动作只执行一次。
+    // 1. r 来自刚执行的 INSERT ... RETURNING idempotency_key。
+    // 2. rows[0] 是新建控制记录返回的数据，String() 将编号按文本使用。
+    // 3. 这个 cmdId 会同时放进 HTTP 响应、MQTT 命令以及采集器回执，关联同一次操作。
+    // 4. 字段名包含 idempotency，不代表采集器已经按它建立已执行命令表；当前关联与去重需要分开解释。
 
     // 契约 §5 第 5 条:全流程落 audit_logs
     // detail 里带 operator —— 机器通道的 operator 是 'ai:feishu:ou_xxx' 这种,
@@ -134,7 +141,6 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
       // 通过 PostgreSQL 连接池执行参数化 SQL，返回 rows 与 rowCount 等结果。
         `INSERT INTO audit_logs (user_id, action, target, detail)
          VALUES ($1, 'command:execute', $2, $3::jsonb)`,
-         // 按前面声明的列顺序提供 SQL 插入值，参数占位符由查询调用传入。
          // $1 是数据库参数占位符，实际值由查询调用另外传入；VALUES 按前面 INSERT 列出的字段顺序提供要写入的数据，$n 占位符由查询参数数组填入
         [userId, `${body.type} @ ${lineCode}/${body.deviceId}`,
          JSON.stringify({ cmdId, params: body.params ?? {}, operator })],
@@ -143,8 +149,10 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
 
     // ---------- 通过 MQTT 下发到边缘 ----------
     this.mqtt.publishCommand(lineCode, body.deviceId, {
-    // 把通过检查并已建立编号的控制请求交给 MQTT 接入服务发布。
-    // mqtt 是项目注入的 MqttIngestService，publishCommand 是项目方法，内部使用 mqtt 库；参数包括产线编码、设备编码和下方组装的 cmdId、type、params 等字段。
+    // 1. mqtt 是项目注入的 MqttIngestService，publishCommand 是项目方法。
+    // 2. lineCode 和 body.deviceId 仍是外部业务编码，用来组成控制主题。
+    // 3. 下方对象带着 cmdId、产生时间、目标、type、params 和 operator 交给接入服务。
+    // 4. 进入 ingest/mqtt-ingest.service.ts 后才看到 mqtt 库真正发布消息；实际写寄存器继续由采集器完成。
       cmdId,
       ts: Date.now(),
       // 取得当前时间戳；Date.now 使用毫秒。
@@ -153,7 +161,6 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
       type: body.type,
       params: body.params ?? {},
       operator,
-      // operator 是上方取得或计算的同名局部值，在此作为返回对象的 operator 属性
     });
     // ---------- 返回给前端 ----------
     // 前端拿 cmdId 后可以查询指令最终状态（acked/rejected/failed）

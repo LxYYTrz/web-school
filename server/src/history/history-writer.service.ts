@@ -71,8 +71,10 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
   bufferRobotFrame(deviceCode: string, msg: any) {
     // ① 翻译 code → id。查不到就直接丢弃这条（返回 undefined）
     const deviceId = this.catalog.deviceId(deviceCode);
-    // 将消息中的设备业务编码转换成历史表使用的内部设备编号。
-    // catalog 是项目的基础目录服务，deviceCode 例如 robot-01；此处 deviceId 是数据库 devices.id，而非消息里的编码字符串。
+    // 1. deviceCode 是消息使用的 robot-01；catalog 是项目的基础目录服务。
+    // 2. 查到后，这里的 deviceId 变为数据库 devices.id，例如教学假设中的 2。
+    // 3. 历史表的外键需要这个内部 id，因此不能直接把 robot-01 当作 device_id 写进去。
+    // 4. 未找到时下面直接 return，只跳过这一帧的历史路径；快照和实时推送分别处理。
     if (deviceId === undefined) return;
     // 目录中没有该设备时，结束这一帧的历史入队处理。
     // undefined 表示编码没有匹配的内部编号；这里只跳过历史缓冲路径，不代表其他独立的快照和实时推送也已停止。
@@ -87,8 +89,10 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
     }
     // ③ 组装成一行，push 进缓冲
     this.robotBuffer.push({
-    // 把时间、内部设备编号和关节等字段组成一条待保存记录，加入当前后端进程的内存队列。
-    // robotBuffer 是 HistoryWriterService 的数组；push 是 JavaScript 数组追加方法；msg 提供本帧现场数据，后面的 flushRobots 才执行数据库 INSERT。
+    // 1. push() 是 JavaScript 数组追加方法，这次把一条待保存历史放入后端进程内存。
+    // 2. time 来自帧 ts 的时间换算，deviceId 来自目录，joints 来自当前帧。
+    // 3. tcp、速度、模式等按当前字段有无填入值或 null；默认报警码不证明现场没有故障。
+    // 4. robotBuffer 是临时周转箱；方法返回时还不能断言数据库已保存。
       time: toTime(msg),
       // 将报文时间戳转换为数据库可用的时间值。
       deviceId,
@@ -109,9 +113,10 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
     //    注意：必须在取出的瞬间清空，这样新到的帧会进入新的缓冲，
     //    不会和正在写入的这批混淆（避免写入期间数据丢失）
     const rows = this.robotBuffer.splice(0, this.robotBuffer.length);
-    // 一次取出当前积累的待保存帧，并从内存缓冲中移除，供下面组装批量 INSERT。
-    // splice 是 JavaScript 数组方法，rows 保存本批数据；此时尚未确认数据库写入成功，后续失败分支会记录错误并丢弃该批。
-    // 没有数据就直接返回（不发空 SQL）
+    // 1. splice 从下标 0 取出当前队列全部元素，同时从原数组移除。
+    // 2. rows 保留本批帧；之后新到的帧继续追加到新的 robotBuffer 内容中。
+    // 3. 先取出并不代表事务已经成功，后续 INSERT 失败时当前代码记录错误并丢弃本批。
+    // 4. 这项批处理减少逐帧发 SQL 的次数，但不提供断电恢复或自动补写保证。
     if (rows.length === 0) return;
     // ② 收集参数值数组（PostgreSQL 占位符 $1 $2 ... 依次对应）
     const values: any[] = [];
@@ -120,7 +125,9 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
       .map((r, i) => {
       // 将集合中的每个元素转换为新值，返回新的数组或迭代结果。
         const o = i * 8;
-        // 把 8 个字段值按顺序 push 进参数数组
+        // 1. 每条 RobotRow 要写 8 个字段，所以第 i 行之前已经占用 i×8 个参数。
+        // 2. i 从 0 开始：第一行使用 $1～$8，第二行使用 $9～$16。
+        // 3. 下面 values 的添加顺序必须与列名和占位符一致，否则同一位置会写入错误字段。
         values.push(r.time, r.deviceId, r.joints, r.tcp, r.speedPct, r.mode, r.program, r.alarmCode);
         // 返回这一行的占位符串，如 ($1,$2,...,$8)
         return `($${o + 1},$${o + 2},$${o + 3},$${o + 4},$${o + 5},$${o + 6},$${o + 7},$${o + 8})`;
@@ -182,12 +189,14 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
     const history = this.pool.query(
       `INSERT INTO line_status_history ("time", line_id, state, product_code, good_count, ng_count, beat_ms)
        VALUES ($7,$1,$2,$3,$4,$5,$6)`,
-       // 按前面声明的列顺序提供 SQL 插入值，参数占位符由查询调用传入。
        // $1 是数据库参数占位符，实际值由查询调用另外传入；VALUES 按前面 INSERT 列出的字段顺序提供要写入的数据，$n 占位符由查询参数数组填入
       args,
     );
     // ⑥ 两条语句并发执行，等都完成后再处理错误（任一失败即记日志）
     Promise.all([upsert, history]).catch((e: Error) =>
+    // 1. upsert 和 history 是前面分别发起的两次数据库查询结果。
+    // 2. Promise.all 汇总它们的异步完成或错误，不会自动添加 BEGIN/COMMIT。
+    // 3. 因此可能一张表成功而另一张失败；不能据此保证当前状态、历史状态和 Redis 严格同时更新。
       this.logger.error(`写产线状态失败: ${e.message}`),
     );
   }
@@ -204,7 +213,6 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
       // 通过 PostgreSQL 连接池执行参数化 SQL，返回 rows 与 rowCount 等结果。
         `INSERT INTO production_events ("time", line_id, device_id, type, level, code, message, payload)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-         // 按前面声明的列顺序提供 SQL 插入值，参数占位符由查询调用传入。
          // $1 是数据库参数占位符，实际值由查询调用另外传入；VALUES 按前面 INSERT 列出的字段顺序提供要写入的数据，$n 占位符由查询参数数组填入
         [
           toTime(msg), lineId, deviceId ?? null, msg.type ?? 'custom', msg.level ?? 'info',
@@ -215,8 +223,10 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
       .catch((e: Error) => this.logger.error(`写事件失败: ${e.message}`));
   }
 
-  // 以回执中的 cmdId 找控制记录，保存 acked/rejected/failed 状态、完整回执和接收时间。
-  // SQL 只更新 pending、sent；已经 timeout 等终态的行不会被这次更新覆盖，实时广播在接入层另行发起。
+  // 1. 先按 msg.cmdId 找原命令，并只接受当前代码允许的 acked/rejected/failed 回执状态。
+  // 2. SQL 中 $1 是业务编号，$2 是回执状态，$3 是完整回执 JSON。
+  // 3. WHERE 同时要求旧记录仍为 pending 或 sent，避免迟到或重复回执覆盖已结束的记录。
+  // 4. 例如记录已经 timeout，迟到 acked 不会由这条 SQL 改写；这不是在 PLC 写入前做去重。
   ackCommand(msg: any) {
     // ① 没有 cmdId 的回执无法定位指令，直接忽略
     if (!msg.cmdId) return;
@@ -245,13 +255,11 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
 // 各写入方法共用的时间换算：数值 ts 按毫秒转 Date，否则使用后端当前时间。
 // 这是缺失时间字段的回退，不说明现场重新采集过。
 function toTime(msg: any): Date {
-// 定义 toTime，用于将报文时间戳转换为数据库可用的时间值。
   return typeof msg?.ts === 'number' ? new Date(msg.ts) : new Date();
 }
 
 // 工序计数字段入库前，仅保留有限数值，否则使用 0 作为当前写入默认值。
 // 默认值不代表现场实际测得 0，需结合采集器是否存在对应点位说明。
 function num(v: any): number {
-// 定义 num，用于将输入规范化为可接受的数值或空值。
   return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 }

@@ -76,8 +76,14 @@ export class CatalogService implements OnModuleInit, OnModuleDestroy {
     // 把查询结果转成 Map：rows.map(r => [String(r.code), Number(r.id)])
     // String/Number 强制转型 —— pg 返回的 bigint 是字符串，id 是 number
     this.lines = new Map(lines.rows.map((r) => [String(r.code), Number(r.id)]));
+    // 1. lines 是 pg 查询结果，rows 中每个 r 对应一条产线档案。
+    // 2. map() 把每条记录转成 [业务编码, 内部编号] 这样的二元数组。
+    // 3. new Map(...) 用这些数组建立查找目录，后面可以直接用 line-01 查到教学示例中的 1。
+    // 4. String/Number 统一键和值的类型，目录存放在此后端进程内存，不是 Redis 里的现场状态。
     this.devices = new Map(devices.rows.map((r) => [String(r.code), Number(r.id)]));
-    // 打印加载结果，方便运维确认种子数据是否正确
+    // 1. 设备目录同样按 code → id 建立，例如 robot-01 → 2。
+    // 2. 外部主题和网页请求使用 code，历史表外键使用内部 id，因此写入前需要这次转换。
+    // 3. 目录刷新与现场帧上报分别进行，刚在数据库新增设备不代表已运行进程立刻读取到了新目录。
     this.logger.log(`编码映射已加载:${this.lines.size} 条产线 / ${this.devices.size} 台设备`);
   }
 

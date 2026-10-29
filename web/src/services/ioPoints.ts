@@ -96,13 +96,16 @@ export function ioPointByField(field: IoField): IoPoint {
 export function ioValueText(p: IoPoint, v: number | null | undefined): string {
   if (v === null || v === undefined) return '—';
   if (p.spec.kind === 'enum') return p.spec.values[v] ?? String(v);
+  // 1. p 来自 IO_POINTS 点位配置，v 是当前 IO 帧中的实际数值。
+  // 2. 枚举点按 values 查中文含义，例如灯色编码；找不到时显示原数字，不编造状态。
+  // 3. 下一行才处理布尔点：v>0 选 onLabel，否则选 offLabel；前面已排除空值。
+  // 4. 这里仅选择网页文案，采集器的寄存器类型与缩放已经在上游处理。
   return v > 0 ? p.spec.onLabel : p.spec.offLabel;
 }
 
 // 按同一份点位规则选择界面语义色，空值使用 idle，未知枚举使用 off。
 // 色调用于网页样式，与 PLC 寄存器写值或物理动作完成没有直接等价关系。
 export function ioTone(p: IoPoint, v: number | null | undefined): string {
-// 定义 ioTone，用于按 IO 点位含义选择界面提示色调。
   if (v === null || v === undefined) return 'idle';
   if (p.spec.kind === 'enum') return p.spec.colors[v] ?? 'off';
   return v > 0 ? p.spec.onTone : 'idle';
@@ -110,6 +113,5 @@ export function ioTone(p: IoPoint, v: number | null | undefined): string {
 
 /** 该点位是否有信号(bool 专用) */
 export function ioOn(v: number | null | undefined): boolean {
-// 定义 ioOn，用于判断 IO 信号是否处于启用或动作状态。
   return v !== null && v !== undefined && v > 0;
 }

@@ -47,6 +47,10 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
     // 这里建立的是消息接入通道，不是采集器向后端发 HTTP 请求；网络重连与后续报文业务检查分别处理。
 
     this.client = connect(config.mqtt.url, {
+    // 1. connect 从 mqtt 库导入，返回客户端对象；真正连接成功由后面的 connect 事件通知。
+    // 2. config.mqtt.url 指向 Broker，clientId 标识这个后端客户端；可选账号与密码来自配置。
+    // 3. keepalive=30 是 MQTT 保活配置；reconnectPeriod=2000 表示断开后按库规则尝试重连的间隔毫秒数。
+    // 4. 采集器也连接同一 Broker，但与后端是两条不同的客户端连接。
       clientId: config.mqtt.clientId,
       username: config.mqtt.username,
       password: config.mqtt.password,
@@ -114,18 +118,24 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
     // 按 '/' 切分：'tl/v1/line-01/telemetry/robot/robot-01'
     //   → ['tl','v1','line-01','telemetry','robot','robot-01']
     const seg = topic.split('/');
-    // seg[2] 是产线编码（因为前缀固定是 tl/v1，占了 0 和 1 两段）
+    // 1. topic 是 mqtt 回调给出的主题字符串，split() 是 JavaScript 字符串方法。
+    // 2. 示例 tl/v1/line-01/telemetry/robot/robot-01 被拆成六段。
+    // 3. 本项目按固定前缀结构取 seg[2] 为产线，seg[5] 为机器人设备；它们都是业务编码。
+    // 4. kind 从第 3 段拼接，用来决定下面进入机器人、IO、状态还是回执分支。
     const lineId = seg[2];
     // kind 是主题剩余部分拼接，用来判断消息类型
     const kind = seg.slice(3).join('/');
 
     // ---------- 第 2 步：解析 JSON 载荷 ----------
     let msg: any;
-    // 声明变量 msg，类型为 any；其值稍后赋入。
     // ---------- 第 3 步：按类型三路分发 ----------
     try {
       // Buffer → utf8 字符串 → JSON 对象
       msg = JSON.parse(payload.toString('utf8'));
+      // 1. payload 是 Node.js Buffer，先按 UTF-8 还原消息正文，再用内置 JSON.parse() 得到对象。
+      // 2. 例如文本中的 joints 数组在这里成为可以访问的 msg.joints。
+      // 3. JSON 语法合法不等于业务字段有效；机器人分支还会检查 joints 是否为长度 6 的数组。
+      // 4. 解析失败只结束当前报文处理，不是关闭整个 MQTT 客户端。
     } catch {
       // 不是合法 JSON：记 warn 并丢弃这一条（不能影响其他消息）
       this.logger.warn(`非 JSON 报文已忽略: ${topic}`);
@@ -151,24 +161,28 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
         // 这些调用不构成保证同时成功的事务，所以网页更新不能单独证明历史完整保存。
 
         this.state.setRobotFrame(lineId, deviceId, msg);
-        // 把本帧交给实时状态服务保存最新快照，供稍后打开或重连的网页读取。
-        // state 是项目注入的 LineStateService；setRobotFrame 内部通过 ioredis 写 Redis 并设置 60 秒有效期；lineId、deviceId 是业务编码，msg 是收到的整帧，不在这一行保存历史或推送网页。
-        // 第 2 路：放进历史缓冲队列（每秒批量写 TimescaleDB）
+        // 1. state 是 NestJS 注入的项目 LineStateService，不是 mqtt 库提供的存储对象。
+        // 2. 参数依次传入主题中的产线编码、设备编码以及解析后的整帧 msg。
+        // 3. 进入 state/line-state.service.ts 的 setRobotFrame，才能看到 ioredis SET、key 和 60 秒有效期的实际实现。
+        // 4. 本行只交给最新快照路径；下面两行分别处理历史缓冲和在线网页推送。
 
         // 把同一条机器人消息交给历史缓冲；这个方法只负责入队，后续定时批量写 PostgreSQL。
         // deviceId 在接入层是设备业务编码，HistoryWriter 会通过 CatalogService 找到数据库内部设备 id。
 
         this.history.bufferRobotFrame(deviceId, msg);
-        // 把同一帧交给历史服务整理并入队，后续由定时批处理写入数据库。
-        // history 是项目注入的 HistoryWriterService；此处 deviceId 是设备业务编码，方法内部会用 CatalogService 查数据库内部编号；入队不等于已经落库。
-        // 第 3 路：WebSocket 推送给订阅了该产线房间的浏览器
+        // 1. history 是项目 HistoryWriterService；这里的 deviceId 仍是 robot-01 这类业务编码。
+        // 2. 方法内部先通过 CatalogService 找数据库设备 id，再把这一帧的时间和关节值放入 robotBuffer。
+        // 3. bufferRobotFrame 只是入队；定时器后来调用 flushRobots 才发数据库 INSERT。
+        // 4. 因此网页已经更新，也不能据此断言这一帧已经成功持久保存。
 
         // 将这帧机器人消息推送给正在订阅对应产线的网页，事件名为 robot_state。
         // 网页收到后更新 useLineData 的 robot，TwinView 再把 joints 交给模型。
 
         this.gateway.broadcastRobot(lineId, msg);
-        // 把同一帧交给实时网关，发送给订阅当前产线的在线网页。
-        // gateway 是项目注入的 TelemetryGateway；broadcastRobot 内部使用 Socket.IO 房间发送 robot_state，网页收到后更新共享状态；这条路径与 Redis、历史写入分别处理。
+        // 1. gateway 是项目 TelemetryGateway；它内部使用 Socket.IO 的房间广播 API。
+        // 2. lineId 选择 line:line-01 这样的房间；msg 作为 robot_state 事件正文送给已经订阅的连接。
+        // 3. 网页 useLineData 的回调更新共享 robot，TwinView 再按需要把 joints 交给模型。
+        // 4. 没有正在订阅的网页时，本行不会替新网页保留历史；首屏快照由 Redis 路径另行提供。
       } else if (kind === 'telemetry/io') {
         // 产线 IO(契约 §3.8):高频瞬时量,只走 Redis 快照 + WebSocket,不落 TimescaleDB。
         // 单个点位读失败时值为 null(edge 保证"没读到"不冒充 0),这里整包照收。
@@ -203,7 +217,9 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
       // 场景 E：控制指令回执（每条指令一次）
       } else if (kind === 'cmd_ack') {
         this.history.ackCommand(msg);
-        // 根据指令编号更新控制审计记录的回执状态。
+        // 1. cmd_ack 主题进入这里时，msg.cmdId 对应原 control_commands.idempotency_key。
+        // 2. ackCommand 用 SQL 条件更新仍为 pending/sent 的记录；终态保护发生在数据库更新阶段。
+        // 3. 下一行仍独立广播给网页，所以数据库没匹配到行不等于整条回执在所有路径都被丢弃。
         this.gateway.broadcastCommandAck(lineId, msg);
         // 向产线房间广播控制指令回执。
       }

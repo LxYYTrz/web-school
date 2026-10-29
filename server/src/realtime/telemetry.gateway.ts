@@ -24,7 +24,9 @@ export class TelemetryGateway {
     if (!body?.lineId) return { ok: false, error: 'lineId required' };
     // 把这个 socket 加入产线房间。之后该产线的所有广播都会推给它。
     void client.join(`line:${body.lineId}`);
-    // 返回确认信息（socket.io 的 emit 带回调函数时会收到这个对象）
+    // 1. client 是本次发送 subscribe 的 Socket.IO 连接，不是 MQTT 采集器。
+    // 2. join() 来自 Socket.IO；body.lineId 例如 line-01 时加入 line:line-01 房间。
+    // 3. 房间名用于后续广播筛选接收者，不会新建数据库产线或启动 PLC 读取。
     return { ok: true, lineId: body.lineId };
   }
 
@@ -39,7 +41,9 @@ export class TelemetryGateway {
   // server.to().emit() 来自 Socket.IO；不会在这里写 Redis 或等待历史落库。
   broadcastRobot(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('robot_state', msg);
-    // 选择要广播消息的 Socket.IO 房间。
+    // 1. server 是 NestJS 网关注入的 Socket.IO 服务端实例。
+    // 2. to() 选择这条产线房间，emit() 将整帧作为 robot_state 事件正文交给连接。
+    // 3. 网页在 useLineData 注册同名回调，所以收到后更新共享 robot；不是函数名自动完成存储与显示。
   }
 
   // 按产线房间广播 line_status，网页共享状态接收后更新工序显示。

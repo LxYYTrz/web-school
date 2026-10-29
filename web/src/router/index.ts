@@ -49,7 +49,9 @@ setUnauthorizedHandler(() => {
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
   if (!auth.ready) await auth.refresh();
-  // 已登录访问 /login → 跳默认页
+  // 1. auth 是 Pinia 登录 store，ready 表示首次读取 /api/auth/me 已经结束。
+  // 2. 首次导航先等 refresh 完成，避免还不知道登录状态就错误跳转。
+  // 3. 后面按 public、isLoggedIn、requiredLevel 决定目标页面；这些是页面进入规则，接口仍由后端检查。
   if (to.path === '/login' && auth.isLoggedIn) {
     return { path: '/twin' };
   }
@@ -65,5 +67,4 @@ router.beforeEach(async (to) => {
     return { path: '/twin' };
   }
   return true;
-  // 布尔结果由当前函数的调用方用于决定是否允许继续执行
 });

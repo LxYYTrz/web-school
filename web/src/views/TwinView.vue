@@ -146,6 +146,10 @@ onBeforeUnmount(() => {
 // 只有帧和模型都存在时才把 r.joints 交给 setJoints()；数组元素仍以度表示，度转弧度在 RobotArm 内部完成。
 // setAlarm() 根据报警码更新模型显示。工序中文和 IO 点位值由另外的显示规则处理，不经过 setJoints()。
 
+// 1. watch 从 Vue 导入，观察 useLineData 返回的共享 robot 容器。
+// 2. 实时回调或首屏快照替换 robot.value 后，r 就是本次触发所用的帧。
+// 3. 下方先确认帧和模型存在，再把 joints 交给 arm.setJoints，把 alarmCode 转成报警布尔值。
+// 4. 这段是数据层到模型层的连接点；网络接收在 composables，角度与节点处理在 RobotArm。
 watch(robot, (r) => {
 // 机器人共享状态变化时，取最新帧更新模型关节角和报警显示。
 // robot 来自 useLineData()；r 是本次机器人帧；arm 是已创建的 RobotArm；r.joints 的元素是度数，弧度转换在模型内部进行。
