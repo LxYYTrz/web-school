@@ -193,7 +193,7 @@ export class AiService {
   // seenTools 只去重本次展示的工具名称，不是 PLC 命令去重记录。
   // 【入口 AiService.handleChunk：部分 / 作用】
   // 部分 | 作用
-  // c | 当前 Paho MQTT 客户端。
+  // c | parseSse 交来的本次 Hermes 流事件对象，供 handleChunk 提取工具提示或正文增量。
   private handleChunk(c: any, push: (e: AiStreamEvent) => void, seenTools: Set<string>) {
     // 工具事件在**顶层**,且 tool 直接是字符串(实测 2026-10-16):
     //   {"tool":"mcp__line_twin__get_line_snapshot","status":"running","emoji":"⚡"}
