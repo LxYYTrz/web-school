@@ -50,12 +50,19 @@ export class AiService {
   }
 
   // 用配置前缀和当前登录用户名组成 Hermes 会话标识，交给后续 HTTP 请求头。
+  // 【入口 AiService.sessionId：部分 / 作用】
+  // 部分 | 作用
+  // user | 当前入口取得的用户身份载体。
   private sessionId(user: SessionUser) {
     return `${config.ai.sessionPrefix}-${user.username}`;
   }
 
   // 为这次网页聊天创建 Observable，异步请求 Hermes 并把事件通过 subscriber 交给 SSE 响应。
   // AbortController 控制本次 fetch；返回的清理回调在取消订阅时停止读取，不会撤销工具已经完成的现场操作。
+  // 【入口 AiService.stream：部分 / 作用】
+  // 部分 | 作用
+  // body | 当前请求正文或流对象；具体字段依函数签名与调用方。
+  // user | 当前入口取得的用户身份载体。
   stream(body: ChatBody, user: SessionUser): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber: Subscriber<MessageEvent>) => {
       const ac = new AbortController();
@@ -139,6 +146,9 @@ export class AiService {
 
   // 持续从 HTTP 响应流读取字节，用 TextDecoder 和缓冲区拼接跨网络分片的数据。
   // 以空行切帧，取 data: 行解析 JSON；单次 reader.read 不等于完整业务事件，无法解析的帧按当前分支跳过。
+  // 【入口 AiService.parseSse：部分 / 作用】
+  // 部分 | 作用
+  // body | 当前请求正文或流对象；具体字段依函数签名与调用方。
   private async *parseSse(body: ReadableStream<Uint8Array>): AsyncGenerator<any, void, void> {
   // 逐块读取上游 SSE 文本，拆分并解析完整事件。
     const reader = body.getReader();
@@ -181,6 +191,9 @@ export class AiService {
 
   // 把 Hermes 事件分别转换为工具提示或文字增量，由 stream 的 push 交给网页。
   // seenTools 只去重本次展示的工具名称，不是 PLC 命令去重记录。
+  // 【入口 AiService.handleChunk：部分 / 作用】
+  // 部分 | 作用
+  // c | 当前 Paho MQTT 客户端。
   private handleChunk(c: any, push: (e: AiStreamEvent) => void, seenTools: Set<string>) {
     // 工具事件在**顶层**,且 tool 直接是字符串(实测 2026-10-16):
     //   {"tool":"mcp__line_twin__get_line_snapshot","status":"running","emoji":"⚡"}
@@ -208,6 +221,9 @@ export class AiService {
 
   // 从工具名称中剥离展示不需要的前缀，隐藏内部描述类工具。
   // 这一步只影响界面工具提示，不决定哪个 MCP 执行函数有控制权限。
+  // 【入口 AiService.friendlyTool：部分 / 作用】
+  // 部分 | 作用
+  // raw | 当前入口收到的原始文本或待清理值。
   private friendlyTool(raw: string): string | null {
     if (raw === 'tool_describe' || raw.startsWith('hermes_')) return null;
     return raw.replace(/^mcp__[^_]+(?:_[^_]+)*__/, '');
@@ -215,6 +231,9 @@ export class AiService {
 
   // 为当前产线组织网页助手提示，要求事实查工具、控制先建议并等待确认。
   // 这些字符串发送给模型作为对话上下文，不为 MCP 函数新增网页或飞书身份检查。
+  // 【入口 AiService.systemPrompt：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
   private systemPrompt(lineId: string) {
     return [
     // 方括号中的条目组成返回数组，调用方按顺序使用其中的数据

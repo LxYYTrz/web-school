@@ -53,6 +53,10 @@ export class AiController {
 
   // 注意顺序:controller 里的 SSE 必须由 HTTP 方法装饰器先声明路径和方法,
   // @Sse() 只负责标记「这个响应是事件流」。少了 @Post 路由根本不会注册(404)。
+  // 【入口 AiController.chat：部分 / 作用】
+  // 部分 | 作用
+  // body | 当前请求正文或流对象；具体字段依函数签名与调用方。
+  // user | 当前入口取得的用户身份载体。
   @Post('chat')
   @Sse('chat')
   @UseGuards(AuthGuard)
@@ -81,6 +85,10 @@ export class AiController {
   // 操作者 user 来自当前会话，不使用建议正文自报的用户名；命令服务校验未通过时按代码恢复建议。
   // 确认接口返回仍属于后端下发阶段，设备回执和物理动作结果要沿后续链路分别判断。
 
+  // 【入口 AiController.confirm：部分 / 作用】
+  // 部分 | 作用
+  // id | 当前记录或建议的标识，依所在函数。
+  // user | 当前入口取得的用户身份载体。
   @Post('proposals/:id/confirm')
   @UseGuards(AuthGuard, CommandGuard)
   async confirm(@Param('id') id: string, @CurrentUser() user: SessionUser) {

@@ -40,6 +40,15 @@ async function bootstrap() {
 
   app.use(
   // 将 cookie-session 注册为 NestJS/Express 的 HTTP 中间件，使后续接口能读取和写入 req.session。
+    // 【调用各部分：部分 / 作用】
+    // 部分 | 作用
+    // cookieSession() | 创建第三方会话中间件，外层 app.use 安装它。
+    // name | Cookie 名称。
+    // keys | 配置的签名密钥，不在注释中展示实际值。
+    // httpOnly | 限制浏览器脚本直接读取该 Cookie。
+    // sameSite | 影响跨站请求携带 Cookie 的规则。
+    // secure | 是否强制只经 HTTPS 发送，当前仓库配置为 false。
+    // maxAge | 有效期的毫秒数，7×24×60×60×1000 表示 7 天。
     cookieSession({
     // 1. cookieSession 是第三方中间件工厂，外层 app.use() 将它装入 HTTP 请求处理链。
     // 2. name 决定 Cookie 名称，keys 提供签名密钥；username、level 等内容由登录控制器写 req.session。

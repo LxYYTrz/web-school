@@ -21,6 +21,10 @@ export const EXECUTABLE_TYPES = new Set<string>(contract.executableTypes);
 //   conveyor.params.action: 'forward'(1) | 'stop'(0)       ← PLC word 10,电平
 export const PARAM_ENUMS: Record<string, Record<string, number>> = contract.paramEnums;
 
+// 【入口 validateParams：部分 / 作用】
+// 部分 | 作用
+// type | 本次指令或事件类型，由当前调用入口传入。
+// params | 指令的附加参数对象，例如 action。
 export function validateParams(type: string, params: Record<string, unknown> | undefined):
   { ok: true } | { ok: false; error: string } {
   const enumMap = PARAM_ENUMS[type];

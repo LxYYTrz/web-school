@@ -65,6 +65,9 @@ const MOCK_IO: IoState = {
 
 // 创建一条产线的响应式数据、快照预加载与实时回调集合，返回界面可复用的数据读取能力。
 // 先看状态变量，再看 preload、subscribe 及 connect/disconnect 与消息回调；各处理不是按定义顺序立即全部执行。
+// 【入口 createLineData：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
 function createLineData(lineId: string) {
   // 取得（并懒创建）全局唯一的 socket 连接
   const socket = getSocket();
@@ -137,6 +140,12 @@ function createLineData(lineId: string) {
    * 后端收到后会把本 socket 加入 room `line:{lineId}`，之后只推这条产线的数据。
    */
   function subscribe() {
+    // 【调用各部分：部分 / 作用】
+    // 部分 | 作用
+    // socket | getSocket 返回的共享 Socket.IO 客户端。
+    // 'subscribe' | 项目约定的事件名，后端 handleSubscribe 接收。
+    // lineId | 本次希望订阅的产线编码。
+    // emit() | 在已有连接发送业务事件，不是 MQTT 的 SUBSCRIBE。
     socket.emit('subscribe', { lineId });
     // 1. emit 是 Socket.IO 客户端方法；subscribe 是本项目约定的业务事件名。
     // 2. 对象带上当前产线编码，后端网关接收后调用 join() 加入对应产线房间。
@@ -156,6 +165,13 @@ function createLineData(lineId: string) {
   // 2. msg 是后端广播的整帧，RobotState 只为 TypeScript 提供类型描述。
   // 3. 先把 liveSeen.robot 标成 true，再将 msg 覆盖给共享 robot.value。
   // 4. 顶栏、模型页和其他使用同一数据层的组件因此能读取本轮结果；这里不会累积关节历史。
+  // 【调用各部分：部分 / 作用】
+  // 部分 | 作用
+  // socket.on() | 注册接收回调，消息真正到达后才执行回调体。
+  // 'robot_state' | 与后端广播约定一致的事件名。
+  // msg | 本次收到的机器人整帧。
+  // liveSeen.robot | 标记已收到实时帧，防止晚到快照覆盖。
+  // robot.value | Vue ref 保存的共享当前帧，更新后供页面和 watch 使用。
   socket.on('robot_state', (msg: RobotState) => {
     liveSeen.robot = true;
     robot.value = msg;
@@ -237,6 +253,9 @@ let shared: ReturnType<typeof createLineData> | null = null;
 // 2. shared 在模块作用域；第一次创建 createLineData(lineId)，后续返回相同实例。
 // 3. 传入第二个产线编码不会自动重建或切换实例；当前实现按首个实例服务。
 // 4. 这里没有引用计数或 dispose，不能把其他三维组件的卸载清理当成此数据层也已经清理。
+// 【入口 useLineData：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
 export function useLineData(lineId = 'line-01') {
   // 还没有实例 → 创建
   if (!shared) shared = createLineData(lineId);

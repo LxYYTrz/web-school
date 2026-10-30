@@ -13,6 +13,9 @@ export class AuthGuard implements CanActivate {
   // 2. switchToHttp().getRequest() 取得当前 HTTP 请求，再读取中间件处理后的 session。
   // 3. 检查的是会话里已有的用户名和数字级别，不会在每个请求重新验证密码。
   // 4. 不满足抛 401；满足后交给后续守卫或业务方法，控制门槛还需 CommandGuard。
+  // 【入口 AuthGuard.canActivate：部分 / 作用】
+  // 部分 | 作用
+  // context | NestJS 提供的当前请求执行上下文。
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
 

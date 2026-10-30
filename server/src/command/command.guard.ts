@@ -12,6 +12,9 @@ export class CommandGuard implements CanActivate {
   // 1. 控制入口先通过登录守卫，再在这里检查 req.session.level。
   // 2. level 不是数字或低于 2 就返回权限不足；达到门槛只允许继续进入命令业务检查。
   // 3. 例如 level=2 通过此层，仍可能因为设备不存在、类型不允许或参数错误被后续拒绝。
+  // 【入口 CommandGuard.canActivate：部分 / 作用】
+  // 部分 | 作用
+  // context | NestJS 提供的当前请求执行上下文。
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
 

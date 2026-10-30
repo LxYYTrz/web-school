@@ -68,6 +68,10 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
 
   // 接入层提供设备业务编码和当前帧，先用 CatalogService 找内部 id，再组织历史字段入内存队列。
   // 未知设备会跳过这条历史路径；队列达到上限舍弃最老条目，不能只据此断定数据库故障。
+  // 【入口 HistoryWriterService.bufferRobotFrame：部分 / 作用】
+  // 部分 | 作用
+  // deviceCode | 设备业务编码，例如 robot-01，供目录换成数据库设备 id。
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   bufferRobotFrame(deviceCode: string, msg: any) {
     // ① 翻译 code → id。查不到就直接丢弃这条（返回 undefined）
     const deviceId = this.catalog.deviceId(deviceCode);
@@ -154,6 +158,10 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
 
   // 工序消息使用内部产线 id：一条 SQL 更新当前表，另一条追加带时间的历史。
   // 两次查询共用字段参数，但 Promise.all 只是合并等待/错误处理，没有 BEGIN/COMMIT 事务。
+  // 【入口 HistoryWriterService.insertLineStatus：部分 / 作用】
+  // 部分 | 作用
+  // lineCode | 产线业务编码，例如 line-01，用于目录查找或消息主题。
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   insertLineStatus(lineCode: string, msg: any) {
     // ① code → id
     const lineId = this.catalog.lineId(lineCode);
@@ -203,6 +211,10 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
 
   // 将事件的时间、产线、可选设备、级别、文本和附加 payload 追加到 production_events。
   // 产线或设备编码先查目录；事件等级是 info/warning 等业务严重程度，与网页登录 level 无关。
+  // 【入口 HistoryWriterService.insertEvent：部分 / 作用】
+  // 部分 | 作用
+  // lineCode | 产线业务编码，例如 line-01，用于目录查找或消息主题。
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   insertEvent(lineCode: string, msg: any) {
     const lineId = this.catalog.lineId(lineCode);
     if (lineId === undefined) return;
@@ -227,6 +239,9 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
   // 2. SQL 中 $1 是业务编号，$2 是回执状态，$3 是完整回执 JSON。
   // 3. WHERE 同时要求旧记录仍为 pending 或 sent，避免迟到或重复回执覆盖已结束的记录。
   // 4. 例如记录已经 timeout，迟到 acked 不会由这条 SQL 改写；这不是在 PLC 写入前做去重。
+  // 【入口 HistoryWriterService.ackCommand：部分 / 作用】
+  // 部分 | 作用
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   ackCommand(msg: any) {
     // ① 没有 cmdId 的回执无法定位指令，直接忽略
     if (!msg.cmdId) return;
@@ -254,6 +269,9 @@ export class HistoryWriterService implements OnModuleInit, OnModuleDestroy {
 
 // 各写入方法共用的时间换算：数值 ts 按毫秒转 Date，否则使用后端当前时间。
 // 这是缺失时间字段的回退，不说明现场重新采集过。
+// 【入口 toTime：部分 / 作用】
+// 部分 | 作用
+// msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
 function toTime(msg: any): Date {
   return typeof msg?.ts === 'number' ? new Date(msg.ts) : new Date();
 }

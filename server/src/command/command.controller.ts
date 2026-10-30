@@ -35,6 +35,11 @@ export class CommandController {
   // Param 提取路径中的产线编码，Body 提取设备、类型和参数，CurrentUser 从会话取已登录操作者。
   // 控制器将这些信息交给 CommandService.issue()，自己不直接访问 PLC；权限通过不代表设备立即动作。
 
+  // 【入口 CommandController.send：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // body | 当前请求正文或流对象；具体字段依函数签名与调用方。
+  // user | 当前入口取得的用户身份载体。
   @Post(':lineId/commands')
   @UseGuards(AuthGuard, CommandGuard)
   send(

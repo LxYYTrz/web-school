@@ -25,6 +25,14 @@ let socket: Socket | null = null;
 export function getSocket(): Socket {
   // 还没创建过 → 创建
   if (!socket) {
+    // 【调用各部分：部分 / 作用】
+    // 部分 | 作用
+    // io() | socket.io-client 提供的客户端创建方法。
+    // BASE | 后端入口配置，未另设时使用当前网站入口。
+    // transports | 本项目只选择 websocket 传输。
+    // reconnectionAttempts | 重连尝试次数配置。
+    // reconnectionDelay / Max | 重连间隔及其上限，单位毫秒。
+    // socket | 模块级共享连接对象，业务订阅仍由后面的代码发出。
     socket = io(BASE ?? '/', {
     // 1. io 从 socket.io-client 导入，在浏览器创建一个实时通信客户端。
     // 2. BASE 有配置时使用指定入口；否则使用当前网站根路径，由部署中的 Nginx 转发。
@@ -43,6 +51,9 @@ export function getSocket(): Socket {
 
 // 为指定产线发起一次 HTTP 快照请求，成功后将响应正文解析为 JSON。
 // fetch 是浏览器内置 API，接口返回由后端 Redis 汇总得到的已有状态；后续实时帧另走 Socket.IO。
+// 【入口 fetchSnapshot：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
 export async function fetchSnapshot(lineId: string) {
   // BASE 为空时用空字符串，拼出的路径是 /api/lines/...（同源相对路径）
   const base = BASE ?? '';

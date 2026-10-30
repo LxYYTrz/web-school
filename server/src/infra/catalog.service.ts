@@ -88,6 +88,9 @@ export class CatalogService implements OnModuleInit, OnModuleDestroy {
   }
 
   // 按产线业务编码查内部主键，未知编码记录警告并返回 undefined。
+  // 【入口 CatalogService.lineId：部分 / 作用】
+  // 部分 | 作用
+  // code | 业务编码，供当前目录查询。
   lineId(code: string): number | undefined {
     const id = this.lines.get(code);
     // 找不到编码通常意味着：① 种子数据没执行；② 现场新增了产线但没同步数据库
@@ -96,6 +99,9 @@ export class CatalogService implements OnModuleInit, OnModuleDestroy {
   }
 
   // 按设备业务编码查内部主键，未知编码记录警告并返回 undefined。
+  // 【入口 CatalogService.deviceId：部分 / 作用】
+  // 部分 | 作用
+  // code | 业务编码，供当前目录查询。
   deviceId(code: string): number | undefined {
     const id = this.devices.get(code);
     if (id === undefined) this.logger.warn(`未知设备编码: ${code}(检查 devices 种子数据)`);

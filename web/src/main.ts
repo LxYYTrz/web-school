@@ -19,6 +19,11 @@ import './styles.css';
 
 // 浏览器执行模块入口，从 App.vue 创建根应用，然后按下方顺序安装共享状态、路由和组件库。
 // createApp 来自 Vue；App 是项目根组件，后端的 NestFactory 与这里分别运行在服务器和浏览器。
+// 【调用各部分：部分 / 作用】
+// 部分 | 作用
+// createApp | Vue 提供的创建应用方法。
+// App | 项目导入的 App.vue 根组件。
+// app | 返回的 Vue 应用实例，后续安装插件并挂载。
 const app = createApp(App);
 // 1. createApp 从 vue 导入，App 从本项目 App.vue 导入。
 // 2. 调用返回 Vue 应用实例 app，先准备应用，还没有把它显示到 HTML 容器。

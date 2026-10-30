@@ -13,6 +13,10 @@ export function setAiUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
 
+// 【入口 throwFor：部分 / 作用】
+// 部分 | 作用
+// method | 本次 HTTP 请求方法。
+// path | 当前文件或资源路径。
 async function throwFor(res: Response, method: string, path: string): Promise<never> {
 // 从失败的 HTTP 响应中提取错误说明并抛出异常。
   if (res.status === 401) {
@@ -38,6 +42,12 @@ export async function apiAiStatus(): Promise<{ enabled: boolean; model: string }
 
 // 发送本次聊天输入并持续读取后端 SSE 响应，将解析出的事件交给 onEvent。
 // signal 来自组件的 AbortController；reader 的网络分块先拼入缓冲，再按事件边界处理，不把一块字节直接当成完整回答。
+// 【入口 apiAiChat：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+// message | 本次用户输入或消息文本。
+// onEvent | 收到解析后的 SSE 事件时调用的函数。
+// signal | AbortSignal，用于取消本次异步读取。
 export async function apiAiChat(
 // 向后端提交当前对话，并持续解析 SSE 返回事件，供网页 AI 抽屉更新显示。
 // lineId、message 描述本次请求；onEvent 接收 delta、tool、error、done 等事件；取消或组件卸载时可中断这次响应读取。
@@ -93,6 +103,9 @@ export async function apiAiChat(
 
 // 用户点击确认后，用建议 id 请求后端领取、校验并安排下发。
 // 成功返回 cmdId 仍是下发阶段的结果；原建议编号和最终控制命令编号承担不同关联作用。
+// 【入口 apiConfirmAiProposal：部分 / 作用】
+// 部分 | 作用
+// id | 当前记录或建议的标识，依所在函数。
 export async function apiConfirmAiProposal(
   id: string,
 ): Promise<{ ok: boolean; cmdId?: string; error?: string }> {
@@ -117,6 +130,9 @@ export async function apiConfirmAiProposal(
 }
 
 // 在共用 Socket.IO 连接上接收 ai_proposal，返回供组件卸载时调用的退订函数。
+// 【入口 onAiProposal：部分 / 作用】
+// 部分 | 作用
+// cb | 由调用方传入的事件处理回调。
 export function onAiProposal(cb: (p: AiProposal) => void): () => void {
   const socket = getSocket();
   socket.on('ai_proposal', cb);

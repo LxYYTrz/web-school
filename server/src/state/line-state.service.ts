@@ -20,6 +20,11 @@ export class LineStateService {
 
   // 接入层将机器人整帧交给这里，写入该产线、设备固定的 Redis key，供后续快照接口读取。
   // 新整帧覆盖旧值并设置 60 秒有效期；frame.ts 当前不先比较，已连接网页的实时推送另外处理。
+  // 【入口 LineStateService.setRobotFrame：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // deviceId | 设备业务编码，例如 robot-01；数据库内部 id 由目录路径另外取得。
+  // frame | 本次已解析的整帧对象。
   setRobotFrame(lineId: string, deviceId: string, frame: unknown) {
     // 不等待本次 Redis 异步写入结束；这里不把调用频率固定成某个现场采集周期。
     // 写失败只记日志，不能让 Redis 故障拖垮整个实时链路。
@@ -30,6 +35,14 @@ export class LineStateService {
     // key 过期后新快照请求不再取得该旧帧，但不会删除 PostgreSQL 历史或主动清空浏览器已经保留的数据。
 
     this.redis
+      // 【调用各部分：部分 / 作用】
+      // 部分 | 作用
+      // this.redis | 注入的 ioredis 客户端。
+      // key | 由产线与设备编码组成的固定存储名称，下一帧覆盖同一位置。
+      // frame | 收到的机器人整帧对象。
+      // JSON.stringify(frame) | 把整帧编码为 Redis 中保存的文本。
+      // 'EX'、60 | 设置成功写入后 60 秒有效期；后续成功 SET 重新计时。
+      // catch() | 处理本次异步写失败并记录日志，不证明其他分支也失败。
       .set(`rt:${lineId}:robot:${deviceId}`, JSON.stringify(frame), 'EX', 60)
       // 1. 这行把机器人整帧交给 Redis，set() 来自 ioredis 客户端库。
       // 2. 参数 1 是 key：产线和设备编码组合成固定存储名称。
@@ -43,6 +56,10 @@ export class LineStateService {
 
   // IO 分支保存本产线最新 IO 整帧，固定 key 的有效期为 60 秒。
   // 这是 ioredis SET，不写 PostgreSQL；网页的 5 秒停滞提示是 IoView 根据帧时间另算。
+  // 【入口 LineStateService.setIoFrame：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // frame | 本次已解析的整帧对象。
   setIoFrame(lineId: string, frame: unknown) {
     this.redis
       .set(`rt:${lineId}:io`, JSON.stringify(frame), 'EX', 60)
@@ -54,6 +71,9 @@ export class LineStateService {
 
   // 工序消息写本产线的最新状态 key，有效期为 120 秒。
   // 工序的数据库当前表和历史表由 HistoryWriterService 分别写，本方法只负责 Redis。
+  // 【入口 LineStateService.setLineStatus：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
   setLineStatus(lineId: string, status: unknown) {
     this.redis
       .set(`rt:${lineId}:status`, JSON.stringify(status), 'EX', 120)
@@ -62,6 +82,9 @@ export class LineStateService {
 
   // 边缘在线状态写本产线的 edge key，有效期为 300 秒。
   // 状态来自采集器在线通知、周期心跳或遗嘱消息；过期影响后续快照读取，不是现场设备动作判定。
+  // 【入口 LineStateService.setEdgeStatus：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
   setEdgeStatus(lineId: string, status: unknown) {
     this.redis
       .set(`rt:${lineId}:edge`, JSON.stringify(status), 'EX', 300)
@@ -70,6 +93,9 @@ export class LineStateService {
 
   // SnapshotController 为一次 HTTP 请求调用这里，汇总本产线已有的工序、边缘、IO 和机器人值。
   // mget 读取固定 key，机器人按 key 模式收集；返回 JSON 的组装时刻不等于每个字段的采集时刻。
+  // 【入口 LineStateService.getLineSnapshot：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
   async getLineSnapshot(lineId: string) {
     try {
       const [status, edge, io] = await this.redis.mget(

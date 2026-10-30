@@ -42,6 +42,10 @@ const MAT_RING = new THREE.MeshStandardMaterial({
 
 // 模型构造过程用几何和材质创建 Three.js Mesh，并设置相应阴影属性。
 // 返回的网格还需 add 到模型节点；创建网格不包含任何现场采集或控制操作。
+// 【入口 mesh：部分 / 作用】
+// 部分 | 作用
+// geo | Three.js 几何体。
+// mat | Three.js 材质。
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
   const m = new THREE.Mesh(geo, mat);
   // 投射阴影
@@ -59,6 +63,11 @@ function mesh(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
 
 // 按给定半径和关节旋转轴创建发光环网格，使环位于对应关节平面。
 // axis 是模型局部轴；材质由调用方提供独立实例，后续 setAlarm 可分别改变各环的发光色。
+// 【入口 jointRing：部分 / 作用】
+// 部分 | 作用
+// radius | 当前几何体的半径。
+// axis | 模型配置的局部旋转轴。
+// mat | Three.js 材质。
 function jointRing(radius: number, axis: Axis, mat: THREE.Material): THREE.Mesh {
   // TorusGeometry(半径, 管粗, 径向分段, 管向分段) —— 一个甜甜圈
   const ring = mesh(new THREE.TorusGeometry(radius, 0.008, 10, 48), mat);
@@ -195,6 +204,10 @@ export class RobotArm {
 
   // 为当前模型关节增加独立光环，并按创建顺序保存 pivot 和 ring。
   // this.joints.length 决定当前 J1～J6 下标及 JOINT_AXES 的轴；它是模型内部登记，不是按设备编码注册机器。
+  // 【入口 RobotArm.register：部分 / 作用】
+  // 部分 | 作用
+  // pivot | 当前模型关节的 Three.js 变换节点。
+  // ringRadius | 模型关节光环半径。
   private register(pivot: THREE.Group, ringRadius: number) {
     // 取当前 joints 数组长度作为关节序号（0..5），据此决定旋转轴
     const axis = JOINT_AXES[this.joints.length];
@@ -213,6 +226,9 @@ export class RobotArm {
 
   // TwinView 在收到机器人帧后，把按 J1～J6 排列的度数传给这里。
   // 逐个检查有限数值，按关节轴将度转弧度写 rotation；跳过无效角度保留原姿态，当前没有帧间插值。
+  // 【入口 RobotArm.setJoints：部分 / 作用】
+  // 部分 | 作用
+  // deg | 按 J1 至 J6 顺序排列的角度数组，单位为度。
   setJoints(deg: number[]) {
     // 遍历 6 个关节
     for (let i = 0; i < 6; i++) {
@@ -235,6 +251,12 @@ export class RobotArm {
       // d 已经是采集器换算后的物理角度，例子中是 25 度；这里将它换成 Three.js rotation 使用的弧度。
       // 采集器的“原始整数乘 0.1”和本行“度转弧度”目的不同，不能重复缩放一次现场数据。
 
+      // 【调用各部分：部分 / 作用】
+      // 部分 | 作用
+      // THREE | 从 three 库导入的命名空间。
+      // d | 当前关节的物理角度，单位已经是度。
+      // MathUtils.degToRad() | 库提供的度转弧度换算，关系为 d×π/180。
+      // rad | 换算得到的弧度，供节点 rotation 使用，不再乘采集器的 0.1。
       const rad = THREE.MathUtils.degToRad(d);
       // 1. THREE 来自 three 库；MathUtils.degToRad 是库提供的单位换算方法。
       // 2. 输入 d 的单位为度，输出 rad 的单位为弧度，数学关系是 d × π / 180。
@@ -256,6 +278,9 @@ export class RobotArm {
 
   // 根据传入报警布尔值改变各关节光环的自发光颜色，供后续渲染显示。
   // 每个环有独立材质；这里只改变模型材质，不向现场发送报警复位或控制。
+  // 【入口 RobotArm.setAlarm：部分 / 作用】
+  // 部分 | 作用
+  // on | 是否启用当前显示状态的布尔值。
   setAlarm(on: boolean) {
     // 遍历所有光环
     for (const ring of this.rings) {

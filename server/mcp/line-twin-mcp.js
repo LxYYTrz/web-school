@@ -87,6 +87,9 @@ const lineIdCache = new Map(); // code -> { id, name } | null,60s 过期(对齐 
 
 // 查询工具把外部产线编码转换为数据库基础档案，后续历史/事件 SQL 使用内部 id。
 // 找不到产线会按本函数错误路径结束，不能从 line-01 的字符串猜数据库编号。
+// 【入口 resolveLine：部分 / 作用】
+// 部分 | 作用
+// code | 业务编码，供当前目录查询。
 async function resolveLine(code) {
   const hit = lineIdCache.get(code);
   if (hit && Date.now() - hit.at < 60000) return hit.row;
@@ -129,6 +132,9 @@ const server = new McpServer(
 
 // 快照工具从 Redis 汇总工序、边缘状态和各设备最新帧，返回已保存的数据。
 // 它不会为了模型回答临时请求 PLC；缺失或过期的 key 需要按空值理解。
+// 【入口 getLineSnapshot：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
 async function getLineSnapshot(lineId) {
   const [status, edge] = await redis.mget(`rt:${lineId}:status`, `rt:${lineId}:edge`);
   // 一次读取多个 Redis 字符串键。
@@ -164,6 +170,11 @@ async function getLineSnapshot(lineId) {
 
 // 查询 line_status_history 中给定时间窗口的工序记录，并限制返回条数。
 // 这里的历史是产线状态历史，不是 robot_joint_states 的六轴轨迹回放。
+// 【入口 getLineHistory：部分 / 作用】
+// 部分 | 作用
+// lineCode | 产线业务编码，例如 line-01，用于目录查找或消息主题。
+// minutes | 历史查询时间范围，单位分钟。
+// limit | 最多返回的记录数量。
 async function getLineHistory(lineCode, minutes, limit) {
   const line = await resolveLine(lineCode);
   const { rows } = await pool.query(
@@ -178,6 +189,12 @@ async function getLineHistory(lineCode, minutes, limit) {
 }
 
 // 查询产线近期事件，可按 onlyProblems 收窄到告警等级，并按时间倒序限制条数。
+// 【入口 getRecentEvents：部分 / 作用】
+// 部分 | 作用
+// lineCode | 产线业务编码，例如 line-01，用于目录查找或消息主题。
+// hours | 事件查询范围，单位小时。
+// onlyProblems | 是否筛选问题事件。
+// limit | 最多返回的记录数量。
 async function getRecentEvents(lineCode, hours, onlyProblems, limit) {
   // 只给索引能覆盖的量;robot_joint_states 是 5-10Hz 的高频表,一律不直查
   const line = await resolveLine(lineCode);
@@ -196,6 +213,13 @@ async function getRecentEvents(lineCode, hours, onlyProblems, limit) {
 
 // 网页助手建议入口先校验契约、可执行类型和参数，再生成建议编号并写 Redis、发布通知。
 // 返回 proposalId 表示建议已登记；用户确认由后端 AiController 处理，此函数不直接写 PLC。
+// 【入口 proposeAction：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+// deviceId | 设备业务编码，例如 robot-01；数据库内部 id 由目录路径另外取得。
+// type | 本次指令或事件类型，由当前调用入口传入。
+// params | 指令的附加参数对象，例如 action。
+// reason | 建议采取该操作的理由，供用户查看。
 async function proposeAction(lineId, deviceId, type, params, reason) {
   if (!contract.allowedTypes.includes(type)) {
     return {
@@ -283,6 +307,13 @@ function machineChannelReady() {
 
 // 将本次工具控制请求通过 HTTP 交给本机后端 /api/machine/commands。
 // fetch 是 Node.js HTTP API，x-machine-token 来自配置；通过后端检查才进入共用命令服务，返回 cmdId 后还需等回执。
+// 【入口 machineIssue：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+// deviceId | 设备业务编码，例如 robot-01；数据库内部 id 由目录路径另外取得。
+// type | 本次指令或事件类型，由当前调用入口传入。
+// params | 指令的附加参数对象，例如 action。
+// operator | 机器通道传入或会话取得的操作者标识，用于记录本次操作。
 async function machineIssue({ lineId, deviceId, type, params, operator }) {
   if (!machineChannelReady()) {
     return { ok: false, error: '机器通道未启用(MCP 侧没有 MACHINE_COMMAND_TOKEN)' };
@@ -294,6 +325,14 @@ async function machineIssue({ lineId, deviceId, type, params, operator }) {
     // 后端通过机器通道守卫后仍调用共用 CommandService，再进入 MQTT、采集器和 PLC 的既有控制链。
     // operator 是此通道传入的操作者标识，不能把机器令牌检查和网页 cookie-session 登录验证混为一谈。
 
+    // 【调用各部分：部分 / 作用】
+    // 部分 | 作用
+    // API_BASE | 本机后端入口配置。
+    // /api/machine/commands | 机器控制入口，仍进入共用 CommandService。
+    // fetch | Node.js HTTP API，不是直接向 PLC 写寄存器。
+    // x-machine-token | 机器凭据请求头，值从配置取得，不展示实际值。
+    // JSON.stringify | 将目标、类型、参数和 operator 编码为 JSON。
+    // res | HTTP 响应，成功返回 cmdId 后还需等待业务回执。
     res = await fetch(`${API_BASE}/api/machine/commands`, {
     // 1. 这是 Node.js 的 HTTP 请求，把工具参数交给本机后端机器入口。
     // 2. API_BASE 来自配置；请求头 x-machine-token 携带机器通道凭据，不使用网页登录 Cookie。
@@ -318,6 +357,10 @@ async function machineIssue({ lineId, deviceId, type, params, operator }) {
 
 // 按 cmdId 轮询 control_commands，等待记录离开 pending/sent，或到工具等待期限。
 // 轮询间隔为 400ms，默认期限来自 ACK_WAIT_MS；数据库状态与现场物理完成必须分别解释。
+// 【入口 waitAck：部分 / 作用】
+// 部分 | 作用
+// cmdId | 一次控制操作的业务编号，用于匹配控制记录、回执与网页等待。
+// timeoutMs | 本次等待上限，单位毫秒。
 async function waitAck(cmdId, timeoutMs = ACK_WAIT_MS) {
 // 在超时时间内查询并等待指定指令的最终回执。
   const deadline = Date.now() + timeoutMs;
@@ -344,6 +387,9 @@ async function waitAck(cmdId, timeoutMs = ACK_WAIT_MS) {
 }
 
 // 从 Redis 读取该产线最后保存的工序字符串，解析失败或 key 缺失返回 null。
+// 【入口 currentState：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
 async function currentState(lineId) {
   const raw = await redis.get(`rt:${lineId}:status`);
   if (!raw) return null;
@@ -357,6 +403,11 @@ async function currentState(lineId) {
 
 // 预设操作在需要时轮询工序快照，等待其进入 wanted 状态或结束等待。
 // 这是读取已有上报，不等于重新采集 PLC；状态等待与 waitAck 的写入回执等待是两个阶段。
+// 【入口 waitState：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+// wanted | 等待达到的目标工序状态。
+// timeoutMs | 本次等待上限，单位毫秒。
 async function waitState(lineId, wanted, timeoutMs = STATE_WAIT_MS) {
   const list = Array.isArray(wanted) ? wanted : [wanted];
   const deadline = Date.now() + timeoutMs;
@@ -372,6 +423,9 @@ async function waitState(lineId, wanted, timeoutMs = STATE_WAIT_MS) {
 
 // 按当前工序和动作检查单步操作的前置条件，返回错误原因或允许继续。
 // 这些条件由项目代码写定，不能由模型自由省略；skipPrecondition 等参数要结合调用方逐步说明。
+// 【入口 preconditionError：部分 / 作用】
+// 部分 | 作用
+// type | 本次指令或事件类型，由当前调用入口传入。
 function preconditionError(type, action, state) {
   if (!state) return '读不到当前产线状态(快照为空),拒绝盲发指令';
   if (state === 'init_error') {
@@ -397,6 +451,15 @@ function preconditionError(type, action, state) {
 
 // 执行一个预设步骤：读取工序和前置条件、提交机器指令、等待回执，并按需等待目标状态。
 // 不同等待的结果都会影响是否继续后续步骤；正常写响应并不自动证明物理目标已完成。
+// 【入口 execStep：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+// deviceId | 设备业务编码，例如 robot-01；数据库内部 id 由目录路径另外取得。
+// type | 本次指令或事件类型，由当前调用入口传入。
+// params | 指令的附加参数对象，例如 action。
+// operator | 机器通道传入或会话取得的操作者标识，用于记录本次操作。
+// waitFor | 步骤要求等待的目标状态。
+// skipPrecondition | 是否按当前步骤配置跳过前置工序检查。
 async function execStep({ lineId, deviceId, type, params, operator, waitFor, skipPrecondition }) {
 // 执行操作流程中的一个指令步骤并等待回执。
   const action = params?.action;
@@ -458,6 +521,13 @@ const OPERATIONS = {
 
 // 按 op 选择代码写定的多步操作；dryRun 分支只返回步骤计划。
 // 真实分支按顺序调用 execStep；例如传送带正转先停止、取得手动，再发正转，前序失败不继续。
+// 【入口 runOperation：部分 / 作用】
+// 部分 | 作用
+// op | 组合操作名称。
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+// deviceId | 设备业务编码，例如 robot-01；数据库内部 id 由目录路径另外取得。
+// operator | 机器通道传入或会话取得的操作者标识，用于记录本次操作。
+// dryRun | 是否仅预览操作序列。
 async function runOperation(op, { lineId, deviceId, operator, dryRun }) {
   const meta = OPERATIONS[op];
   if (!meta) {

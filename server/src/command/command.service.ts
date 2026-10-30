@@ -80,6 +80,11 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
   // 网页和机器控制入口共用本方法，按字段、契约、目录与参数检查后创建指令记录。
   // lineCode/body.deviceId 是外部编码，lineId/deviceId 是数据库内部编号；operator 保留传入的操作人字符串。
   // 记录取得 cmdId 后异步写审计，再交 MqttIngestService.publishCommand；返回时尚未等待 cmd_ack。
+  // 【入口 CommandService.issue：部分 / 作用】
+  // 部分 | 作用
+  // lineCode | 产线业务编码，例如 line-01，用于目录查找或消息主题。
+  // body | 当前请求正文或流对象；具体字段依函数签名与调用方。
+  // user | 当前入口取得的用户身份载体。
   async issue(lineCode: string, body: CommandBody, user: SessionUser) {
     // ---------- 校验 1：参数完整 + 类型在白名单内 ----------
     // 任一不满足就拒绝。**先校验再落库再下发**，绝不能"先发出去再说"
@@ -169,6 +174,9 @@ export class CommandService implements OnModuleInit, OnModuleDestroy {
 
   // 按操作人用户名在旧 users 表查询审计关联 id；未找到时按当前实现取 admin。
   // 这不是网页登录账号验证；app.app_users 与 users 分别存在，不能只看 control_commands.user_id 判断真实操作者。
+  // 【入口 CommandService.resolveUserId：部分 / 作用】
+  // 部分 | 作用
+  // username | 当前操作涉及的用户名，不是密码。
   private async resolveUserId(username: string): Promise<number> {
 
     // 登录验证使用 app.app_users，但控制记录 user_id 引用的是 users；本方法处理这两套账号结构间的关联。

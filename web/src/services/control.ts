@@ -26,6 +26,10 @@ export interface SendCommandResult {
 
 // 组件确认操作后将 cmd 编码成 JSON，发送到当前 lineId 的 commands 接口。
 // 设备、type、params 在正文；适用 Cookie 随请求发送，操作者由后端会话取得；返回 cmdId 后再等待业务回执。
+// 【入口 apiSendCommand：部分 / 作用】
+// 部分 | 作用
+// lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+// cmd | 本次业务命令对象，提供设备、类型、参数等字段。
 export async function apiSendCommand(
 // 将网页确认后的业务指令提交到当前产线的控制接口，返回后端受理结果。
 // lineId 进入 URL，cmd 提供 deviceId、type、params；返回 cmdId 后页面继续等待 command_ack，HTTP 返回不等于物理动作完成。
@@ -33,6 +37,15 @@ export async function apiSendCommand(
   // 后端:AuthGuard + CommandGuard(level>=2) + 契约 v1.1 白名单。
   cmd: SendCommandParams,
 ): Promise<SendCommandResult> {
+  // 【调用各部分：部分 / 作用】
+  // 部分 | 作用
+  // fetch() | 浏览器内置 HTTP API，负责发请求并返回响应对象。
+  // BASE、lineId | 组成当前产线的 /api/lines/.../commands URL。
+  // method: 'POST' | 提交一次控制请求，与后端 POST 路由对应。
+  // credentials: 'include' | 按浏览器 Cookie 规则附带适用的登录凭证。
+  // Content-Type | 声明请求正文的格式为 application/json。
+  // JSON.stringify(cmd) | 把设备、指令类型和参数对象编码为 JSON 文本。
+  // res、await | 等待并取得 HTTP 响应；PLC 业务回执是后续另一个阶段。
   const res = await fetch(`${BASE}/api/lines/${lineId}/commands`, {
   // 1. fetch 是浏览器 HTTP API；BASE 与 lineId 拼出本次业务接口地址。
   // 2. POST 表示提交控制请求，credentials: include 让浏览器按规则附带登录 Cookie。
@@ -61,6 +74,9 @@ export async function apiSendCommand(
 
 // 给共用 Socket.IO 连接注册 command_ack 回调，返回移除同一回调的闭包。
 // 组件卸载应调用这个闭包；移除界面监听不会撤销已发给 PLC 的命令。
+// 【入口 onCommandAck：部分 / 作用】
+// 部分 | 作用
+// cb | 由调用方传入的事件处理回调。
 export function onCommandAck(cb: (ack: CommandAck) => void): () => void {
   const socket = getSocket();
   const handler = (msg: CommandAck) => cb(msg);

@@ -25,6 +25,9 @@ export class MachineTokenGuard implements CanActivate {
   // token 来自后端配置，调用方在 x-machine-token 请求头提供；没有配置表示通道关闭，和“令牌提供错误”是不同情况。
   // 这层校验不读取网页 Cookie，也不单独实现飞书与网页 MCP 工具的身份隔离；通过后仍进入命令业务检查。
 
+  // 【入口 MachineTokenGuard.canActivate：部分 / 作用】
+  // 部分 | 作用
+  // context | NestJS 提供的当前请求执行上下文。
   canActivate(context: ExecutionContext): boolean {
   // 检查机器命令入口是否启用、请求来源是否满足本机限制以及机器令牌是否匹配。
   // context 提供当前 HTTP 请求；配置 commandToken 为空表示通道关闭；x-machine-token 是调用方的机器凭据，和网页会话 Cookie 分别校验。

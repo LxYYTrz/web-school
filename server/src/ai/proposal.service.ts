@@ -78,6 +78,9 @@ export class ProposalService implements OnModuleInit, OnModuleDestroy {
 
   // 解析并二次校验来自工具侧的建议，再保存待确认 key 并经 TelemetryGateway 通知网页。
   // 本段只接入建议，未调用 CommandService，也未向 MQTT 控制主题发布命令。
+  // 【入口 ProposalService.onProposalMessage：部分 / 作用】
+  // 部分 | 作用
+  // raw | 当前入口收到的原始文本或待清理值。
   private async onProposalMessage(raw: string) {
     let p: AiProposal;
     try {
@@ -112,6 +115,9 @@ export class ProposalService implements OnModuleInit, OnModuleDestroy {
 
   // 确认入口用建议 id 原子取出并删除 Redis 中的待确认建议。
   // eval 执行本文件 CLAIM_LUA；GET 与 DEL 同次脚本完成，重复领取得到空值，不等于 PLC 命令已去重。
+  // 【入口 ProposalService.claim：部分 / 作用】
+  // 部分 | 作用
+  // id | 当前记录或建议的标识，依所在函数。
   async claim(id: string): Promise<AiProposal | null> {
     const raw = (await this.redis.eval(CLAIM_LUA, 1, keyOf(id))) as string | null;
     // 1. eval() 在 Redis 端执行本文件的 Lua 脚本，第二个参数 1 表示随后提供一个 key。

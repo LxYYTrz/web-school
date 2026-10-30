@@ -31,6 +31,13 @@ export class AuthService {
     if (rows.length === 0) throw new BadCredentials();
     // 没有查到账号就终止登录，不继续读取摘要或建立会话。
     // rows.length 是匹配的账号记录数；BadCredentials 是项目定义的 HTTP 401 异常。
+    // 【调用各部分：部分 / 作用】
+    // 部分 | 作用
+    // bcrypt | 从 bcryptjs 导入的密码摘要工具。
+    // password | 用户本次输入的密码。
+    // rows[0].password | 数据库保存的摘要，不需要还原原始密码。
+    // as string | TypeScript 类型断言，不会解密或执行运行时转换。
+    // await、ok | 等待匹配结果并取得布尔值，后面据此允许或拒绝登录。
     const ok = await bcrypt.compare(password, rows[0].password as string);
     // 1. bcrypt 从 bcryptjs 导入；compare() 是专门的密码匹配方法。
     // 2. 第一个参数 password 是用户这次输入，第二个参数是数据库已有的密码摘要。

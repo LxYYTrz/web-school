@@ -30,6 +30,9 @@ export class SceneManager {
 
   // TwinView 挂载后传入真实 DOM 容器，创建场景、渲染器、相机、灯光和观察控制器。
   // canvas 加入容器后再由 start 绘制；容器尺寸影响相机与画布，模型通过 add 挂入场景。
+  // 【入口 SceneManager.constructor：部分 / 作用】
+  // 部分 | 作用
+  // container | 容纳三维 canvas 的网页 DOM 元素。
   constructor(private readonly container: HTMLElement) {
     // ---------- 渲染器 ----------
     // antialias: 开启抗锯齿（边缘平滑），对细长的机械臂尤其重要
@@ -123,6 +126,9 @@ export class SceneManager {
   }
 
   // 将 RobotArm 等 Three.js 对象加入本场景，后续 render 才会从当前相机绘制它。
+  // 【入口 SceneManager.add：部分 / 作用】
+  // 部分 | 作用
+  // obj | 要加入场景的 Three.js 对象。
   add(obj: THREE.Object3D) {
     this.scene.add(obj);
   }

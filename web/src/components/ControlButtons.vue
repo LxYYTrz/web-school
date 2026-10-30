@@ -127,6 +127,9 @@ const initError = computed(() => lineState.value === S_INIT_ERROR);
 
 // 按当前连接、用户控制级别、指令等待状态和工序判断某个按钮是否可用。
 // 这是前端交互门槛，参数检查与权限仍会在后端重复验证。
+// 【入口 can：部分 / 作用】
+// 部分 | 作用
+// type | 本次指令或事件类型，由当前调用入口传入。
 function can(type: CmdType, action?: string): boolean {
   if (initError.value) return false;
   switch (type) {
@@ -223,6 +226,10 @@ function scheduleReset() {
 
 // 发送前弹出二次确认框，用户取消时由调用路径结束本次提交。
 // 确认文字取决于当前指令和参数，不是采集器已执行后的结果。
+// 【入口 confirm：部分 / 作用】
+// 部分 | 作用
+// type | 本次指令或事件类型，由当前调用入口传入。
+// params | 指令的附加参数对象，例如 action。
 async function confirm(type: CmdType, params?: Record<string, unknown>) {
   if (state.value !== 'idle') return;
   // 双保险:按钮已按 can() 禁用,但点击瞬间产线状态可能刚变(比如别处刚发了指令),

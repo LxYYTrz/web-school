@@ -81,6 +81,13 @@ function Start-Tunnel {
         '-o', 'ExitOnForwardFailure=yes',
         '-o', 'StrictHostKeyChecking=accept-new',
         '-i', $KeyPath,
+        # 【调用各部分：部分 / 作用】
+        # 部分 | 作用
+        # -R | 请求 SSH 服务端建立远程转发监听。
+        # RemoteBind | 云端监听地址和端口，本项目默认回环地址 3300。
+        # 127.0.0.1 | 参数后半段指运行 ssh 客户端的工控机自身。
+        # LocalBackendPort | 工控机侧最终目标端口，默认 3000。
+        # -N、-T | 不执行远端命令、不申请终端，连接用于转发。
         '-R', "${RemoteBind}:127.0.0.1:${LocalBackendPort}",
         # 1. -R 是 ssh.exe 的远程转发参数，后一个字符串按“远端监听:本地目标地址:本地目标端口”解释。
         # 2. RemoteBind 配置为云端回环地址与 3300；后半段 127.0.0.1 指运行 ssh 的工控机自身。

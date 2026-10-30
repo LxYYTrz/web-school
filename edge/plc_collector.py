@@ -107,6 +107,9 @@ LOCK_FILE = Path(os.getenv("COLLECTOR_LOCK_FILE",
 
 # main 启动时尝试持有独占文件锁，避免同一采集入口同时运行多个实例。
 # 返回的句柄必须保持到进程结束；返回 None 时由 main 决定退出，不把锁文件存在本身当成进程仍在运行。
+# 【入口 acquire_single_instance_lock：部分 / 作用】
+# 部分 | 作用
+# path | 当前文件或资源路径。
 def acquire_single_instance_lock(path: Path):
     """拿独占锁;拿不到说明已经有采集器在跑 → 返回 None(调用方应退出)。
 
@@ -153,6 +156,9 @@ class Signal:
 
 # main 把点表路径交给这里，得到周期读取使用的 Signal 列表。
 # csv.DictReader 读取字段；cmd.* 点另外登记到 _cmd_signals，供下行查找，不进入上行周期读取。
+# 【入口 _read_csv：部分 / 作用】
+# 部分 | 作用
+# path | 当前文件或资源路径。
 def _read_csv(path: Path) -> list[Signal]:
     """读取点位表;支持 # 开头的注释行;缺失/格式错的行打 warning 跳过,不致命。
     name 以 "cmd." 开头的为写命令点位,单独存到 _cmd_signals(不进主循环读取)。"""
@@ -219,6 +225,9 @@ def _read_csv(path: Path) -> list[Signal]:
 
 # decode_signal 在处理跨两个 word 的数值时调用这里，按 PLC_WORD_ORDER 拼成无符号 32 位整数。
 # word 顺序是解码约定，不是 MQTT 字段顺序；结果还要按当前信号类型继续解释。
+# 【入口 _words_to_u32：部分 / 作用】
+# 部分 | 作用
+# regs | Modbus 响应中的原始 word 数组。
 def _words_to_u32(regs: list[int]) -> int:
     """按 PLC_WORD_ORDER 把 2 个 word 合并成 32 位整数。
     BIG = 高 word 在前；LITTLE = 低 word 在前。
@@ -230,6 +239,10 @@ def _words_to_u32(regs: list[int]) -> int:
 
 # Plc.read_all 把本次响应寄存器数组和当前 Signal 配置交给这里。
 # 先按 BOOL/INT/UINT/FLOAT/STRING 解释，再应用相应偏移与缩放；例如 J1 原始整数 250 对应 25 度，缺失值保留为 None。
+# 【入口 decode_signal：部分 / 作用】
+# 部分 | 作用
+# regs | Modbus 响应中的原始 word 数组。
+# sig | 当前点位的 Signal 配置，携带类型、偏移与缩放。
 def decode_signal(regs: list[int], sig: Signal) -> Any:
 # 按点表规定的类型解释这次寄存器响应，再应用偏移和缩放，返回业务数值；没有读到值时保留 None。
 # regs 是这次 Modbus 响应的寄存器数组；sig 是本点位的 Signal 配置，提供 type、offset、scale 等解释规则。
@@ -250,6 +263,14 @@ def decode_signal(regs: list[int], sig: Signal) -> Any:
         # 2. 0x8000 是 32768：小于它时按非负值使用；达到它时减去 65536，解释补码负数。
         # 3. 例如 regs[0]=65526，得到 raw=-10；若该点 scale=0.1，最终是 -1 度。
         # 4. 这个分支只针对 INT/INT16；UINT 分支不会执行这一步减法。
+        # 【调用各部分：部分 / 作用】
+        # 部分 | 作用
+        # raw | 已经按当前信号类型解释过正负的数值。
+        # sig | 调用处传入的当前 Signal 点表配置。
+        # sig.offset | 先加到原始数值上的偏移量。
+        # sig.scale | 偏移完成后再乘的缩放系数。
+        # return | 把换算值交回 read_all，调用处按 s.name 保存。
+        # 250、0、0.1 | J1 教学示例的原值、偏移、缩放，结果是 25.0 度。
         return (raw + sig.offset) * sig.scale
         # 1. raw 是刚才按 INT 解释的数值；sig 来自当前 CSV 点表的一行。
         # 2. 先加 offset，再乘 scale，顺序与本项目公式一致。
@@ -267,10 +288,26 @@ def decode_signal(regs: list[int], sig: Signal) -> Any:
         if raw >= 0x80000000:
             raw -= 0x100000000
             # 用 0x100000000 更新 raw；-= 表示先计算再赋回。
+        # 【调用各部分：部分 / 作用】
+        # 部分 | 作用
+        # raw | 已经按当前信号类型解释过正负的数值。
+        # sig | 调用处传入的当前 Signal 点表配置。
+        # sig.offset | 先加到原始数值上的偏移量。
+        # sig.scale | 偏移完成后再乘的缩放系数。
+        # return | 把换算值交回 read_all，调用处按 s.name 保存。
+        # 250、0、0.1 | J1 教学示例的原值、偏移、缩放，结果是 25.0 度。
         return (raw + sig.offset) * sig.scale
     # ---- 32 位无符号整数 ----
     if sig.type == "UINT32":
         raw = _words_to_u32(regs)
+        # 【调用各部分：部分 / 作用】
+        # 部分 | 作用
+        # raw | 已经按当前信号类型解释过正负的数值。
+        # sig | 调用处传入的当前 Signal 点表配置。
+        # sig.offset | 先加到原始数值上的偏移量。
+        # sig.scale | 偏移完成后再乘的缩放系数。
+        # return | 把换算值交回 read_all，调用处按 s.name 保存。
+        # 250、0、0.1 | J1 教学示例的原值、偏移、缩放，结果是 25.0 度。
         return (raw + sig.offset) * sig.scale
     # ---- 32 位浮点（占 2 个寄存器）----
     if sig.type == "FLOAT32":
@@ -289,14 +326,31 @@ class Plc:
 
     # main 创建现场 PLC 客户端；host、port、unit 来自环境配置，pymodbus 实例负责网络请求。
     # 同一 Plc 的锁协调读取与下行写入，减少同一客户端被并发使用；创建对象还没有证明连接成功。
+    # 【入口 __init__：部分 / 作用】
+    # 部分 | 作用
+    # host | 连接目标主机配置。
+    # port | 连接目标服务端口配置。
+    # unit_id | Modbus 站号配置。
     def __init__(self, host, port, unit_id):
         # PLC 地址信息
         self.host = host
         self.port = port
         self.unit = unit_id
         # pymodbus 客户端。timeout=2 秒 —— 2 秒读不到就当通信异常
+        # 【调用各部分：部分 / 作用】
+        # 部分 | 作用
+        # ModbusTcpClient | pymodbus 提供的 Modbus TCP 客户端类。
+        # host | PLC 的目标地址，由调用方配置传入。
+        # port | PLC 端 Modbus TCP 服务端口，由配置传入。
+        # timeout=2 | 本客户端请求的超时配置，单位为秒。
+        # self.cli | 保存客户端对象，后续读取和写入复用它。
         self.cli = ModbusTcpClient(host=host, port=port, timeout=2)
         # MQTT 回调与采集循环位于不同线程，不能并发操作同一个 Modbus 连接。
+        # 【调用各部分：部分 / 作用】
+        # 部分 | 作用
+        # threading | Python 标准库模块。
+        # Lock() | 创建一把线程互斥锁，此时只是创建，不是立即获取锁。
+        # self.lock | 把锁保存到当前 Plc 实例；读取路径和写入路径取得同一把锁后再用客户端。
         self.lock = threading.Lock()
         # 连接状态标记（自己维护，不依赖库的内部状态）
         self.connected = False
@@ -318,6 +372,9 @@ class Plc:
 
     # 每轮采集根据点表依次读取现场寄存器，返回信号名称到已解码值的字典。
     # 当前 s 决定地址和数量，rr 是这一点位的读取响应；错误保留未知值，成功才交给 decode_signal。
+    # 【入口 read_all：部分 / 作用】
+    # 部分 | 作用
+    # signals | 已加载的点表 Signal 列表。
     def read_all(self, signals: list[Signal]) -> dict[str, Any]:
     # 读取本轮点表配置的现场信号，将读取响应逐点解码，返回按业务名称组织的结果字典。
     # self 是已有 Plc 客户端；signals 是点表 Signal 列表；返回字典供 group_signals()、io_payload() 等分别组装消息。
@@ -342,6 +399,15 @@ class Plc:
                     # 在已有 PLC 连接上读取这一点位，响应保存在 rr，供下面检查错误和提取 registers。
                     # address、count 来自当前点表信号 s；device_id 使用 self.unit，三者共同确定本次向 PLC 读什么。
 
+                    # 【调用各部分：部分 / 作用】
+                    # 部分 | 作用
+                    # self | 当前 Plc 实例，主程序把同一实例交给读取与命令路径。
+                    # self.cli | pymodbus 的 ModbusTcpClient，负责协议请求和响应。
+                    # s | 当前循环取出的 Signal 点表配置。
+                    # address=s.address | 本次读取的起始 word 地址，例如 J1 对应地址 0。
+                    # count=s.count | 连续读取的寄存器数量，由点位类型确定。
+                    # device_id=self.unit | 本次 Modbus 站号，来自连接配置，不是 robot-01 业务编码。
+                    # rr | 这次读取的响应对象，后续检查 rr.isError() 并取 rr.registers。
                     rr = self.cli.read_holding_registers(
                     # 1. 这是项目调用 pymodbus 读取保持寄存器的位置，rr 将保存这一次响应对象。
                     # 2. address=s.address：从点表取得的起始 word 地址，当前约定从 0 开始。
@@ -358,6 +424,13 @@ class Plc:
                     values[s.name] = None
                     continue
                 # 正常读到 → 解码成物理量
+                # 【调用各部分：部分 / 作用】
+                # 部分 | 作用
+                # values | 本轮采集结果字典，键是业务点名。
+                # s.name | 当前点的名称，例如 robot.joints[0]。
+                # rr.registers | 本次读取响应中的原始 word 数组。
+                # s | 点表配置，提供 type、offset、scale 等解释规则。
+                # decode_signal() | 项目的解码函数，返回物理量或 None，不在这里发布 MQTT。
                 values[s.name] = decode_signal(rr.registers, s)
                 # 1. decode_signal 是本项目函数，不是 pymodbus 直接替项目完成的业务翻译。
                 # 2. rr.registers 是此次响应的原始 word 数组，s 提供类型、偏移和缩放规则。
@@ -371,6 +444,10 @@ class Plc:
 
 # 主循环把点表和本轮读取结果分组成机器人报文，产线编码、设备编码和产生时间由采集器补入。
 # robot.joints[i] 这些点名被归入同一个六轴数组；这里只组装数据，后面的 publish 才通过 MQTT 发送。
+# 【入口 group_signals：部分 / 作用】
+# 部分 | 作用
+# signals | 已加载的点表 Signal 列表。
+# values | 本轮点名到解码结果的字典。
 def group_signals(signals: list[Signal], values: dict[str, Any]) -> dict:
     """按 'robot' / 'line' 命名空间组装契约 payload。"""
     # 按命名空间分组： {"robot": {...}, "line": {...}}
@@ -424,6 +501,10 @@ def group_signals(signals: list[Signal], values: dict[str, Any]) -> dict:
 
 # 主循环从同一轮 values 中抽取 io.* 点位，组装独立 IO 帧。
 # IO 字段与机器人关节分别处理，读取失败的 None 在 JSON 中成为 null，不能冒充有效的 0。
+# 【入口 io_payload：部分 / 作用】
+# 部分 | 作用
+# signals | 已加载的点表 Signal 列表。
+# values | 本轮点名到解码结果的字典。
 def io_payload(signals: list[Signal], values: dict[str, Any]) -> dict | None:
     """产线 IO 快照(契约 §3.8):io.* 命名空间的点位原样透传。
 
@@ -440,6 +521,9 @@ def io_payload(signals: list[Signal], values: dict[str, Any]) -> dict | None:
 
 # 主循环读取 line.state，再用 STATE_MAP 将现场工序整数转成契约字符串。
 # 其他生产字段按当前已有点位和默认值组装；没有对应现场读取的默认值不能当成实测指标。
+# 【入口 line_status_payload：部分 / 作用】
+# 部分 | 作用
+# values | 本轮点名到解码结果的字典。
 def line_status_payload(values: dict[str, Any]) -> dict:
     # 注意:state 的 0(等待入料)是合法值,不能用 `or 1` 兜底,否则 0 被吞成 1。
     # 现场 17 word 表不提供 productCode / goodCount / ngCount / beatMs,
@@ -492,18 +576,44 @@ def make_mqtt() -> mqtt.Client:
                # 把 Python 对象编码成 JSON 文本。
                qos=1, retain=True)
     # 建立连接（keepalive 30 秒）
+    # 【调用各部分：部分 / 作用】
+    # 部分 | 作用
+    # c | Paho MQTT 客户端对象。
+    # MQTT_HOST | Broker 主机配置，采集器主动向它连接。
+    # MQTT_PORT | Broker 的监听端口配置。
+    # keepalive=30 | MQTT 保活配置，单位为秒。
     c.connect(MQTT_HOST, MQTT_PORT, keepalive=30)
     # 尝试建立网络连接。
     # 启动后台网络线程（不调用 loop_start 就没有收发能力）
+    # 【调用各部分：部分 / 作用】
+    # 部分 | 作用
+    # c | 已经配置连接目标的 Paho 客户端。
+    # loop_start() | 启动后台网络处理线程，使收发和回调能够持续进行，主线程继续采集。
     c.loop_start()
     # 启动 Paho MQTT 后台网络线程。
     return c
 
 # 把调用方组装好的 Python 字典编码成 JSON，按主题、QoS 和 retain 参数交给 paho-mqtt。
 # 上行机器人帧与命令回执使用各自的投递参数；发布返回不表示后端历史已经保存或设备动作完成。
+# 【入口 publish：部分 / 作用】
+# 部分 | 作用
+# c | 当前 Paho MQTT 客户端。
+# topic | 本次 MQTT 消息主题，参与路由或订阅匹配。
+# payload | 消息正文或组装后的业务对象，依当前处理阶段解释。
+# qos | 当前 MQTT 消息的投递级别。
+# retain | 是否保存此主题最后一条保留消息。
 def publish(c: mqtt.Client, topic: str, payload: dict, qos=0, retain=False):
 # 将 payload 编码为 JSON 文本，交给已连接 Broker 的客户端向 topic 发布。
 # c 是 paho-mqtt 客户端；topic 是消息主题；qos 和 retain 来自本次调用参数，决定这次消息的投递选项。
+    # 【调用各部分：部分 / 作用】
+    # 部分 | 作用
+    # c | make_mqtt 创建并已用于连接 Broker 的 Paho MQTT 客户端。
+    # topic | 本次发布的主题，Broker 据此匹配订阅者。
+    # payload | 调用方已经组装好的 Python 字典。
+    # json.dumps() | 把字典编码为 JSON 文本，作为消息正文交给 MQTT 库。
+    # ensure_ascii=False | 保留中文字符表达，不强制写成 ASCII 转义形式。
+    # qos | 本次发布选择的消息投递级别，不等于现场物理动作结果。
+    # retain | 是否让 Broker 保存该主题最后一条保留消息。
     c.publish(topic, json.dumps(payload, ensure_ascii=False), qos=qos, retain=retain)
     # 1. c 是 make_mqtt() 创建的 paho-mqtt 客户端；publish 是库方法，连接和协议发送由库处理。
     # 2. topic 由调用方选择：机器人遥测、IO、工序和 cmd_ack 使用不同栏目。
@@ -562,6 +672,11 @@ STATE_MAP = {
 
 # on_command 解析业务指令后进入这里，将 start、stop、mode_set、conveyor 等映射到配置的控制点。
 # 先核对类型和参数，再找到 _cmd_signals 中的地址与值并调用 _write_cmd；未知类型返回拒绝原因。
+# 【入口 _dispatch_cmd：部分 / 作用】
+# 部分 | 作用
+# plc | 项目 Plc 实例，保存现场客户端、锁和连接标记。
+# cmd_type | 从命令字典取出的业务类型，例如 start。
+# params | 指令的附加参数对象，例如 action。
 def _dispatch_cmd(plc: Plc, cmd_type: str, params: dict) -> tuple[bool, str]:
     """返回 (success, message)。False → cmd_ack.status=rejected,True → acked。"""
     spec = CMD_DISPATCH.get(cmd_type)
@@ -597,6 +712,11 @@ def _dispatch_cmd(plc: Plc, cmd_type: str, params: dict) -> tuple[bool, str]:
 
 # 下行流程到这里才实际调用 pymodbus 写一个保持寄存器。
 # 取得锁并连接后发送 address/value，rr 是写响应；返回正常只说明协议写响应成功，未等待独立的物理完成信号。
+# 【入口 _write_cmd：部分 / 作用】
+# 部分 | 作用
+# plc | 项目 Plc 实例，保存现场客户端、锁和连接标记。
+# address | 本次寄存器的 word 地址，由点表或分发结果取得。
+# value | 当前操作需要处理或写入的值。
 def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
 # 向指定 PLC 寄存器写入一次值，依据本次 Modbus 响应返回成功标记与失败说明。
 # plc 是现场 Plc 对象，address 和 value 已由指令分发及点表确定；返回 True 不单独证明物理动作完成。
@@ -618,6 +738,14 @@ def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
             # 按已确定的地址和值发出一次 Modbus 写请求，并把响应保存到 rr。
             # 随后检查 rr.isError() 决定返回成功或失败；这一步没有等待独立的现场动作完成信号。
 
+            # 【调用各部分：部分 / 作用】
+            # 部分 | 作用
+            # plc | 回调取得的项目 Plc 实例，与上行共用客户端和线程锁。
+            # plc.cli | 实际发出 Modbus TCP 请求的 pymodbus 客户端。
+            # address | 已经由分发表和点表选出的保持寄存器地址，启动示例为 9。
+            # value | 本次写入的整数，启动示例为 1。
+            # device_id=plc.unit | Modbus 站号，与 MQTT 主题中的设备编码分别使用。
+            # rr | 本次写响应；正常协议响应不单独证明物理动作完成。
             rr = plc.cli.write_register(address=address, value=value, device_id=plc.unit)
             # 1. write_register 是 pymodbus 方法，发送一次保持寄存器写请求。
             # 2. address 是分发表和点表最终确定的 word 地址；start 的示例地址为 9。
@@ -635,17 +763,40 @@ def _write_cmd(plc: Plc, address: int, value: int) -> tuple[bool, str]:
 
 # main 注册控制主题回调；后续收到匹配消息时才执行内部 _cb，不是在注册时写 PLC。
 # 回调解析 JSON、取 cmdId/type/params、分派写入，再原样带回 cmdId；当前没有已执行编号去重表。
+# 【入口 on_command：部分 / 作用】
+# 部分 | 作用
+# c | 当前 Paho MQTT 客户端。
+# plc | 项目 Plc 实例，保存现场客户端、锁和连接标记。
 def on_command(c: mqtt.Client, plc: Plc):
 # 为 MQTT 命令安装接收处理：解析报文、按契约分发、调用现场写入，再发布带编号的回执。
 # c 是 MQTT 客户端；plc 是现场连接对象；回调 msg.payload 中的 cmdId 用来对应后端控制记录和网页等待结果。
     """订阅控制指令。校验白名单 → 真写 PLC(PLC 未连则 rejected)→ 回 cmd_ack。
     cmdId 缺失 → 回 rejected;ack 始终回(契约 §3.7)。"""
     # 内部回调函数（paho 的签名：client, userdata, message）
+    # 【入口 _cb：部分 / 作用】
+    # 部分 | 作用
+    # _client | Paho 在消息回调中提供的 MQTT 客户端。
+    # _userdata | Paho 在回调中传入的用户上下文对象。
+    # msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
     def _cb(_client, _userdata, msg):
         cmd_id, ack_status, ack_msg = '', 'failed', ''
         try:
             # 解析指令 JSON
+            # 【调用各部分：部分 / 作用】
+            # 部分 | 作用
+            # msg | Paho 在消息到达时交给回调的消息对象。
+            # msg.payload | 消息正文的原始 bytes，此时还不是 Python 字典。
+            # decode("utf-8") | 按 UTF-8 将正文从字节还原成字符串。
+            # json.loads() | 将 JSON 字符串解析为 Python 对象。
+            # cmd | 保存解析后的命令字典，后面从中取得 cmdId、type、params。
             cmd = json.loads(msg.payload.decode("utf-8"))
+            # 【调用各部分：部分 / 作用】
+            # 部分 | 作用
+            # cmd | 刚才由 JSON 正文解析出的命令字典。
+            # cmdId / cmd_id | 后端为一次控制生成的业务编号；回执原样带回以关联原命令。
+            # type / cmd_type | 业务指令类型，例如 start，不是 Modbus 地址。
+            # params | 附加参数对象，例如手动模式的 action。
+            # get() 与 or | 取字段并处理缺失或空值；当前缺少 cmdId 时不进入真实写入。
             cmd_id = cmd.get('cmdId') or ''
             # 1. cmd 是刚解析的这条控制消息对象；cmdId 是后端为本次业务操作生成的编号。
             # 2. get() 取字段；缺失或空值按这里的回退变成空字符串。
@@ -678,9 +829,20 @@ def on_command(c: mqtt.Client, plc: Plc):
                 }, qos=1)
     # ★ 用 message_callback_add 而不是全局 on_message：
     #   这样以后要加别的订阅主题不会互相覆盖
+    # 【调用各部分：部分 / 作用】
+    # 部分 | 作用
+    # c | 采集器使用的 Paho MQTT 客户端。
+    # T_CMD | 当前产线命令主题模式，例如 tl/v1/line-01/cmd/+。
+    # _cb | 项目定义的命令回调，匹配消息到达时才执行。
+    # message_callback_add() | 登记本地处理入口，不负责代替 Broker 订阅。
     c.message_callback_add(T_CMD, _cb)
     # 为指定 MQTT 主题注册消息回调函数。
     # 订阅下行指令主题（QoS 1：指令不能丢）
+    # 【调用各部分：部分 / 作用】
+    # 部分 | 作用
+    # T_CMD | 向 Broker 登记的主题模式，+ 匹配一个主题层级。
+    # qos=1 | 本次订阅请求的投递级别。
+    # subscribe() | 告诉 Broker 将匹配消息交给此连接；回调注册另由 message_callback_add 完成。
     c.subscribe(T_CMD, qos=1)
 
 # 正式入口先取得单实例锁，再加载点表、创建 PLC/MQTT、注册命令回调，随后循环采集。

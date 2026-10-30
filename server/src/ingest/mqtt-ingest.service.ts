@@ -46,6 +46,15 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
     // 连接目标、客户端编号与认证信息来自统一配置。连接成功回调会登记订阅，Broker 才能沿这条连接交付匹配主题。
     // 这里建立的是消息接入通道，不是采集器向后端发 HTTP 请求；网络重连与后续报文业务检查分别处理。
 
+    // 【调用各部分：部分 / 作用】
+    // 部分 | 作用
+    // connect() | 从 mqtt 库导入，创建后端 MQTT 客户端并启动连接。
+    // config.mqtt.url | 目标 Broker 地址，来自统一配置。
+    // clientId | 这个后端 MQTT 客户端的标识。
+    // username、password | 可选认证配置，文档不展示实际凭据。
+    // keepalive | MQTT 保活配置，单位为秒。
+    // reconnectPeriod | 断开后尝试重连的间隔配置，单位为毫秒。
+    // this.client | 保存客户端，供订阅、发布和关闭复用。
     this.client = connect(config.mqtt.url, {
     // 1. connect 从 mqtt 库导入，返回客户端对象；真正连接成功由后面的 connect 事件通知。
     // 2. config.mqtt.url 指向 Broker，clientId 标识这个后端客户端；可选账号与密码来自配置。
@@ -101,7 +110,20 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
 
   // CommandService 建好命令编号后调用本方法，将业务对象编码为 JSON 并发布到 cmd/设备编码 主题。
   // publish 来自 mqtt 库，当前使用 QoS 1；方法不等待采集器 cmd_ack，回执从 dispatch 的另一分支返回。
+  // 【入口 MqttIngestService.publishCommand：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // deviceId | 设备业务编码，例如 robot-01；数据库内部 id 由目录路径另外取得。
+  // cmd | 本次业务命令对象，提供设备、类型、参数等字段。
   publishCommand(lineId: string, deviceId: string, cmd: Record<string, unknown>) {
+    // 【调用各部分：部分 / 作用】
+    // 部分 | 作用
+    // this.client | 后端已连接 Broker 的 mqtt 库客户端。
+    // topicPrefix | 项目消息主题前缀，须与采集器约定一致。
+    // lineId、deviceId | 产线、设备业务编码，用来组成 cmd 主题。
+    // cmd | 已带 cmdId、目标、类型、参数和操作者的命令对象。
+    // JSON.stringify(cmd) | 将命令对象编码成 JSON 文本。
+    // qos: 1 | 本次命令的 MQTT 发布级别，不等于 PLC 动作恰好执行一次。
     this.client.publish(
       `${config.topicPrefix}/${lineId}/cmd/${deviceId}`,
       // 构造模板字符串，把 ${...} 中的值插入目标路径或文本。
@@ -112,6 +134,10 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
 
   // 收到一条 MQTT 消息后，先从主题取得产线与消息类别，再把 payload 解码成业务对象。
   // 机器人分支检查 joints 数组长度后做三路分发；IO 不走关节历史表，工序、事件、边缘状态和回执分别交给对应服务。
+  // 【入口 MqttIngestService.dispatch：部分 / 作用】
+  // 部分 | 作用
+  // topic | 本次 MQTT 消息主题，参与路由或订阅匹配。
+  // payload | 消息正文或组装后的业务对象，依当前处理阶段解释。
   private dispatch(topic: string, payload: Buffer) {
     // 主题结构见数据契约: tl/v1/{lineId}/...
     // ---------- 第 1 步：解析主题 ----------
@@ -160,6 +186,12 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
         // setRobotFrame() 更新 Redis 最新快照，bufferRobotFrame() 准备历史记录，broadcastRobot() 向产线房间推送。
         // 这些调用不构成保证同时成功的事务，所以网页更新不能单独证明历史完整保存。
 
+        // 【调用各部分：部分 / 作用】
+        // 部分 | 作用
+        // this.state | 项目 LineStateService，由 NestJS 注入。
+        // lineId、deviceId | 从主题解析出的产线与设备业务编码。
+        // msg | 由 MQTT 正文解析出的整帧对象。
+        // setRobotFrame() | 进入项目最新快照路径，内部才通过 ioredis 写 Redis。
         this.state.setRobotFrame(lineId, deviceId, msg);
         // 1. state 是 NestJS 注入的项目 LineStateService，不是 mqtt 库提供的存储对象。
         // 2. 参数依次传入主题中的产线编码、设备编码以及解析后的整帧 msg。
@@ -169,6 +201,12 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
         // 把同一条机器人消息交给历史缓冲；这个方法只负责入队，后续定时批量写 PostgreSQL。
         // deviceId 在接入层是设备业务编码，HistoryWriter 会通过 CatalogService 找到数据库内部设备 id。
 
+        // 【调用各部分：部分 / 作用】
+        // 部分 | 作用
+        // this.history | 项目 HistoryWriterService。
+        // deviceId | 机器人业务编码，方法内通过目录换成数据库 id。
+        // msg | 当前整帧，包含时间与关节等数据。
+        // bufferRobotFrame() | 先进入内存队列；后续定时批量写数据库。
         this.history.bufferRobotFrame(deviceId, msg);
         // 1. history 是项目 HistoryWriterService；这里的 deviceId 仍是 robot-01 这类业务编码。
         // 2. 方法内部先通过 CatalogService 找数据库设备 id，再把这一帧的时间和关节值放入 robotBuffer。
@@ -178,6 +216,12 @@ export class MqttIngestService implements OnModuleInit, OnModuleDestroy {
         // 将这帧机器人消息推送给正在订阅对应产线的网页，事件名为 robot_state。
         // 网页收到后更新 useLineData 的 robot，TwinView 再把 joints 交给模型。
 
+        // 【调用各部分：部分 / 作用】
+        // 部分 | 作用
+        // this.gateway | 项目 TelemetryGateway。
+        // lineId | 选择 Socket.IO 的产线房间。
+        // msg | 作为 robot_state 事件正文交给已经订阅的网页连接。
+        // broadcastRobot() | 项目广播方法，内部调用 Socket.IO，不在本行写历史。
         this.gateway.broadcastRobot(lineId, msg);
         // 1. gateway 是项目 TelemetryGateway；它内部使用 Socket.IO 的房间广播 API。
         // 2. lineId 选择 line:line-01 这样的房间；msg 作为 robot_state 事件正文送给已经订阅的连接。

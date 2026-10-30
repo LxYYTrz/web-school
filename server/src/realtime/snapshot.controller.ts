@@ -20,6 +20,9 @@ export class SnapshotController {
   // 控制器交给 LineStateService.getLineSnapshot() 从 Redis 汇总数据并返回 JSON；浏览器不直接连接 Redis。
   // 后续实时新帧走 Socket.IO，快照接口本身不是持续推送连接。
 
+  // 【入口 SnapshotController.snapshot：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
   @Get(':lineId/snapshot')
   snapshot(@Param('lineId') lineId: string) {
     return this.state.getLineSnapshot(lineId);

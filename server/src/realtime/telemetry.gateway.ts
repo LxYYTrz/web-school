@@ -18,6 +18,9 @@ export class TelemetryGateway {
 
   // 浏览器在已有 Socket.IO 连接上发 subscribe，提供要接收的产线编码。
   // client.join 是 Socket.IO 的房间 API；加入 line:编码 后，后续对应广播才选择这些连接。
+  // 【入口 TelemetryGateway.handleSubscribe：部分 / 作用】
+  // 部分 | 作用
+  // body | 当前请求正文或流对象；具体字段依函数签名与调用方。
   @SubscribeMessage('subscribe')
   handleSubscribe(@ConnectedSocket() client: Socket, @MessageBody() body: { lineId?: string }) {
     // 参数校验：没有 lineId 直接拒绝（返回对象会作为 ack 回给客户端）
@@ -31,6 +34,9 @@ export class TelemetryGateway {
   }
 
   // 浏览器退出该产线订阅时离开对应房间；连接本身可继续存在。
+  // 【入口 TelemetryGateway.handleUnsubscribe：部分 / 作用】
+  // 部分 | 作用
+  // body | 当前请求正文或流对象；具体字段依函数签名与调用方。
   @SubscribeMessage('unsubscribe')
   handleUnsubscribe(@ConnectedSocket() client: Socket, @MessageBody() body: { lineId?: string }) {
     if (body?.lineId) void client.leave(`line:${body.lineId}`);
@@ -39,6 +45,10 @@ export class TelemetryGateway {
 
   // MQTT 接入层把机器人整帧交给这里，以 robot_state 事件发送给相应产线房间。
   // server.to().emit() 来自 Socket.IO；不会在这里写 Redis 或等待历史落库。
+  // 【入口 TelemetryGateway.broadcastRobot：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   broadcastRobot(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('robot_state', msg);
     // 1. server 是 NestJS 网关注入的 Socket.IO 服务端实例。
@@ -47,24 +57,40 @@ export class TelemetryGateway {
   }
 
   // 按产线房间广播 line_status，网页共享状态接收后更新工序显示。
+  // 【入口 TelemetryGateway.broadcastLineStatus：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   broadcastLineStatus(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('line_status', msg);
     // 选择要广播消息的 Socket.IO 房间。
   }
 
   // 按产线房间广播 io_state；网页的 IO 文案、色调和停滞判断在前端分别计算。
+  // 【入口 TelemetryGateway.broadcastIo：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   broadcastIo(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('io_state', msg);
     // 选择要广播消息的 Socket.IO 房间。
   }
 
   // 按产线房间广播 event；数据库事件写入由 HistoryWriter 的独立路径完成。
+  // 【入口 TelemetryGateway.broadcastEvent：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   broadcastEvent(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('event', msg);
     // 选择要广播消息的 Socket.IO 房间。
   }
 
   // 按产线房间广播 edge_status，内容来自采集器上报或遗嘱通知。
+  // 【入口 TelemetryGateway.broadcastEdge：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   broadcastEdge(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('edge_status', msg);
     // 选择要广播消息的 Socket.IO 房间。
@@ -72,12 +98,20 @@ export class TelemetryGateway {
 
   // 把采集器业务回执转换为网页 command_ack 事件，保留原 cmdId 供页面匹配。
   // 它与 MQTT 的 cmd_ack 主题及数据库更新分别处理；数据库未匹配行不等于此广播自动停止。
+  // 【入口 TelemetryGateway.broadcastCommandAck：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   broadcastCommandAck(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('command_ack', msg);
     // 选择要广播消息的 Socket.IO 房间。
   }
 
   // ProposalService 在建议校验保存后广播 ai_proposal，让网页显示等待人工确认的内容。
+  // 【入口 TelemetryGateway.broadcastAiProposal：部分 / 作用】
+  // 部分 | 作用
+  // lineId | 产线业务编码，例如 line-01；供接口、消息主题或快照 key 使用。
+  // msg | 当前收到的消息或帧对象，字段含义依所在事件分支。
   broadcastAiProposal(lineId: string, msg: unknown) {
     this.server?.to(`line:${lineId}`).emit('ai_proposal', msg);
     // 选择要广播消息的 Socket.IO 房间。

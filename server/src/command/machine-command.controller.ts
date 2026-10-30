@@ -14,6 +14,9 @@ export interface MachineCommandBody extends CommandBody {
 }
 
 /** operator 清洗:只保留字母数字和 -_:.,长度截断,防止审计里塞进奇怪内容 */
+// 【入口 sanitizeOperator：部分 / 作用】
+// 部分 | 作用
+// raw | 当前入口收到的原始文本或待清理值。
 function sanitizeOperator(raw: unknown): string {
   const s = String(raw ?? '').trim();
   const cleaned = s.replace(/[^A-Za-z0-9_:.-]/g, '').slice(0, 64);
@@ -25,6 +28,9 @@ export class MachineCommandController {
 // MachineCommandController 是本文件声明的类；其装饰器、字段和方法由下面的代码定义
   constructor(private readonly commands: CommandService) {}
 
+  // 【入口 MachineCommandController.send：部分 / 作用】
+  // 部分 | 作用
+  // body | 当前请求正文或流对象；具体字段依函数签名与调用方。
   @Post('commands')
   @UseGuards(MachineTokenGuard)
   send(@Body() body: MachineCommandBody) {

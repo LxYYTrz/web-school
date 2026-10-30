@@ -28,6 +28,14 @@ export class AuthController {
     // user 来自密码校验的返回结果，所以这里记录的是已验证身份，而不是请求正文任意提交的 level。
     // cookie-session 会把该对象放入客户端签名 Cookie；签名检查篡改，内容本身并未因此加密。
 
+    // 【调用各部分：部分 / 作用】
+    // 部分 | 作用
+    // req.session | cookie-session 中间件提供的当前请求会话对象。
+    // user | verifyCredentials 校验通过后返回的身份。
+    // username | 已验证的用户名，不来自任意自报的级别字段。
+    // level | 数据库账号级别，供后续权限检查。
+    // loginAt | Date.now() 取得的毫秒时间戳。
+    // 签名 Cookie | 中间件通过响应头处理，签名检查篡改，不等于内容加密。
     req.session = { username: user.username, level: user.level, loginAt: Date.now() };
     // 1. user 来自上一步 verifyCredentials() 的校验结果，不是请求正文任意自报的级别。
     // 2. username 记录已经验证的账号，level 记录数据库返回的操作级别。
